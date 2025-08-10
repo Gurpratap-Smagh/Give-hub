@@ -1,0 +1,54 @@
+# Node.js dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE/editor settings
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Temporary files
+*.tmp
+*.swp
+*.bak
+
+# Coverage reports
+coverage/
+
+# Parcel, Next.js, Nuxt, etc.
+.cache/
+.next/
+.nuxt/
+
+# Static assets
+public/static/
+
+# Optional: Ignore compiled CSS if using Sass/Less
+*.css.map
+*.scssc
+
+# Optional: Ignore compiled JS if using TypeScript
+*.js.map
+*.tsbuildinfo
+
+# Optional: Ignore uploads or user-generated content
+uploads/
