@@ -1,4 +1,6 @@
-GiveHub: A Gemini-Powered Cross-Chain Fundraising Platform
+#GiveHub
+
+A Gemini-Powered Cross-Chain Fundraising Platform
 🚀 Project Description
 GiveHub is a decentralized fundraising platform built to simplify the donation process. It leverages ZetaChain's Universal Smart Contracts to allow campaign organizers to accept donations from multiple blockchains (Ethereum and Solana) through a single contract. The platform features an AI-powered chat assistant, built with Google Gemini, that enables donors to make contributions using natural language commands. This hybrid approach offers both an innovative conversational user experience and a reliable traditional interface.
 
