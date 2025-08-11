@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GiveHub - Decentralized Donation Platform
+
+Welcome to GiveHub, a modern, decentralized platform for fundraising and donations, built with Next.js and integrated with blockchain technology.
+
+## Overview
+
+GiveHub allows users to create fundraising campaigns, explore existing ones, and donate to causes they care about. The platform is designed to be transparent and secure, leveraging smart contracts for handling donations.
+
+This repository contains the frontend application built with the Next.js App Router. The codebase is heavily annotated with developer comments, migration notes, and TODOs to guide the transition from mock data to a full-fledged backend.
+
+## Tech Stack
+
+- **Framework:** [Next.js 13](https://nextjs.org/) (App Router)
+- **Language:** [TypeScript](https://www.typescriptlang.org/)
+- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
+- **UI Components:** [Shadcn UI](https://ui.shadcn.com/) (using Radix UI and Tailwind CSS)
+- **Blockchain Integration (Planned):** [ZetaChain](https://www.zetachain.com/) via [viem](https://viem.sh/)
+- **Database (Planned):** [MongoDB](https://www.mongodb.com/)
+- **AI Integration (Planned):** Campaign creation assistance via Gemini AI.
 
 ## Getting Started
 
-First, run the development server:
+To run the development server locally, follow these steps:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1.  **Install Dependencies:**
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+    ```bash
+    npm install
+    ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+2.  **Run the Development Server:**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+    ```bash
+    npm run dev
+    ```
 
-## Learn More
+Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
 
-To learn more about Next.js, take a look at the following resources:
+## Project Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+-   `app/`: Contains all pages and layouts, following the Next.js App Router structure.
+-   `components/`: Reusable React components used across the application (e.g., `Nav`, `CampaignCard`).
+-   `lib/`: Core logic, type definitions, and placeholder data.
+    -   `types.ts`: Centralized TypeScript type definitions.
+    -   `mock.ts`: Temporary mock data for development.
+    -   `contracts.ts`: Stub functions for smart contract interactions.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Migration Roadmap
 
-## Deploy on Vercel
+This project is currently in a pre-alpha stage, using mock data for rapid prototyping. The next phases involve:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1.  **Backend Integration:** Replace mock data in `lib/mock.ts` with API calls to a MongoDB database. API routes will be created under `app/api/`.
+2.  **Smart Contract Integration:** Implement the stubbed functions in `lib/contracts.ts` to interact with deployed ZetaChain smart contracts using `viem`.
+3.  **AI-Powered Features:** Build out the `/api/ai` endpoint to parse user intents for campaign creation, adding validation and security checks.
+4.  **Authentication:** Implement user login and wallet connection to manage campaigns and donations.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Developer notes and `TODO` comments are embedded throughout the code to pinpoint exactly where these changes need to occur.
