@@ -78,7 +78,7 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
         <div className="relative bg-white rounded-xl border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-md hover:border-gray-300 transform hover:-translate-y-1 h-full flex flex-col">
           {/* Category pill */}
           {displayCategory && (
-            <div className="absolute top-3 right-3">
+            <div className="absolute top-3 right-3 z-10">
               <span className="px-2.5 py-1 text-[10px] leading-none font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200 shadow-sm">
                 {displayCategory}
               </span>

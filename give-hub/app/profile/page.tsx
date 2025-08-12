@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
 import Spinner from '@/components/spinner'
+import ProfilePictureUpload from '@/components/profile-picture-upload'
 
 export default function ProfilePage() {
   const { user, isLoading } = useAuth()
@@ -15,6 +16,7 @@ export default function ProfilePage() {
     bio: 'Passionate about making a difference through blockchain technology and charitable giving.',
     location: 'San Francisco, CA',
     website: 'https://johndoe.com',
+    profilePicture: (user as any)?.profilePicture || '',
     walletAddresses: {
       ethereum: '0x1234...5678',
       solana: 'ABC123...XYZ789',
@@ -29,6 +31,7 @@ export default function ProfilePage() {
         ...prev,
         name: user.username,
         email: user.email,
+        profilePicture: (user as any).profilePicture || '',
       }))
     }
   }, [user])
@@ -91,15 +94,47 @@ export default function ProfilePage() {
     }
   }
 
-  const handleSave = () => {
-    // Placeholder for profile update logic
-    alert('Profile updates will be saved to MongoDB in the next phase!')
-    setIsEditing(false)
+  const handleSave = async () => {
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          profilePicture: profileData.profilePicture,
+          bio: profileData.bio,
+          location: profileData.location,
+          website: profileData.website,
+          walletAddresses: profileData.walletAddresses
+        }),
+      })
+
+      if (response.ok) {
+        alert('Profile updated successfully!')
+        setIsEditing(false)
+      } else {
+        alert('Failed to update profile. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error)
+      alert('Error updating profile. Please try again.')
+    }
   }
 
   const handleCancel = () => {
     // Reset to original data (in real app, would fetch from server)
     setIsEditing(false)
+  }
+
+  // Prefill profile using AI placeholder. Later this will call AI to suggest content and update image.
+  const handleFixWithAI = () => {
+    setIsEditing(true)
+    setProfileData((prev) => ({
+      ...prev,
+      bio:
+        "Hi! I'm a passionate supporter of transparent giving and web3 impact. I use GiveHub to connect causes with donors, share progress, and make every contribution count.",
+    }))
   }
 
   return (
@@ -134,31 +169,7 @@ export default function ProfilePage() {
                 Manage your account information and wallet addresses
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              {!isEditing ? (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="px-4 py-2 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm text-gray-700"
-                >
-                  Edit my profile
-                </button>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleCancel}
-                    className="px-4 py-2 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm text-gray-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    className="px-4 py-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-sm"
-                  >
-                    Save
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* External edit controls removed; controls live within the Profile Information card */}
           </div>
         </div>
 
@@ -166,9 +177,13 @@ export default function ProfilePage() {
           {/* Profile Card */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl card-shadow border border-gray-100 p-6 text-center">
-              <div className="w-24 h-24 bg-gradient-to-r from-blue-500 to-green-500 rounded-full flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4">
-                {(profileData.name || user.username).split(' ').map(n => n[0]).join('')}
-              </div>
+              <ProfilePictureUpload
+                currentUser={user as any}
+                currentPicture={profileData.profilePicture}
+                onPictureChange={(newPicture) => setProfileData(prev => ({ ...prev, profilePicture: newPicture }))}
+                isEditing={isEditing}
+                size="lg"
+              />
               <h2 className="text-xl font-bold text-gray-900 mb-2">{profileData.name || user.username}</h2>
               <p className="text-gray-600 mb-4">{profileData.email || user.email}</p>
               <div className="space-y-2 text-sm text-gray-500">
@@ -213,6 +228,18 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-6">
+                {/* Lower action: Fix with AI (prefill placeholder) */}
+                <div className="flex justify-end -mt-4 mb-2">
+                  {!isEditing && (
+                    <button
+                      onClick={handleFixWithAI}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-200 text-gray-800 hover:bg-blue-50 transition-colors"
+                      title="Prefill description with AI template"
+                    >
+                      <span className="text-sm font-semibold">Fix with <span className="text-blue-600">AI</span></span>
+                    </button>
+                  )}
+                </div>
                 {/* Basic Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>

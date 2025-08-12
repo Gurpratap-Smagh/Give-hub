@@ -8,6 +8,7 @@
       "role": "user",
       "createdAt": "2024-01-15T00:00:00.000Z",
       "updatedAt": "2024-01-15T00:00:00.000Z",
+      "profilePicture": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiM0Rjk2RkYiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjM1IiByPSIxNSIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMjUgNzVhMjUgMjUgMCAwIDEgNTAgMCIgZmlsbD0id2hpdGUiLz48L3N2Zz4K",
       "donatedCampaigns": [
         "1",
         "3",
@@ -27,6 +28,7 @@
       "role": "user",
       "createdAt": "2024-02-01T00:00:00.000Z",
       "updatedAt": "2024-02-01T00:00:00.000Z",
+      "profilePicture": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiNGRjY1NjUiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjM1IiByPSIxNSIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMjUgNzVhMjUgMjUgMCAwIDEgNTAgMCIgZmlsbD0id2hpdGUiLz48L3N2Zz4K",
       "donatedCampaigns": [
         "2",
         "4"
@@ -44,6 +46,7 @@
       "role": "creator",
       "createdAt": "2024-01-10T00:00:00.000Z",
       "updatedAt": "2024-01-10T00:00:00.000Z",
+      "profilePicture": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiMxMEI5ODEiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjM1IiByPSIxNSIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMjUgNzVhMjUgMjUgMCAwIDEgNTAgMCIgZmlsbD0id2hpdGUiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI4IiBmaWxsPSIjMTBCOTgxIi8+PC9zdmc+Cg==",
       "createdCampaigns": [
         "1"
       ],
@@ -64,6 +67,7 @@
       "role": "creator",
       "createdAt": "2024-01-20T00:00:00.000Z",
       "updatedAt": "2024-01-20T00:00:00.000Z",
+      "profilePicture": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiNGNTlFMEIiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjM1IiByPSIxNSIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMjUgNzVhMjUgMjUgMCAwIDEgNTAgMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSI0NSIgeT0iNDUiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iI0Y1OUUwQiIvPjwvc3ZnPgo=",
       "createdCampaigns": [
         "2"
       ],
@@ -80,6 +84,7 @@
       "role": "creator",
       "createdAt": "2024-02-05T00:00:00.000Z",
       "updatedAt": "2024-02-05T00:00:00.000Z",
+      "profilePicture": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiM4QjVDRjYiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjM1IiByPSIxNSIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMjUgNzVhMjUgMjUgMCAwIDEgNTAgMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgcng9IjMiIGZpbGw9IiM4QjVDRjYiLz48L3N2Zz4K",
       "createdCampaigns": [
         "3",
         "5"
@@ -96,6 +101,7 @@
       "id": "user_1754982187749",
       "createdAt": "2025-08-12T07:03:07.749Z",
       "updatedAt": "2025-08-12T07:03:07.749Z",
+      "profilePicture": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiM2MzY2RjEiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjM1IiByPSIxNSIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMjUgNzVhMjUgMjUgMCAwIDEgNTAgMCIgZmlsbD0id2hpdGUiLz48L3N2Zz4K",
       "donatedCampaigns": [],
       "totalDonated": 0,
       "preferredChains": []
@@ -119,13 +125,15 @@
       "role": "creator",
       "createdCampaigns": [
         "campaign_1754989964789",
-        "campaign_1754991406765"
+        "campaign_1754991406765",
+        "campaign_1755000184820",
+        "campaign_1755002767924"
       ],
       "totalRaised": 0,
       "verificationStatus": "pending",
       "id": "creator_1754988484427",
       "createdAt": "2025-08-12T08:48:04.427Z",
-      "updatedAt": "2025-08-12T09:36:46.769Z"
+      "updatedAt": "2025-08-12T12:46:07.933Z"
     },
     {
       "username": "doramon",

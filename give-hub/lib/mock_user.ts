@@ -61,7 +61,7 @@ export const mockUserOperations = {
     return db.deleteUser(id);
   }
 };
-
+// add pfp image upload on db integration
 // TEMP: Helper functions - REPLACE WITH MONGODB AGGREGATION QUERIES
 export const mockUserHelpers = {
   // TODO: Replace with MongoDB aggregation pipeline

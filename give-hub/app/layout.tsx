@@ -38,8 +38,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen antialiased x-limitscroll">
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-screen antialiased x-limitscroll" suppressHydrationWarning>
         {/* Providers */}
         <AuthProvider>
           {/* Global navigation - handles auth state, wallet connection */}

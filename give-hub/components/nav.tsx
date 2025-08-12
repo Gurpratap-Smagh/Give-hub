@@ -2,7 +2,11 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
+import type { User, Creator } from '@/lib/mock-db/database'
+import ProfilePictureUpload from '@/components/profile-picture-upload'
+import AIOverlay from '@/components/ai-overlay'
 
 /**
  * Main Navigation Component
@@ -24,7 +28,12 @@ export function Nav() {
   const [showSearch, setShowSearch] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false) // State for mobile menu
   const [searchQuery, setSearchQuery] = useState('')
+  const [showAI, setShowAI] = useState(false)
   const { user, signout } = useAuth()
+  const pathname = usePathname()
+
+  // Hide search UX on studio pages
+  const isStudio = pathname?.startsWith('/studio')
 
   /**
    * Handle search functionality
@@ -37,16 +46,17 @@ export function Nav() {
   }
 
   return (
+    <>
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo - Building Block: Brand identity */}
-          <Link href="/" className="font-bold text-xl text-gray-900 hover:text-blue-600 transition-colors">
+          <Link href="/" onClick={() => setShowAI(false)} className="h-10 inline-flex items-center px-4 rounded-full font-bold text-3xl leading-none tracking-[-0.05em] text-gray-900 hover:text-blue-600 transition-colors">
             Give<span className="text-blue-600">Hub</span>
           </Link>
 
           {/* Search Bar - show when active on any page */}
-          {showSearch && (
+          {showSearch && !isStudio && (
             <div className="flex-1 max-w-md mx-8">
               <div className="relative">
                 <input
@@ -59,7 +69,7 @@ export function Nav() {
                     if (e.key === 'Escape') setShowSearch(false)
                     if (e.key === 'Enter') setShowSearch(false)
                   }}
-                  className="w-full px-4 py-2 pl-10 pr-4 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                  className="w-full h-10 px-4 pl-10 pr-4 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                   autoFocus
                 />
                 <img src="/search.svg" alt="Search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -78,52 +88,65 @@ export function Nav() {
           {/* Navigation Links - Building Block: Main navigation */}
           <div className="hidden md:flex items-center gap-4">
             {/* Search Icon - show on all pages when search is not active */}
-            {!showSearch && (
+            {!showSearch && !isStudio && (
               <button
-                onClick={() => setShowSearch(true)}
-                className="p-2 rounded-full hover:bg-gray-100 transition-colors shadow-sm border border-gray-200"
+                onClick={() => { setShowAI(false); setShowSearch(true) }}
+                className="h-10 w-10 inline-flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors shadow-sm border border-gray-200"
                 title="Search campaigns"
               >
                 <img src="/search.svg" alt="Search" className="w-5 h-5 text-gray-600" />
               </button>
             )}
 
-            {/* Start Campaign Button - Only for creators */}
+            {/* Creator action: Studio link or Create Campaign (on studio) */}
             {user?.role === 'creator' && (
-              <Link
-                href="/create"
-                className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-full px-5 py-2 font-semibold transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                Start a campaign
-              </Link>
+              isStudio ? (
+                <Link
+                  href="/create"
+                  onClick={() => { setShowAI(false); setShowSearch(false) }}
+                  className="h-10 inline-flex items-center px-4 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  Create Campaign
+                </Link>
+              ) : (
+                <Link
+                  href="/studio"
+                  onClick={() => { setShowAI(false); setShowSearch(false) }}
+                  className="h-10 inline-flex items-center px-4 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  Creator Studio
+                </Link>
+              )
             )}
+
+            {/* AI Button */}
+            <button
+              onClick={() => setShowAI((v) => !v)}
+              className="h-10 inline-flex items-center px-4 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm text-gray-700 hover:text-gray-900"
+            >
+              AI
+            </button>
 
             {/* Authenticated actions */}
             {user && (
               <>
-                {/* AI Button (uses inline SVG to avoid CORS) */}
-                <button
-                  onClick={() => alert('ai yet to be integrated')}
-                  className="p-2 rounded-full hover:bg-gray-100 transition-colors shadow-sm border border-gray-200"
-                  title="AI Assistant"
-                >
-                  {/* Reusing previous user-circle SVG as requested */}
-                  <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9 9 0 1118.88 17.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-                {/* Profile Button */}
+                {/* Profile Link with Picture only */}
                 <Link
                   href="/profile"
-                  className="px-4 py-2 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm text-gray-700 hover:text-gray-900"
+                  onClick={() => { setShowAI(false); setShowSearch(false) }}
+                  className="inline-flex items-center h-10"
+                  aria-label="Profile"
+                  title="Profile"
                 >
-                  Profile
+                  <ProfilePictureUpload
+                    currentUser={user as unknown as User | Creator}
+                    currentPicture={(user as any)?.profilePicture}
+                    onPictureChange={() => {}}
+                    isEditing={false}
+                    size="sm"
+                  />
                 </Link>
-                {/* Logout Button (neutral styling) */}
-                <button
-                  onClick={signout}
-                  className="px-4 py-2 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm text-gray-700 hover:text-gray-900"
-                >
+                <button onClick={signout} className="h-10 inline-flex items-center px-4 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm text-gray-700 hover:text-gray-900">
                   Logout
                 </button>
               </>
@@ -133,7 +156,8 @@ export function Nav() {
             {!user && (
               <Link
                 href="/auth"
-                className="px-4 py-2 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm text-gray-700 hover:text-gray-900"
+                onClick={() => { setShowAI(false); setShowSearch(false) }}
+                className="h-10 inline-flex items-center px-4 rounded-full border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all shadow-sm text-gray-700 hover:text-gray-900"
               >
                 Login
               </Link>
@@ -141,10 +165,10 @@ export function Nav() {
           </div>
 
           {/* Mobile actions: Search trigger + Menu button */}
-          {!showSearch && (
+          {!showSearch && !isStudio && (
             <button
-              className="md:hidden mr-2 p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm border border-gray-200"
-              onClick={() => setShowSearch(true)}
+              className="md:hidden mr-2 h-10 w-10 inline-flex items-center justify-center rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm border border-gray-200"
+              onClick={() => { setShowAI(false); setShowSearch(true) }}
               aria-label="Open search"
               title="Search campaigns"
             >
@@ -153,8 +177,8 @@ export function Nav() {
           )}
           {/* Mobile Menu Button - Building Block: Mobile navigation trigger */}
           <button
-            className="md:hidden p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm border border-gray-200"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden h-10 w-10 inline-flex items-center justify-center rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm border border-gray-200"
+            onClick={() => { setShowAI(false); setIsMobileMenuOpen(!isMobileMenuOpen) }}
             aria-label="Toggle mobile menu"
             aria-expanded={isMobileMenuOpen}
           >
@@ -171,26 +195,38 @@ export function Nav() {
         <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg rounded-b-lg border-t border-gray-200 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex flex-col p-4 space-y-4">
             {user?.role === 'creator' && (
-              <Link href="/create" className="text-gray-700 hover:text-blue-600 font-medium px-2 py-1 rounded-md">Start a Campaign</Link>
+              isStudio ? (
+                <Link href="/create" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="text-gray-700 hover:text-blue-600 font-medium px-2 py-1 rounded-md">Create Campaign</Link>
+              ) : (
+                <Link href="/studio" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="text-gray-700 hover:text-blue-600 font-medium px-2 py-1 rounded-md">Creator Studio</Link>
+              )
             )}
             {user ? (
               <>
                 <button
-                  onClick={() => { alert('ai yet to be integrated'); setIsMobileMenuOpen(false); }}
+                  onClick={() => { setShowAI((v) => !v); /* AI button toggles itself */ setIsMobileMenuOpen(false) }}
                   className="text-gray-700 hover:text-blue-600 font-medium px-2 py-1 rounded-md text-left"
                 >
                   AI
                 </button>
-                <Link href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="text-gray-700 hover:text-blue-600 font-medium px-2 py-1 rounded-md">Profile</Link>
+                <Link href="/profile" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="inline-flex items-center px-2 py-1 rounded-md" aria-label="Profile" title="Profile">
+                  <ProfilePictureUpload
+                    currentUser={user as any}
+                    currentPicture={(user as any)?.profilePicture}
+                    onPictureChange={() => {}}
+                    isEditing={false}
+                    size="sm"
+                  />
+                </Link>
                 <button
-                  onClick={() => { setIsMobileMenuOpen(false); signout(); }}
+                  onClick={() => { setShowAI(false); setIsMobileMenuOpen(false); signout(); }}
                   className="w-full text-center px-4 py-2 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors text-gray-700"
                 >
                   Logout
                 </button>
               </>
             ) : (
-              <Link href="/auth" className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <Link href="/auth" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 Login
               </Link>
             )}
@@ -200,5 +236,7 @@ export function Nav() {
       {/* END_REGION: Mobile Menu (Dropdown) */}
 
     </nav>
+    {showAI && <AIOverlay open={showAI} onClose={() => setShowAI(false)} />}
+    </>
   )
 }

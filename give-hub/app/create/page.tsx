@@ -18,9 +18,9 @@
 
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { useAuth } from '@/lib/auth-context'
 // TODO: import { createCampaign } from '@/lib/api' // Future API integration
 // TODO: import { validateCampaign } from '@/lib/validation' // Zod schema validation
@@ -30,7 +30,7 @@ import { useAuth } from '@/lib/auth-context'
  * Campaign creation page component
  * @returns JSX element with campaign creation form
  */
-export default function CreatePage() {
+export default function CreateCampaignPage() {
   // REGION: State management
   const [formData, setFormData] = useState({
     title: '',
@@ -39,6 +39,9 @@ export default function CreatePage() {
     chains: [] as string[],
     category: ''
   })
+  const [image, setImage] = useState<string>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const [otherCategory, setOtherCategory] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
@@ -54,6 +57,29 @@ export default function CreatePage() {
       ...formData,
       [e.target.name]: e.target.value
     })
+  }
+
+  // Image upload helpers (base64 inline like edit form)
+  const convertToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleImageSelect = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size must be less than 5MB')
+      return
+    }
+    const base64 = await convertToBase64(file)
+    setImage(base64)
   }
 
   /**
@@ -95,7 +121,8 @@ export default function CreatePage() {
           goal: Number(formData.goal),
           chains: formData.chains as ('Ethereum' | 'Solana' | 'Bitcoin')[],
           category: formData.category === 'other' ? otherCategory.trim() : formData.category,
-          creatorId: user?.id
+          creatorId: user?.id,
+          image
         })
       })
       const data = await res.json()
@@ -113,31 +140,43 @@ export default function CreatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Main Content Section */}
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        {/* Back Button */}
-        <Link
-          href="/"
-          className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6 font-medium"
-        >
-          ← Back to Home
-        </Link>
-
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            Start a <span className="text-gradient">Campaign</span>
-          </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            Create a campaign to raise funds for your cause. Choose which blockchains 
-            to accept donations from and start making a difference.
-          </p>
+    <div className="max-w-6xl mx-auto px-4 py-10">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Create a Campaign</h1>
+          <p className="text-gray-600 mt-1">Describe your cause, set a goal, and share a compelling image.</p>
         </div>
-        
-        {/* Campaign Form */}
-        <div className="bg-white rounded-2xl card-shadow border border-gray-100 p-8">
-          <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              const friendlyGoal = formData.goal ? ` a goal of $${Number(formData.goal).toLocaleString()}` : ''
+              const rawCategory = formData.category === 'other' ? (otherCategory || 'Other') : formData.category
+              const categoryText = rawCategory ? ` in the ${rawCategory} category` : ''
+              const suggested = `We are launching "${formData.title || 'our campaign'}"${categoryText} on GiveHub to create meaningful impact.${friendlyGoal}. Your support will help us reach more people, deliver transparent updates, and turn generosity into real-world change. Join us and share this campaign to amplify the mission.`
+              setFormData(prev => ({ ...prev, description: suggested }))
+            }}
+            className="px-4 py-2 rounded-full border-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300"
+          >
+            Edit with AI
+          </button>
+          <button
+            type="button"
+            onClick={() => formRef.current?.requestSubmit()}
+            disabled={isSubmitting}
+            className="px-4 py-2 rounded-full bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-70"
+          >
+            {isSubmitting ? 'Creating...' : 'Create Campaign'}
+          </button>
+        </div>
+      </div>
+
+      {/* Two-column layout: Form left, Live preview right */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Form Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
             {/* Campaign Title */}
             <div>
               <label className="block text-lg font-semibold text-gray-900 mb-3">
@@ -153,20 +192,6 @@ export default function CreatePage() {
                 required
               />
             </div>
-            {/* Edit with AI button */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => alert('AI integration yet to happen')}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 border-gray-200 text-gray-700 hover:border-blue-500 hover:text-blue-600 hover:shadow-sm transition-all"
-                title="Edit with AI"
-              >
-                <span className="text-xl">✨</span>
-                Edit with AI
-                <span className="text-xs bg-black text-white rounded-full px-2 py-0.5 ml-1">beta</span>
-              </button>
-            </div>
-
             {/* Campaign Description */}
             <div>
               <label className="block text-lg font-semibold text-gray-900 mb-3">
@@ -273,34 +298,92 @@ export default function CreatePage() {
               )}
             </div>
 
-            {/* Submit Button */}
-            <div className="pt-6">
-              <button
-                type="submit"
-                disabled={formData.chains.length === 0 || isSubmitting}
-                className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-400 text-white py-4 rounded-full font-bold text-xl transition-all hover:scale-105 shadow-lg disabled:hover:scale-100 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Creating…' : 'Create Campaign'}
-              </button>
-            </div>
-          </form>
+            {/* Image selection moved to preview card pencil overlay */}
 
-          {/* Placeholder Notice */}
-          <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center">
-              <div className="text-blue-600 mr-3">ℹ️</div>
-              <div>
-                <p className="text-sm text-blue-800 font-medium">
-                  Enhanced with AI
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  Campaign creation will be enhanced with Gemini AI for content optimization and validation.
-                </p>
+            {/* Submit moved to header */}
+          </form>
+        </div>
+
+        {/* Live Preview Card - matches home page minimal card style */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-0 overflow-hidden">
+          {/* Image header */}
+          <div className="relative w-full h-56 bg-gray-100">
+            {image ? (
+              <Image
+                src={image}
+                alt="Preview image"
+                fill
+                sizes="(max-width: 768px) 100vw, 50vw"
+                className="object-cover"
+                priority
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-400">No image selected</div>
+            )}
+            {/* Pencil overlay trigger */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute top-3 right-3 inline-flex items-center justify-center w-10 h-10 rounded-full bg-black/50 hover:bg-black/60 transition text-white shadow-md"
+              title="Change image"
+            >
+              {/* Pencil icon */}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                <path d="M16.862 3.487a1.5 1.5 0 0 1 2.121 0l1.53 1.53a1.5 1.5 0 0 1 0 2.121l-9.9 9.9a1.5 1.5 0 0 1-.67.386l-4.019 1.004a.75.75 0 0 1-.91-.91l1.003-4.02a1.5 1.5 0 0 1 .386-.669l9.9-9.9Zm-2.828 2.828L5.9 14.45a.5.5 0 0 0-.129.223l-.692 2.773 2.773-.692a.5.5 0 0 0 .223-.13l8.134-8.133-2.167-2.167Z" />
+              </svg>
+            </button>
+          </div>
+          {/* Content */}
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-2">
+              {formData.category ? (
+                <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                  {formData.category === 'other' ? (otherCategory || 'Other') : formData.category}
+                </span>
+              ) : null}
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
+              {formData.title || 'Your campaign title'}
+            </h3>
+            <p className="mt-2 text-sm text-gray-600 line-clamp-3">
+              {formData.description || 'Write a compelling description to inspire donations.'}
+            </p>
+            <div className="mt-4">
+              <div className="w-full bg-gray-100 rounded-full h-2">
+                <div className="bg-green-500 h-2 rounded-full" style={{ width: '0%' }} />
+              </div>
+              <div className="mt-2 text-sm text-gray-700 flex items-center justify-between">
+                <span>$0 raised</span>
+                <span>Goal: ${formData.goal || '0'}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Placeholder Notice */}
+      <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center">
+          <div className="text-blue-600 mr-3">ℹ️</div>
+          <div>
+            <p className="text-sm text-blue-800 font-medium">Enhanced with AI</p>
+            <p className="text-xs text-blue-700 mt-1">
+              Campaign creation will be enhanced with Gemini AI for content optimization and validation.
+            </p>
+          </div>
+        </div>
+      </div>
+      {/* Hidden file input for image upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) handleImageSelect(f)
+        }}
+        className="hidden"
+      />
     </div>
   )
 }

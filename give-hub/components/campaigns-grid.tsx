@@ -28,6 +28,8 @@ export type Campaign = {
 
 interface CampaignsGridProps {
   initialCampaigns?: Campaign[]
+  /** Tailwind class for the gradient 'from' color, e.g. 'from-blue-100' */
+  gradientFromClass?: string
 }
 
 function SkeletonCard() {
@@ -47,7 +49,7 @@ function SkeletonCard() {
   )
 }
 
-export function CampaignsGrid({ initialCampaigns = [] }: CampaignsGridProps) {
+export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from-gray-50' }: CampaignsGridProps) {
   const [campaigns] = useState<Campaign[]>(initialCampaigns)
   const [loading] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -96,7 +98,7 @@ export function CampaignsGrid({ initialCampaigns = [] }: CampaignsGridProps) {
         {/* Gradient mask only when not expanded and there are preview items */
         }
         {!expanded && blurredThree.length > 0 && (
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-gray-50 to-transparent" />
+          <div className={`pointer-events-none absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t ${gradientFromClass} to-transparent`} />
         )}
       </div>
 

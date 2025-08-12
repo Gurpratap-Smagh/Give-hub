@@ -23,6 +23,18 @@ export interface User {
   role: UserRole;
   createdAt: string; // ISO string for JSON compatibility
   updatedAt: string; // ISO string for JSON compatibility
+  // Profile picture - base64 encoded image or URL
+  profilePicture?: string;
+  // Basic profile fields used in Profile page
+  bio?: string;
+  location?: string;
+  website?: string;
+  // Web3 wallet addresses placeholder (by chain)
+  walletAddresses?: {
+    Ethereum?: string;
+    Solana?: string;
+    Bitcoin?: string;
+  };
   // User-specific fields
   donatedCampaigns?: string[]; // Campaign IDs user has donated to
   totalDonated?: number;
@@ -53,6 +65,16 @@ export interface Campaign {
   description: string;
   /** Optional campaign category (e.g., education, healthcare, other-custom) */
   category?: string;
+  /** Campaign creator ID - maps to User/Creator */
+  creatorId: string;
+  /** Campaign image - base64 encoded image or URL */
+  image?: string;
+  /** Placeholder for smart contract ownership verification in production */
+  contractOwnership?: {
+    verified: boolean;
+    contractAddress?: string;
+    blockchainProof?: string;
+  };
 }
 
 // Database interface (uses ISO strings for JSON compatibility)
@@ -138,6 +160,7 @@ class MockDatabase {
       id: `user_${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      walletAddresses: {},
       donatedCampaigns: [],
       totalDonated: 0,
       preferredChains: []

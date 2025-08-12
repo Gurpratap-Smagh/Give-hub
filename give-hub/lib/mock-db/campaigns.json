@@ -10,7 +10,14 @@
         "Solana"
       ],
       "description": "Providing access to clean, safe drinking water for remote villages in developing countries. Our team will install solar-powered water purification systems that can serve entire communities. Each system can provide clean water for up to 500 people daily. The funds will cover equipment, transportation, installation, and training local technicians for maintenance. This project will directly impact over 2,000 people across 4 villages, giving them access to clean water for the first time. We've partnered with local organizations to ensure sustainability and community ownership of these systems.",
-      "category": "Water & Sanitation"
+      "category": "Water & Sanitation",
+      "creatorId": "creator_1",
+      "image": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjI0MCIgdmlld0JveD0iMCAwIDQwMCAyNDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjNEY5NkZGIi8+CjxjaXJjbGUgY3g9IjIwMCIgY3k9IjEyMCIgcj0iNDAiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuOSIvPgo8cGF0aCBkPSJNMTgwIDEwMGgyMHYyMGgtMjB6IiBmaWxsPSIjNEY5NkZGIi8+CjxwYXRoIGQ9Ik0xNzAgMTMwaDYwdjEwSDE3MHoiIGZpbGw9IiM0Rjk2RkYiLz4KPHN2Zz4K",
+      "contractOwnership": {
+        "verified": false,
+        "contractAddress": null,
+        "blockchainProof": null
+      }
     },
     {
       "id": "2",
@@ -22,7 +29,14 @@
         "Bitcoin"
       ],
       "description": "Supporting families who have lost their homes in recent wildfires. Many families have been displaced with nowhere to go and need immediate assistance with temporary housing, food, clothing, and basic necessities. Your donations will provide direct financial support to affected families, help them find temporary accommodation, and cover emergency expenses while they work to rebuild their lives. We've identified 50 families in urgent need and are working with local shelters and community organizations to ensure aid reaches those who need it most. Every dollar goes directly to families - no administrative fees.",
-      "category": "Emergency Relief"
+      "category": "Emergency Relief",
+      "creatorId": "creator_2",
+      "image": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjI0MCIgdmlld0JveD0iMCAwIDQwMCAyNDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjRkY2NTY1Ii8+CjxwYXRoIGQ9Ik0xODAgMTAwaDQwdjQwSDE4MHoiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuOSIvPgo8cGF0aCBkPSJNMTkwIDExMGgyMHYyMEgxOTB6IiBmaWxsPSIjRkY2NTY1Ii8+CjxjaXJjbGUgY3g9IjIwMCIgY3k9IjE2MCIgcj0iMTUiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuOCIvPgo8L3N2Zz4K",
+      "contractOwnership": {
+        "verified": false,
+        "contractAddress": null,
+        "blockchainProof": null
+      }
     },
     {
       "id": "3",
@@ -35,7 +49,14 @@
         "Bitcoin"
       ],
       "description": "Bridging the digital divide by providing laptops, tablets, and internet access to students in underserved communities. Many students lack access to technology necessary for modern education, especially highlighted during remote learning periods. This campaign will purchase refurbished devices, set up internet connectivity, and provide digital literacy training for both students and teachers. We aim to serve 3 schools in rural areas, reaching approximately 300 students. The program includes ongoing technical support and educational software licenses. Studies show that access to technology can improve learning outcomes by up to 30% in these communities.",
-      "category": "Education"
+      "category": "Education",
+      "creatorId": "creator_3",
+      "image": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjI0MCIgdmlld0JveD0iMCAwIDQwMCAyNDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjMTBCOTgxIi8+CjxyZWN0IHg9IjE2MCIgeT0iODAiIHdpZHRoPSI4MCIgaGVpZ2h0PSI2MCIgcng9IjgiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuOSIvPgo8cmVjdCB4PSIxNzAiIHk9IjkwIiB3aWR0aD0iNjAiIGhlaWdodD0iNDAiIGZpbGw9IiMxMEI5ODEiLz4KPHN2Zz4K",
+      "contractOwnership": {
+        "verified": false,
+        "contractAddress": null,
+        "blockchainProof": null
+      }
     },
     {
       "id": "4",
@@ -47,7 +68,14 @@
         "Solana"
       ],
       "description": "Expanding our local animal shelter to accommodate more rescued animals and provide better medical care. Our current facility is at capacity and we're forced to turn away animals in need. The expansion will add 20 new kennels, a veterinary clinic, and a rehabilitation area for injured animals. This will allow us to rescue an additional 200 animals per year and provide on-site medical care instead of expensive external veterinary services. The shelter has been serving the community for 15 years and has successfully found homes for over 3,000 animals. All funds go directly to construction and medical equipment - our staff are volunteers.",
-      "category": "Animals"
+      "category": "Animals",
+      "creatorId": "creator_2",
+      "image": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjI0MCIgdmlld0JveD0iMCAwIDQwMCAyNDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjRjU5RTBCIi8+CjxjaXJjbGUgY3g9IjE4MCIgY3k9IjEwMCIgcj0iMjAiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuOSIvPgo8Y2lyY2xlIGN4PSIyMjAiIGN5PSIxMDAiIHI9IjIwIiBmaWxsPSJ3aGl0ZSIgZmlsbC1vcGFjaXR5PSIwLjkiLz4KPHBhdGggZD0iTTE4MCA1MHY0MGgtNDB2LTQwaDQweiIgZmlsbD0id2hpdGUiIGZpbGwtb3BhY2l0eT0iMC44Ii8+CjxwYXRoIGQ9Ik0yMjAgNTB2NDBoLTQwdi00MGg0MHoiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuOCIvPgo8L3N2Zz4K",
+      "contractOwnership": {
+        "verified": false,
+        "contractAddress": null,
+        "blockchainProof": null
+      }
     },
     {
       "id": "5",
@@ -59,7 +87,14 @@
         "Bitcoin"
       ],
       "description": "Free coding bootcamp for underrepresented youth aged 16-18 in our community. This intensive 12-week program will teach web development, mobile app creation, and basic cybersecurity skills. Many talented young people in our area lack access to quality tech education and career opportunities. The bootcamp includes mentorship from industry professionals, career counseling, and job placement assistance. We'll provide laptops, course materials, and even transportation assistance for students who need it. Our pilot program last year achieved a 90% completion rate with 80% of graduates finding tech internships or jobs within 6 months. This year we aim to serve 25 students.",
-      "category": "Youth & Education"
+      "category": "Youth & Education",
+      "creatorId": "creator_3",
+      "image": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjI0MCIgdmlld0JveD0iMCAwIDQwMCAyNDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjOEI1Q0Y2Ii8+CjxyZWN0IHg9IjE1MCIgeT0iNzAiIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiByeD0iMTAiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuOSIvPgo8cmVjdCB4PSIxNjAiIHk9IjgwIiB3aWR0aD0iODAiIGhlaWdodD0iNjAiIGZpbGw9IiM4QjVDRjYiLz4KPGNpcmNsZSBjeD0iMTcwIiBjeT0iOTAiIHI9IjMiIGZpbGw9IndoaXRlIi8+CjxjaXJjbGUgY3g9IjE4MCIgY3k9IjkwIiByPSIzIiBmaWxsPSJ3aGl0ZSIvPgo8Y2lyY2xlIGN4PSIxOTAiIGN5PSI5MCIgcj0iMyIgZmlsbD0id2hpdGUiLz4KPHN2Zz4K",
+      "contractOwnership": {
+        "verified": false,
+        "contractAddress": null,
+        "blockchainProof": null
+      }
     },
     {
       "id": "6",
@@ -71,7 +106,14 @@
         "Bitcoin"
       ],
       "description": "Creating a sustainable community garden in an urban food desert. This project will transform a vacant lot into a thriving garden that provides fresh produce to local families while teaching sustainable farming practices. The garden will feature raised beds, a greenhouse for year-round growing, rainwater collection systems, and a composting area. We'll offer free gardening classes and distribute fresh vegetables to local food banks and low-income families. The project includes partnerships with local schools for educational field trips and after-school programs. Over 100 families have already signed up to participate, and local restaurants have committed to purchasing surplus produce to help fund ongoing maintenance.",
-      "category": "Community & Food"
+      "category": "Community & Food",
+      "creatorId": "creator_1",
+      "image": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjI0MCIgdmlld0JveD0iMCAwIDQwMCAyNDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjMjJDNTVFIi8+CjxjaXJjbGUgY3g9IjE4MCIgY3k9IjEwMCIgcj0iMjUiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuOSIvPgo8Y2lyY2xlIGN4PSIyMjAiIGN5PSIxMjAiIHI9IjIwIiBmaWxsPSJ3aGl0ZSIgZmlsbC1vcGFjaXR5PSIwLjgiLz4KPGNpcmNsZSBjeD0iMjAwIiBjeT0iMTUwIiByPSIxNSIgZmlsbD0id2hpdGUiIGZpbGwtb3BhY2l0eT0iMC43Ii8+CjxwYXRoIGQ9Ik0xNjAgMTgwaDgwdjIwSDE2MHoiIGZpbGw9IndoaXRlIiBmaWxsLW9wYWNpdHk9IjAuNiIvPgo8L3N2Zz4K",
+      "contractOwnership": {
+        "verified": false,
+        "contractAddress": null,
+        "blockchainProof": null
+      }
     },
     {
       "title": "mommy's house",
@@ -82,7 +124,13 @@
         "Ethereum"
       ],
       "category": "family fund",
-      "id": "campaign_1754989964789"
+      "id": "campaign_1754989964789",
+      "creatorId": "user_1754982187749",
+      "contractOwnership": {
+        "verified": false,
+        "contractAddress": null,
+        "blockchainProof": null
+      }
     },
     {
       "title": "A privacy focused browser powered by revolutionary docker-containers",
@@ -94,7 +142,39 @@
         "Bitcoin"
       ],
       "category": "Privacy",
-      "id": "campaign_1754991406765"
+      "id": "campaign_1754991406765",
+      "creatorId": "user_1754982187749",
+      "image": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjI0MCIgdmlld0JveD0iMCAwIDQwMCAyNDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjNjM2NkYxIi8+CjxyZWN0IHg9IjE0MCIgeT0iODAiIHdpZHRoPSIxMjAiIGhlaWdodD0iODAiIHJ4PSIxMCIgZmlsbD0id2hpdGUiIGZpbGwtb3BhY2l0eT0iMC45Ii8+CjxyZWN0IHg9IjE1MCIgeT0iOTAiIHdpZHRoPSIxMDAiIGhlaWdodD0iNjAiIGZpbGw9IiM2MzY2RjEiLz4KPGNpcmNsZSBjeD0iMjAwIiBjeT0iMTIwIiByPSIxNSIgZmlsbD0id2hpdGUiLz4KPHN2Zz4K",
+      "contractOwnership": {
+        "verified": false,
+        "contractAddress": null,
+        "blockchainProof": null
+      }
+    },
+    {
+      "title": "A dog shelter",
+      "description": "We are launching \"A dog shelter\" on GiveHub to create meaningful impact. a goal of $2,000. Your support will help us reach more people, deliver transparent updates, and turn generosity into real-world change. Join us and share this campaign to amplify the mission.",
+      "goal": 2000,
+      "raised": 0,
+      "chains": [
+        "Bitcoin"
+      ],
+      "category": "animals",
+      "id": "campaign_1755000184820"
+    },
+    {
+      "title": "A dog shelter",
+      "description": "We are launching \"A dog shelter\" on GiveHub to create meaningful impact. a goal of $2,000. Your support will help us reach more people, deliver transparent updates, and turn generosity into real-world change. Join us and share this campaign to amplify the mission.",
+      "goal": 2000,
+      "raised": 0,
+      "chains": [
+        "Ethereum",
+        "Bitcoin"
+      ],
+      "category": "animals",
+      "creatorId": "creator_1754988484427",
+      "image": "",
+      "id": "campaign_1755002767924"
     }
   ]
 }

@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
       goal,
       chains,
       category,
-      creatorId
+      creatorId,
+      image
     } = body as {
       title: string;
       description: string;
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
       chains: ("Ethereum" | "Solana" | "Bitcoin")[];
       category?: string;
       creatorId?: string;
+      image?: string;
     }
 
     if (!title || !description || !goal || !chains || chains.length === 0) {
@@ -50,7 +52,10 @@ export async function POST(req: NextRequest) {
       goal: Number(goal),
       raised: 0,
       chains,
-      category
+      category,
+      // ensure campaigns are linked to their creator for /studio filtering
+      creatorId: creatorId || '',
+      image
     })
 
     // Optionally link to creator profile
