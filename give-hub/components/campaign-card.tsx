@@ -5,10 +5,16 @@
  * WHAT IT RENDERS: Campaign info card with progress bar, chains, title, description
  * ACCESS: Named export, import { CampaignCard } from '@/components/campaign-card'
  * MIGRATION NOTES:
- * - Replace Campaign type import with lib/types.ts Campaign interface
- * - Add real-time progress updates via WebSocket or polling
- * - Integrate with contract calls to get accurate raised amounts
- * - Add loading states for dynamic data
+ * - Types (MongoDB): Move local `Campaign`/`Chain` to a shared `lib/types.ts` used by
+ *   both client and server (ensure client types do not import server-only code).
+ * - Data accuracy (Contracts): Raised amount should reflect on-chain state. After
+ *   integrating `contracts.readCampaign(campaignId)`, derive `raised` from contract
+ *   or reconcile periodically with backend. Display pending states if optimistic.
+ * - Realtime: Add WebSocket/SSE or polling to update progress as donations are mined.
+ * - Loading/Skeletons: Add skeleton UIs for minimal and detailed variants.
+ * - Accessibility: Add ARIA attributes and better keyboard focus styles.
+ * - AI (future): Provide short AI-generated summaries for titles/descriptions with
+ *   user consent and clear labeling; ensure no server-only dependencies here.
  * TODO:
  * - Add accessibility labels and ARIA attributes
  * - Implement favorite/bookmark functionality
@@ -20,11 +26,24 @@
 
 import Link from 'next/link'
 import { formatCurrency } from '@/lib/format' // ACCESS: Currency formatting utilities
-import { mockCampaigns } from '@/lib/mock' // TEMP: Replace with lib/types.ts
 // TODO: import { Campaign } from '@/lib/types' // Use centralized types
 
-// TEMP: Type definition - USE lib/types.ts Campaign interface instead
-type Campaign = (typeof mockCampaigns)[0]
+// Client-safe types for this component (avoid importing server-only modules)
+type Chain = 'Ethereum' | 'Solana' | 'Bitcoin'
+type Campaign = {
+  id: string
+  title: string
+  description: string
+  image?: string
+  raised: number
+  goal: number
+  creator?: string
+  createdAt?: string | Date
+  deadline?: string | Date
+  chains: Chain[]
+  /** Optional category label */
+  category?: string
+}
 
 /**
  * Props for CampaignCard component
@@ -45,12 +64,26 @@ interface CampaignCardProps {
 export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProps) {
   // Calculate funding progress percentage
   const progressPercentage = Math.round((campaign.raised / campaign.goal) * 100)
+  // Format category (hide `other:` prefix and underscores)
+  const displayCategory = campaign.category
+    ? campaign.category.startsWith('other:')
+      ? campaign.category.slice('other:'.length).replaceAll('_', ' ')
+      : campaign.category
+    : undefined
   
   // Minimal variant for home page grid display
   if (variant === 'minimal') {
     return (
       <Link href={`/campaign/${campaign.id}`}>
-        <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-md hover:border-gray-300 transform hover:-translate-y-1">
+        <div className="relative bg-white rounded-xl border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-md hover:border-gray-300 transform hover:-translate-y-1 h-full flex flex-col">
+          {/* Category pill */}
+          {displayCategory && (
+            <div className="absolute top-3 right-3">
+              <span className="px-2.5 py-1 text-[10px] leading-none font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200 shadow-sm">
+                {displayCategory}
+              </span>
+            </div>
+          )}
           {/* Blockchain Chain Indicators - Building Block: Multi-chain support display */}
           <div className="flex gap-2 mb-4">
             {campaign.chains.map((chain) => (
@@ -69,7 +102,7 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
           </h3>
           
           {/* Progress Section - Building Block: Funding visualization */}
-          <div className="mb-4">
+          <div className="mt-auto">
             <div className="flex justify-between items-center mb-2">
               <span className="text-2xl font-bold text-gray-900">
                 {formatCurrency(campaign.raised)}

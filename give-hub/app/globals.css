@@ -93,3 +93,15 @@ input::-webkit-inner-spin-button {
 input[type=number] {
   -moz-appearance: textfield;
 }
+
+/* Limitscroll utility: prevent "scrolling into void"/rubber-band overscroll and hide x-overflow */
+.x-limitscroll {
+  overscroll-behavior: contain; /* prevent scroll chaining and bounce */
+  overflow-x: hidden;
+  min-height: 100svh; /* account for mobile dynamic viewport */
+}
+
+/* Ensure fixed bottom elements respect safe area on iOS */
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}

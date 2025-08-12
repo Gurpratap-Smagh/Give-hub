@@ -6,11 +6,11 @@ Welcome to GiveHub, a modern, decentralized platform for fundraising and donatio
 
 GiveHub allows users to create fundraising campaigns, explore existing ones, and donate to causes they care about. The platform is designed to be transparent and secure, leveraging smart contracts for handling donations.
 
-This repository contains the frontend application built with the Next.js App Router. The codebase is heavily annotated with developer comments, migration notes, and TODOs to guide the transition from mock data to a full-fledged backend.
+This repository contains the frontend application built with the Next.js App Router (currently v15). The codebase is annotated with concise migration notes and TODOs to guide the swap from the JSON mock DB to MongoDB. It is production-structured and self-sufficient without any external test references.
 
 ## Tech Stack
 
-- **Framework:** [Next.js 13](https://nextjs.org/) (App Router)
+- **Framework:** [Next.js 15](https://nextjs.org/) (App Router)
 - **Language:** [TypeScript](https://www.typescriptlang.org/)
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/)
 - **UI Components:** [Shadcn UI](https://ui.shadcn.com/) (using Radix UI and Tailwind CSS)
@@ -36,22 +36,43 @@ To run the development server locally, follow these steps:
 
 Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
 
+Environment is automatically loaded from `.env.local` when present.
+
 ## Project Structure
 
 -   `app/`: Contains all pages and layouts, following the Next.js App Router structure.
 -   `components/`: Reusable React components used across the application (e.g., `Nav`, `CampaignCard`).
--   `lib/`: Core logic, type definitions, and placeholder data.
+-   `lib/`: Core logic, types, auth, and data access.
     -   `types.ts`: Centralized TypeScript type definitions.
-    -   `mock.ts`: Temporary mock data for development.
+    -   `auth.ts`, `auth-context.tsx`: JWT auth utilities and client context.
+    -   `mock-db/`: JSON-based mock database (drop-in path to MongoDB).
+      -   `database.ts`: CRUD helpers and search across schema fields.
+      -   `users.json`, `campaigns.json`, `donations.json`: Persistent JSON stores.
     -   `contracts.ts`: Stub functions for smart contract interactions.
+
+## Current Features
+
+-   Campaigns list API: `GET /api/campaigns`
+-   Campaign detail API: `GET /api/campaigns/[id]`
+-   Campaign creation API: `POST /api/campaigns`
+    -   Persists to JSON mock DB and links created campaign to creator
+    -   Supports optional `category`, including custom values
+-   Authentication (JWT): signup/signin/signout, client context, role-based UI
+-   Home page uses server-side data (`db.getAllCampaigns()`) and passes to a client grid
+    -   Grid shows 6 cards fully + next 3 blurred before "See more" (sticky button)
+    -   On expand, remaining items render unblurred
+-   Campaign creation UI with category dropdown and "Other" free text
+    -   Stylish "Edit with AI" button (alerts for now)
+-   Campaign cards show category as a small grey pill
+-   DB search helper `db.searchCampaigns(query)` for filtering by any schema field and text query `q`
 
 ## Migration Roadmap
 
-This project is currently in a pre-alpha stage, using mock data for rapid prototyping. The next phases involve:
+The app uses a JSON-backed mock DB that can be replaced with MongoDB by swapping implementations in `lib/mock-db/database.ts` while keeping API contracts the same.
 
-1.  **Backend Integration:** Replace mock data in `lib/mock.ts` with API calls to a MongoDB database. API routes will be created under `app/api/`.
-2.  **Smart Contract Integration:** Implement the stubbed functions in `lib/contracts.ts` to interact with deployed ZetaChain smart contracts using `viem`.
-3.  **AI-Powered Features:** Build out the `/api/ai` endpoint to parse user intents for campaign creation, adding validation and security checks.
-4.  **Authentication:** Implement user login and wallet connection to manage campaigns and donations.
+1.  **MongoDB Integration:** Replace file read/write with MongoDB collections in `database.ts`.
+2.  **Contracts:** Implement `lib/contracts.ts` with viem / ZetaChain.
+3.  **AI:** Add `/api/ai` and integrate content assistance where TODOs indicate.
+4.  **Rate limiting & emails:** Add production-grade infra.
 
-Developer notes and `TODO` comments are embedded throughout the code to pinpoint exactly where these changes need to occur.
+Developer TODOs are intentionally left in code as placeholders to guide the next steps. No external test references are required.

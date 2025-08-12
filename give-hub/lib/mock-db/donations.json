@@ -1,0 +1,88 @@
+{
+  "donations": [
+    {
+      "campaignId": "1",
+      "name": "Sarah Chen",
+      "amount": 250,
+      "chain": "Ethereum",
+      "timestamp": "2024-08-11T22:52:08.000Z"
+    },
+    {
+      "campaignId": "1",
+      "name": "Michael Rodriguez",
+      "amount": 100,
+      "chain": "Solana",
+      "timestamp": "2024-08-11T19:52:08.000Z"
+    },
+    {
+      "campaignId": "1",
+      "name": "Anonymous",
+      "amount": 500,
+      "chain": "Ethereum",
+      "timestamp": "2024-08-11T16:52:08.000Z"
+    },
+    {
+      "campaignId": "1",
+      "name": "David Park",
+      "amount": 75,
+      "chain": "Solana",
+      "timestamp": "2024-08-11T12:52:08.000Z"
+    },
+    {
+      "campaignId": "1",
+      "name": "Emma Thompson",
+      "amount": 300,
+      "chain": "Ethereum",
+      "timestamp": "2024-08-10T00:52:08.000Z"
+    },
+    {
+      "campaignId": "2",
+      "name": "Alex Johnson",
+      "amount": 150,
+      "chain": "Bitcoin",
+      "timestamp": "2024-08-11T21:52:08.000Z"
+    },
+    {
+      "campaignId": "2",
+      "name": "Maria Garcia",
+      "amount": 200,
+      "chain": "Ethereum",
+      "timestamp": "2024-08-11T18:52:08.000Z"
+    },
+    {
+      "campaignId": "2",
+      "name": "James Wilson",
+      "amount": 350,
+      "chain": "Bitcoin",
+      "timestamp": "2024-08-11T14:52:08.000Z"
+    },
+    {
+      "campaignId": "3",
+      "name": "Lisa Anderson",
+      "amount": 400,
+      "chain": "Ethereum",
+      "timestamp": "2024-08-11T20:52:08.000Z"
+    },
+    {
+      "campaignId": "3",
+      "name": "Robert Kim",
+      "amount": 125,
+      "chain": "Solana",
+      "timestamp": "2024-08-11T17:52:08.000Z"
+    },
+    {
+      "campaignId": "4",
+      "name": "Jennifer Lee",
+      "amount": 180,
+      "chain": "Ethereum",
+      "timestamp": "2024-08-12T01:52:08.000Z"
+    },
+    {
+      "campaignId": "5",
+      "name": "Kevin Brown",
+      "amount": 90,
+      "chain": "Bitcoin",
+      "timestamp": "2024-08-11T15:52:08.000Z"
+    }
+  ]
+}

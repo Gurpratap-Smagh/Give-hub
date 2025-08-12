@@ -1,0 +1,143 @@
+{
+  "users": [
+    {
+      "id": "user_1",
+      "username": "john_donor",
+      "email": "john@example.com",
+      "password": "hashedpassword123",
+      "role": "user",
+      "createdAt": "2024-01-15T00:00:00.000Z",
+      "updatedAt": "2024-01-15T00:00:00.000Z",
+      "donatedCampaigns": [
+        "1",
+        "3",
+        "5"
+      ],
+      "totalDonated": 750,
+      "preferredChains": [
+        "Ethereum",
+        "Solana"
+      ]
+    },
+    {
+      "id": "user_2",
+      "username": "sarah_helper",
+      "email": "sarah@example.com",
+      "password": "hashedpassword456",
+      "role": "user",
+      "createdAt": "2024-02-01T00:00:00.000Z",
+      "updatedAt": "2024-02-01T00:00:00.000Z",
+      "donatedCampaigns": [
+        "2",
+        "4"
+      ],
+      "totalDonated": 500,
+      "preferredChains": [
+        "Bitcoin"
+      ]
+    },
+    {
+      "id": "creator_1",
+      "username": "water_org",
+      "email": "contact@waterorg.com",
+      "password": "hashedpassword789",
+      "role": "creator",
+      "createdAt": "2024-01-10T00:00:00.000Z",
+      "updatedAt": "2024-01-10T00:00:00.000Z",
+      "createdCampaigns": [
+        "1"
+      ],
+      "totalRaised": 32500,
+      "verificationStatus": "verified",
+      "bio": "Non-profit organization focused on providing clean water access to underserved communities worldwide.",
+      "website": "https://waterorg.com",
+      "socialLinks": {
+        "twitter": "@waterorg",
+        "linkedin": "company/water-org"
+      }
+    },
+    {
+      "id": "creator_2",
+      "username": "relief_foundation",
+      "email": "help@relieffoundation.org",
+      "password": "hashedpassword101",
+      "role": "creator",
+      "createdAt": "2024-01-20T00:00:00.000Z",
+      "updatedAt": "2024-01-20T00:00:00.000Z",
+      "createdCampaigns": [
+        "2"
+      ],
+      "totalRaised": 18750,
+      "verificationStatus": "verified",
+      "bio": "Emergency relief organization providing immediate assistance to disaster victims.",
+      "website": "https://relieffoundation.org"
+    },
+    {
+      "id": "creator_3",
+      "username": "tech_education",
+      "email": "admin@techedu.org",
+      "password": "hashedpassword202",
+      "role": "creator",
+      "createdAt": "2024-02-05T00:00:00.000Z",
+      "updatedAt": "2024-02-05T00:00:00.000Z",
+      "createdCampaigns": [
+        "3",
+        "5"
+      ],
+      "totalRaised": 53500,
+      "verificationStatus": "pending",
+      "bio": "Bridging the digital divide through technology education and access programs."
+    },
+    {
+      "username": "joe",
+      "email": "joe@joe.com",
+      "password": "$2b$10$dtG/Nm5rny0S55EIkAWtV.fSsNAAbc7O4r.2f/gUp.FlmHOG/t0ga",
+      "role": "user",
+      "id": "user_1754982187749",
+      "createdAt": "2025-08-12T07:03:07.749Z",
+      "updatedAt": "2025-08-12T07:03:07.749Z",
+      "donatedCampaigns": [],
+      "totalDonated": 0,
+      "preferredChains": []
+    },
+    {
+      "username": "joey",
+      "email": "joe@bro.com",
+      "password": "$2b$10$axOSOr4ZnZgLpqg8EiJYfeYF5aE8YwghepLoDZWb0RyYptD16kk7m",
+      "role": "user",
+      "id": "user_1754982650561",
+      "createdAt": "2025-08-12T07:10:50.561Z",
+      "updatedAt": "2025-08-12T07:10:50.565Z",
+      "donatedCampaigns": [],
+      "totalDonated": 0,
+      "preferredChains": []
+    },
+    {
+      "username": "maya",
+      "email": "mayaa@joe.com",
+      "password": "$2b$10$QJ2X1sBnMqHOJkySSpRSYuRyOV/0vFmCb91631/e.MfBkQFaUCjLG",
+      "role": "creator",
+      "createdCampaigns": [
+        "campaign_1754989964789",
+        "campaign_1754991406765"
+      ],
+      "totalRaised": 0,
+      "verificationStatus": "pending",
+      "id": "creator_1754988484427",
+      "createdAt": "2025-08-12T08:48:04.427Z",
+      "updatedAt": "2025-08-12T09:36:46.769Z"
+    },
+    {
+      "username": "doramon",
+      "email": "do@joe.com",
+      "password": "$2b$10$sDyYBXdgH6uHnCbM0bdKkuiLqk1fRKoQ0fo2.ff8obu67/LCzCLaO",
+      "role": "user",
+      "id": "user_1754992322999",
+      "createdAt": "2025-08-12T09:52:02.999Z",
+      "updatedAt": "2025-08-12T09:52:03.000Z",
+      "donatedCampaigns": [],
+      "totalDonated": 0,
+      "preferredChains": []
+    }
+  ]
+}

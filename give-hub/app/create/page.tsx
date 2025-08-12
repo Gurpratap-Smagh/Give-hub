@@ -20,7 +20,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-// TODO: import { useRouter } from 'next/navigation' // For redirect after creation
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth-context'
 // TODO: import { createCampaign } from '@/lib/api' // Future API integration
 // TODO: import { validateCampaign } from '@/lib/validation' // Zod schema validation
 // TODO: import { optimizeContent } from '@/lib/ai' // AI content enhancement
@@ -38,9 +39,10 @@ export default function CreatePage() {
     chains: [] as string[],
     category: ''
   })
-  // TODO: Add loading and error states
-  // const [isSubmitting, setIsSubmitting] = useState(false)
-  // const [errors, setErrors] = useState<Record<string, string>>({})
+  const [otherCategory, setOtherCategory] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const router = useRouter()
+  const { user } = useAuth()
 
   // REGION: Event handlers
   /**
@@ -73,34 +75,41 @@ export default function CreatePage() {
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TEMP: Placeholder alert
-    alert('Campaign creation will be integrated with backend and Gemini AI in the next phase!')
-    
-    // TODO: Implement real campaign creation flow
-    // setIsSubmitting(true)
-    // setErrors({})
-    // 
-    // try {
-    //   // Validate form data with zod schema
-    //   const validatedData = validateCampaign(formData)
-    //   
-    //   // Optional: Enhance content with AI
-    //   const optimizedData = await optimizeContent(validatedData)
-    //   
-    //   // Create campaign via API
-    //   const campaign = await createCampaign(optimizedData)
-    //   
-    //   // Redirect to new campaign page
-    //   router.push(`/campaign/${campaign.id}`)
-    // } catch (error) {
-    //   if (error instanceof ZodError) {
-    //     setErrors(error.flatten().fieldErrors)
-    //   } else {
-    //     console.error('Campaign creation failed:', error)
-    //   }
-    // } finally {
-    //   setIsSubmitting(false)
-    // }
+    if (!formData.category) {
+      alert('Please select a category')
+      return
+    }
+    if (formData.category === 'other' && !otherCategory.trim()) {
+      alert('Please specify your category')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const res = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          goal: Number(formData.goal),
+          chains: formData.chains as ('Ethereum' | 'Solana' | 'Bitcoin')[],
+          category: formData.category === 'other' ? otherCategory.trim() : formData.category,
+          creatorId: user?.id
+        })
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to create campaign')
+      }
+      // Redirect to the new campaign page; campaign page shows its own loading
+      router.push(`/campaign/${data.campaign.id}`)
+    } catch (error) {
+      console.error('Campaign creation failed:', error)
+      alert('Failed to create campaign. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -143,6 +152,19 @@ export default function CreatePage() {
                 placeholder="Enter a compelling title for your campaign"
                 required
               />
+            </div>
+            {/* Edit with AI button */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => alert('AI integration yet to happen')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 border-gray-200 text-gray-700 hover:border-blue-500 hover:text-blue-600 hover:shadow-sm transition-all"
+                title="Edit with AI"
+              >
+                <span className="text-xl">✨</span>
+                Edit with AI
+                <span className="text-xs bg-black text-white rounded-full px-2 py-0.5 ml-1">beta</span>
+              </button>
             </div>
 
             {/* Campaign Description */}
@@ -203,6 +225,18 @@ export default function CreatePage() {
                 <option value="emergency">Emergency Relief</option>
                 <option value="other">Other</option>
               </select>
+              {formData.category === 'other' && (
+                <div className="mt-3">
+                  <input
+                    type="text"
+                    value={otherCategory}
+                    onChange={(e) => setOtherCategory(e.target.value)}
+                    placeholder="Enter your custom category"
+                    className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-lg"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">This will be shown on your card.</p>
+                </div>
+              )}
             </div>
 
             {/* Blockchain Selection */}
@@ -243,10 +277,10 @@ export default function CreatePage() {
             <div className="pt-6">
               <button
                 type="submit"
-                disabled={formData.chains.length === 0}
+                disabled={formData.chains.length === 0 || isSubmitting}
                 className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-400 text-white py-4 rounded-full font-bold text-xl transition-all hover:scale-105 shadow-lg disabled:hover:scale-100 disabled:cursor-not-allowed"
               >
-                Create Campaign
+                {isSubmitting ? 'Creating…' : 'Create Campaign'}
               </button>
             </div>
           </form>

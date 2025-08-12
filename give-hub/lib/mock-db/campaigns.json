@@ -1,0 +1,100 @@
+{
+  "campaigns": [
+    {
+      "id": "1",
+      "title": "Clean Water for Rural Communities",
+      "goal": 50000,
+      "raised": 32500,
+      "chains": [
+        "Ethereum",
+        "Solana"
+      ],
+      "description": "Providing access to clean, safe drinking water for remote villages in developing countries. Our team will install solar-powered water purification systems that can serve entire communities. Each system can provide clean water for up to 500 people daily. The funds will cover equipment, transportation, installation, and training local technicians for maintenance. This project will directly impact over 2,000 people across 4 villages, giving them access to clean water for the first time. We've partnered with local organizations to ensure sustainability and community ownership of these systems.",
+      "category": "Water & Sanitation"
+    },
+    {
+      "id": "2",
+      "title": "Emergency Relief for Wildfire Victims",
+      "goal": 25000,
+      "raised": 18750,
+      "chains": [
+        "Ethereum",
+        "Bitcoin"
+      ],
+      "description": "Supporting families who have lost their homes in recent wildfires. Many families have been displaced with nowhere to go and need immediate assistance with temporary housing, food, clothing, and basic necessities. Your donations will provide direct financial support to affected families, help them find temporary accommodation, and cover emergency expenses while they work to rebuild their lives. We've identified 50 families in urgent need and are working with local shelters and community organizations to ensure aid reaches those who need it most. Every dollar goes directly to families - no administrative fees.",
+      "category": "Emergency Relief"
+    },
+    {
+      "id": "3",
+      "title": "Educational Technology for Underserved Schools",
+      "goal": 75000,
+      "raised": 45000,
+      "chains": [
+        "Ethereum",
+        "Solana",
+        "Bitcoin"
+      ],
+      "description": "Bridging the digital divide by providing laptops, tablets, and internet access to students in underserved communities. Many students lack access to technology necessary for modern education, especially highlighted during remote learning periods. This campaign will purchase refurbished devices, set up internet connectivity, and provide digital literacy training for both students and teachers. We aim to serve 3 schools in rural areas, reaching approximately 300 students. The program includes ongoing technical support and educational software licenses. Studies show that access to technology can improve learning outcomes by up to 30% in these communities.",
+      "category": "Education"
+    },
+    {
+      "id": "4",
+      "title": "Local Animal Shelter Expansion",
+      "goal": 40000,
+      "raised": 12000,
+      "chains": [
+        "Ethereum",
+        "Solana"
+      ],
+      "description": "Expanding our local animal shelter to accommodate more rescued animals and provide better medical care. Our current facility is at capacity and we're forced to turn away animals in need. The expansion will add 20 new kennels, a veterinary clinic, and a rehabilitation area for injured animals. This will allow us to rescue an additional 200 animals per year and provide on-site medical care instead of expensive external veterinary services. The shelter has been serving the community for 15 years and has successfully found homes for over 3,000 animals. All funds go directly to construction and medical equipment - our staff are volunteers.",
+      "category": "Animals"
+    },
+    {
+      "id": "5",
+      "title": "Youth Coding Bootcamp",
+      "goal": 30000,
+      "raised": 8500,
+      "chains": [
+        "Ethereum",
+        "Bitcoin"
+      ],
+      "description": "Free coding bootcamp for underrepresented youth aged 16-18 in our community. This intensive 12-week program will teach web development, mobile app creation, and basic cybersecurity skills. Many talented young people in our area lack access to quality tech education and career opportunities. The bootcamp includes mentorship from industry professionals, career counseling, and job placement assistance. We'll provide laptops, course materials, and even transportation assistance for students who need it. Our pilot program last year achieved a 90% completion rate with 80% of graduates finding tech internships or jobs within 6 months. This year we aim to serve 25 students.",
+      "category": "Youth & Education"
+    },
+    {
+      "id": "6",
+      "title": "Community Garden Project",
+      "goal": 15000,
+      "raised": 22000,
+      "chains": [
+        "Solana",
+        "Bitcoin"
+      ],
+      "description": "Creating a sustainable community garden in an urban food desert. This project will transform a vacant lot into a thriving garden that provides fresh produce to local families while teaching sustainable farming practices. The garden will feature raised beds, a greenhouse for year-round growing, rainwater collection systems, and a composting area. We'll offer free gardening classes and distribute fresh vegetables to local food banks and low-income families. The project includes partnerships with local schools for educational field trips and after-school programs. Over 100 families have already signed up to participate, and local restaurants have committed to purchasing surplus produce to help fund ongoing maintenance.",
+      "category": "Community & Food"
+    },
+    {
+      "title": "mommy's house",
+      "description": "I want to make a house for my mom",
+      "goal": 5000,
+      "raised": 0,
+      "chains": [
+        "Ethereum"
+      ],
+      "category": "family fund",
+      "id": "campaign_1754989964789"
+    },
+    {
+      "title": "A privacy focused browser powered by revolutionary docker-containers",
+      "description": "We are building a browser which will each user a temporary container to browse on and can be removed anytime, user will only receive stream of container providing ultimate cyber-protection. first draft link:https://github.com/Luminous-Llama/LluminousLlama/tree/master/luminous",
+      "goal": 2000,
+      "raised": 0,
+      "chains": [
+        "Ethereum",
+        "Bitcoin"
+      ],
+      "category": "Privacy",
+      "id": "campaign_1754991406765"
+    }
+  ]
+}

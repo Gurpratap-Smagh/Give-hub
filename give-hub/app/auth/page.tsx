@@ -1,23 +1,79 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth-context'
 
 export default function AuthPage() {
   const [isSignUp, setIsSignUp] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const router = useRouter()
+  const { signin, signup } = useAuth()
+  
   const [formData, setFormData] = useState({
+    username: '',
     email: '',
     password: '',
     confirmPassword: '',
-    name: ''
+    role: 'user' as 'user' | 'creator'
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Placeholder for authentication logic
-    alert(`${isSignUp ? 'Sign Up' : 'Sign In'} functionality will be integrated with MongoDB later!`)
+    setError('')
+    setSuccess('')
+    setIsLoading(true)
+
+    try {
+      if (isSignUp) {
+        // Validate passwords match
+        if (formData.password !== formData.confirmPassword) {
+          setError('Passwords do not match')
+          setIsLoading(false)
+          return
+        }
+        // Sign up via auth context (sets user + cookie)
+        const result = await signup(
+          formData.username,
+          formData.email,
+          formData.password,
+          formData.role
+        )
+
+        if (result.success) {
+          setSuccess('Account created successfully! Redirecting...')
+          try { localStorage.setItem('new-signup', '1') } catch {}
+          setTimeout(() => {
+            router.push('/profile')
+          }, 2000)
+        } else {
+          setError(result.error || 'Failed to create account')
+        }
+      } else {
+        // Sign in via auth context (sets user + cookie)
+        const result = await signin(
+          formData.email || formData.username,
+          formData.password
+        )
+
+        if (result.success) {
+          setSuccess('Signed in successfully! Redirecting...')
+          router.push('/')
+        } else {
+          setError(result.error || 'Failed to sign in')
+        }
+      }
+    } catch (error) {
+      console.error('Auth error:', error)
+      setError('Network error. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
@@ -42,35 +98,49 @@ export default function AuthPage() {
             </p>
           </div>
 
+          {/* Error/Success Messages */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+          
+          {success && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800">{success}</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {isSignUp && (
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Full Name
+                  Username
                 </label>
                 <input
                   type="text"
-                  name="name"
-                  value={formData.name}
+                  name="username"
+                  value={formData.username}
                   onChange={handleInputChange}
                   className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
-                  placeholder="Enter your full name"
+                  placeholder="Choose a username"
                   required
+                  minLength={3}
                 />
               </div>
             )}
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Email Address
+                {isSignUp ? 'Email Address' : 'Email or Username'}
               </label>
               <input
-                type="email"
+                type={isSignUp ? "email" : "text"}
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
                 className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
-                placeholder="Enter your email"
+                placeholder={isSignUp ? "Enter your email" : "Enter email or username"}
                 required
               />
             </div>
@@ -87,31 +157,61 @@ export default function AuthPage() {
                 className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
                 placeholder="Enter your password"
                 required
+                minLength={8}
               />
             </div>
 
             {isSignUp && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
-                  placeholder="Confirm your password"
-                  required
-                />
-              </div>
+              <>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                    placeholder="Confirm your password"
+                    required
+                    minLength={8}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Account Type
+                  </label>
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleInputChange}
+                    className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+                    required
+                  >
+                    <option value="user">Donor - Support campaigns</option>
+                    <option value="creator">Creator - Create campaigns</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {formData.role === 'creator' 
+                      ? 'Creators can create and manage fundraising campaigns'
+                      : 'Donors can support campaigns and track their contributions'
+                    }
+                  </p>
+                </div>
+              </>
             )}
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white py-3 rounded-full font-bold text-lg transition-all hover:scale-105 shadow-lg"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 disabled:from-gray-400 disabled:to-gray-500 text-white py-3 rounded-full font-bold text-lg transition-all hover:scale-105 shadow-lg disabled:hover:scale-100"
             >
-              {isSignUp ? 'Create Account' : 'Sign In'}
+              {isLoading 
+                ? (isSignUp ? 'Creating Account...' : 'Signing In...') 
+                : (isSignUp ? 'Create Account' : 'Sign In')
+              }
             </button>
           </form>
 
@@ -119,24 +219,36 @@ export default function AuthPage() {
             <p className="text-gray-600">
               {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
               <button
-                onClick={() => setIsSignUp(!isSignUp)}
+                onClick={() => {
+                  setIsSignUp(!isSignUp)
+                  setError('')
+                  setSuccess('')
+                  setFormData({
+                    username: '',
+                    email: '',
+                    password: '',
+                    confirmPassword: '',
+                    role: 'user'
+                  })
+                }}
                 className="text-blue-600 hover:text-blue-800 font-semibold"
+                disabled={isLoading}
               >
                 {isSignUp ? 'Sign In' : 'Sign Up'}
               </button>
             </p>
           </div>
 
-          {/* Placeholder Notice */}
-          <div className="mt-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          {/* Implementation Status */}
+          <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center">
-              <div className="text-yellow-600 mr-3">⚠️</div>
+              <div className="text-blue-600 mr-3">🔐</div>
               <div>
-                <p className="text-sm text-yellow-800 font-medium">
-                  Placeholder Implementation
+                <p className="text-sm text-blue-800 font-medium">
+                  JWT Authentication Active
                 </p>
-                <p className="text-xs text-yellow-700 mt-1">
-                  Authentication will be integrated with MongoDB in the next phase.
+                <p className="text-xs text-blue-700 mt-1">
+                  Mock data storage - MongoDB integration ready for deployment.
                 </p>
               </div>
             </div>

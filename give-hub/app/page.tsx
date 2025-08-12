@@ -4,31 +4,28 @@
  * WHAT CALLS THIS: Next.js App Router for root route '/'
  * WHAT IT RENDERS: Campaign grid with minimal cards, header section
  * ACCESS: Default export, automatically routed by Next.js
- * MIGRATION NOTES:
- * - Replace mockCampaigns import with fetch('/api/campaigns') or server action
- * - Add loading states and error handling for API calls
- * - Consider server-side rendering for SEO (campaigns fetched at build/request time)
+ * DATA FLOW:
+ * - Server component fetches campaigns from JSON DB via `db.getAllCampaigns()`
+ * - Passes data to client grid; no client-side polling or repeated API calls
+ * SEO:
+ * - Server render ensures stable HTML for crawlers; easy to swap DB to MongoDB
  * TODO:
  * - Add pagination when campaign count grows (limit: 12 per page)
  * - Implement search/filter functionality (integrate with Nav search)
  * - Add skeleton loading states
  * - Consider infinite scroll vs pagination UX
  */
-
-import { CampaignCard } from '@/components/campaign-card' // ACCESS: Campaign display component
-import { mockCampaigns } from '@/lib/mock' // TEMP: Replace with API call
+import CampaignsGrid from '../components/campaigns-grid' // Client grid w/ loading and see-more UX
+import { db } from '@/lib/mock-db/database'
 // TODO: import { getCampaigns } from '@/lib/api' // Future API integration
 
 /**
  * Home page component - campaign discovery and browsing
  * @returns JSX element with campaign grid and header
  */
-export default function Home() {
-  // REGION: Data fetching (currently mock)
-  // MIGRATION: Replace with server action or API call
-  // const campaigns = await getCampaigns({ limit: 12, page: 1 })
-  const campaigns = mockCampaigns; // TEMP: Mock data
-
+export default async function Home() {
+  // Server-side fetch to avoid client polling and reduce network chatter
+  const campaigns = db.getAllCampaigns()
   return (
     <div className="min-h-screen bg-gray-50">
       {/* REGION: Main content area */}
@@ -42,23 +39,10 @@ export default function Home() {
             Discover and fund impactful campaigns across multiple blockchains
           </p>
         </div>
-
-        {/* REGION: Campaign grid rendering */}
-        {/* Tailwind: Responsive grid (1 col mobile, 2 col tablet, 3 col desktop) */}
-        {/* Spacing: gap-8 (2rem) for visual separation */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {campaigns.map((campaign) => (
-            <CampaignCard 
-              key={campaign.id} 
-              campaign={campaign} 
-              variant="minimal" // No contribute controls on home page
-            />
-          ))}
-        </div>
-
-        {/* TODO: Add pagination controls here */}
-        {/* TODO: Add "Load More" button or infinite scroll */}
+        {/* REGION: Campaign grid rendering with progressive reveal */}
+        <CampaignsGrid initialCampaigns={campaigns} />
       </main>
     </div>
   )
 }
+

@@ -1,64 +1,147 @@
 /**
  * FILE: app/campaign/[id]/page.tsx
- * PURPOSE: Campaign detail page - fetches campaign data and renders donate controls
- * WHAT CALLS THIS: Next.js App Router for /campaign/[id] routes
- * WHAT IT RENDERS: Campaign details, donation form, recent donations list
- * ACCESS: Dynamic route with params.id, import UI components from @/components
+ * PURPOSE: Campaign detail page with contribution UI and recent donations
+ * WHAT CALLS THIS: Next.js dynamic route /campaign/:id
+ * WHAT IT RENDERS: Detailed campaign info, donate controls, recent donations
  * MIGRATION NOTES:
- * - Replace mockCampaigns/mockDonations with GET /api/campaigns/[id] (MongoDB)
- * - Wire handleDonate to contracts.donate({ campaignId, amount, chain, memo })
- * - Consider optimistic UI: update local raised amount, then reconcile with on-chain read
- * - Add error states, loading skeletons, and transaction status tracking
+ * - Data layer (MongoDB): This page currently fetches from /api/campaigns/[id],
+ *   which reads JSON via `lib/mock-db/database.ts`. Swap that implementation to real
+ *   MongoDB without changing this page's fetch contract. Keep response shape
+ *   { success, campaign, donations }. Add pagination to donations when needed.
+ * - Smart contracts: Replace the TODO donate handler with a concrete call, e.g.
+ *   `contracts.donate({ campaignId, amount, chain, memo })`. Use on-chain events or
+ *   a post-donation API to persist donations to DB and reconcile raised totals.
+ * - Optimistic UI: Optimistically increment `raised` and prepend to donations; rollback
+ *   on failure; reconcile with a read from chain or backend after tx confirmation.
+ * - UX/State: Expand loading states, errors, and transaction status (pending/confirmed/failed).
+ * - Security: Validate amount/chain client-side and server-side. Prevent duplicate submissions.
+ * - SEO: Consider server component version if SEO is needed; keep fs usage server-only.
  * TODO:
- * - Add error boundary for campaign not found
- * - Implement real-time donation updates (WebSocket or polling)
- * - Add transaction history with block explorer links
- * - Implement share functionality with dynamic metadata
+ * - Error boundary for not found and network errors
+ * - Real-time donations via WebSocket/SSE or periodic polling (backed by DB or on-chain indexer)
+ * - Transaction history with block explorer links per chain (Etherscan, Solscan, etc.)
+ * - Social/share: dynamic OG metadata and share links
+ * - AI (future):
+ *   - Summarize campaign description for preview cards
+ *   - Flag risky content via moderation service
+ *   - Recommend similar campaigns; ensure opt-in and privacy safeguards
  */
+
 
 'use client'
 
-import { useState } from 'react'
-import { notFound } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import Spinner from '@/components/spinner'
+import { notFound, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { CampaignCard } from '@/components/campaign-card' // ACCESS: Detailed campaign display
-import { mockCampaigns, mockDonations } from '@/lib/mock' // TEMP: Replace with API calls
 import { formatCurrency, formatDate } from '@/lib/format' // ACCESS: Utility formatters
 // TODO: import { donate } from '@/lib/contracts' // Future contract integration
 // TODO: import { getCampaign, getDonations } from '@/lib/api' // Future API integration
 
-/**
- * Props for campaign detail page
- * @param params - Dynamic route parameters from Next.js
- */
-interface CampaignPageProps {
-  params: { id: string }
-}
+// Route params will be read via useParams to avoid Promise-based params issues in Next.js 15
 
 /**
  * Campaign detail page component - main donation interface
  * @param params - Route parameters containing campaign ID
  * @returns JSX element with campaign details and donation form
  */
-export default function CampaignPage({ params }: CampaignPageProps) {
+export default function CampaignPage() {
+  const route = useParams<{ id: string }>()
+  const id = (route?.id || '') as string
   // REGION: State management
   const [selectedChain, setSelectedChain] = useState<'Ethereum' | 'Solana' | 'Bitcoin'>('Ethereum')
   const [donationAmount, setDonationAmount] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Local types to avoid importing server-only modules
+  type Chain = 'Ethereum' | 'Solana' | 'Bitcoin'
+  interface Campaign {
+    id: string
+    title: string
+    description: string
+    image: string
+    raised: number
+    goal: number
+    creator: string
+    createdAt: string | Date
+    deadline: string | Date
+    chains: Chain[]
+  }
+
+  interface Donation {
+    campaignId: string
+    name?: string
+    amount: number
+    chain: Chain
+    donor?: string
+    timestamp: string | Date
+  }
+
+  const [campaign, setCampaign] = useState<Campaign | null>(null)
+  const [campaignDonations, setCampaignDonations] = useState<Donation[]>([])
   // TODO: Add loading state for donation processing
   // const [isDonating, setIsDonating] = useState(false)
   // TODO: Add transaction status tracking
   // const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'confirmed' | 'failed'>('idle')
 
-  // REGION: Data fetching (currently mock)
-  // MIGRATION: Replace with server-side data fetching or API call
-  // const campaign = await getCampaign(params.id)
-  // const campaignDonations = await getDonations(params.id)
-  const campaign = mockCampaigns.find(c => c.id === params.id) // TEMP: Mock lookup
-  if (!campaign) {
-    notFound() // Next.js 404 handling
+  // REGION: Data fetching
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        setLoading(true)
+        const res = await fetch(`/api/campaigns/${id}`, { cache: 'no-store' })
+        if (!res.ok) {
+          if (res.status === 404) {
+            if (active) setError('not-found')
+            return
+          }
+          throw new Error(`Failed to load campaign (${res.status})`)
+        }
+        const data = await res.json()
+        if (data.success) {
+          if (active) {
+            const allowed: Chain[] = ['Ethereum', 'Solana', 'Bitcoin']
+            const chains: Chain[] = (data.campaign?.chains || [])
+              .filter((c: string): c is Chain => (allowed as string[]).includes(c))
+            setCampaign({ ...data.campaign, chains })
+            setCampaignDonations((data.donations || []) as Donation[])
+          }
+        } else {
+          throw new Error(data.error || 'Unknown error')
+        }
+      } catch (e: unknown) {
+        console.error('Campaign fetch error:', e)
+        const message = e instanceof Error ? e.message : 'Failed to load campaign'
+        if (active) setError(message)
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [id])
+
+  if (error === 'not-found') {
+    notFound()
   }
 
-  const campaignDonations = mockDonations.filter(d => d.campaignId === params.id) // TEMP: Mock filter
+  if (loading || !campaign) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+          <div className="flex items-center gap-3">
+            <Spinner size={20} />
+            <p className="text-gray-600">Loading campaign...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const progressPercentage = Math.round((campaign.raised / campaign.goal) * 100)
 
   // REGION: Event handlers
@@ -101,6 +184,16 @@ export default function CampaignPage({ params }: CampaignPageProps) {
         >
           ← Back to Campaigns
         </Link>
+
+        {/* Colorful heading */}
+        <div className="mb-6">
+          <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900">
+            <span className="text-blue-600">Campaign</span>
+            <span className="text-gray-900"> Details</span>
+          </h1>
+          <p className="mt-2 text-gray-600">{campaign.title}</p>
+          <div className="h-1 w-24 bg-gradient-to-r from-blue-600 to-green-500 rounded-full mt-3" />
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}

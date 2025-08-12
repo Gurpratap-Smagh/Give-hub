@@ -31,6 +31,8 @@ export interface Campaign {
   chains: ("Ethereum" | "Solana" | "Bitcoin")[];
   /** Full campaign description with markdown support */
   description: string;
+  /** Optional campaign category (preset or custom when using Other) */
+  category?: string;
   /** Campaign creator wallet address - added in MongoDB migration */
   creatorAddress?: string;
   /** Creation timestamp - added in MongoDB migration */

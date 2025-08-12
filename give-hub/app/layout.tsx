@@ -18,6 +18,8 @@
 import type { Metadata } from 'next'
 import './globals.css' // ACCESS: Tailwind CSS base styles, custom utilities
 import { Nav } from '@/components/nav' // ACCESS: Global navigation component
+import GlobalLoading from '@/components/global-loading'
+import { AuthProvider } from '@/lib/auth-context'
 
 // SEO metadata for all pages (can be overridden in individual pages)
 export const metadata: Metadata = {
@@ -37,19 +39,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased">
-        {/* MIGRATION: Wrap with providers here */}
-        {/* TODO: <AuthProvider><QueryClientProvider client={queryClient}> */}
-        
-        {/* Global navigation - handles auth state, wallet connection */}
-        <Nav />
-        
-        {/* Main content area - pt-20 accounts for fixed nav height */}
-        <main className="pt-20">
-          {children}
-        </main>
-        
-        {/* TODO: </QueryClientProvider></AuthProvider> */}
+      <body className="min-h-screen antialiased x-limitscroll">
+        {/* Providers */}
+        <AuthProvider>
+          {/* Global navigation - handles auth state, wallet connection */}
+          <Nav />
+          <GlobalLoading />
+          {/* Main content area - pt-20 accounts for fixed nav height */}
+          <main className="pt-20">
+            {children}
+          </main>
+        </AuthProvider>
       </body>
     </html>
   )
