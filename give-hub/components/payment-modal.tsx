@@ -21,7 +21,7 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
   if (!isOpen) return null
 
   const handlePayment = async () => {
-    if (!amount || !donorName || !selectedChain) return
+    if (!amount || !selectedChain) return
 
     setIsProcessing(true)
     
@@ -34,15 +34,15 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
         },
         body: JSON.stringify({
           campaignId: campaign.id,
-          amount: parseFloat(amount),
+          amount: parseFloat((amount || '').replace(/,/g, '.')),
           chain: selectedChain,
-          donorName: donorName.trim(),
+          donorName: (donorName || '').trim() || user?.username || 'Anonymous',
         }),
       })
 
       if (response.ok) {
         await response.json() // Process response but don't store unused result
-        onPaymentSuccess(parseFloat(amount), selectedChain)
+        onPaymentSuccess(parseFloat((amount || '').replace(/,/g, '.')), selectedChain)
         onClose()
         // Reset form
         setAmount('')
@@ -58,8 +58,7 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
     }
   }
 
-  const remainingAmount = campaign.goal - campaign.raised
-  const suggestedAmounts = [10, 25, 50, 100].filter(amt => amt <= remainingAmount)
+  const suggestedAmounts = [10, 25, 50, 100]
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -83,18 +82,18 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
             <span>Raised: ${campaign.raised.toLocaleString()}</span>
             <span>Goal: ${campaign.goal.toLocaleString()}</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+          <div className="w-full bg-gray-200 rounded-full h-2 mt-2 overflow-visible">
             <div 
               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${Math.min((campaign.raised / campaign.goal) * 100, 100)}%` }}
+              style={{ width: `${(campaign.raised / campaign.goal) * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Donor Name */}
+        {/* Donor Name (optional) */}
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Your Name (will be shown publicly)
+            Your Name (optional, shown publicly)
           </label>
           <input
             type="text"
@@ -116,7 +115,6 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Enter amount"
             min="1"
-            max={remainingAmount}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           
@@ -161,7 +159,7 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
         {/* Payment Button */}
         <button
           onClick={handlePayment}
-          disabled={!amount || !donorName || isProcessing || parseFloat(amount) <= 0}
+          disabled={!amount || isProcessing || parseFloat((amount || '').replace(/,/g, '.')) <= 0}
           className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
           {isProcessing ? (

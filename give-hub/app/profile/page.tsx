@@ -226,7 +226,7 @@ export default function ProfilePage() {
                     </button>
                     <button
                       onClick={handleCancel}
-                      className="bg-gray-50 text-gray-700 border border-gray-300 hover:bg-gray-100 px-6 py-2 rounded-full font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="bg-white text-gray-700 border border-gray-300 hover:bg-gray-100 px-6 py-2 rounded-full font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       Cancel
                     </button>

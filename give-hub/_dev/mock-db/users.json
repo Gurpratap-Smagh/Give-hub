@@ -189,9 +189,11 @@
       "role": "creator",
       "id": "creator_1755065969838",
       "createdAt": "2025-08-13T06:19:29.838Z",
-      "updatedAt": "2025-08-13T06:29:46.042Z",
-      "createdCampaigns": [],
-      "totalRaised": 0,
+      "updatedAt": "2025-08-13T07:21:47.861Z",
+      "createdCampaigns": [
+        "campaign_1755068116752"
+      ],
+      "totalRaised": 8234.3,
       "verificationStatus": "pending",
       "profilePicture": "",
       "bio": "Hi! I'm a passionate supporter of transparent giving and web3 impact. I use GiveHub to connect causes with donors, share progress, and make every contribution count.",
@@ -202,6 +204,27 @@
         "Solana": "ABC123...XYZ789",
         "Bitcoin": "bc1q...example"
       }
+    },
+    {
+      "username": "joes",
+      "email": "joes@joe.com",
+      "password": "hashed_http://localhost:3000/auth",
+      "role": "user",
+      "id": "user_1755068049664",
+      "createdAt": "2025-08-13T06:54:09.664Z",
+      "updatedAt": "2025-08-13T06:54:25.765Z",
+      "walletAddresses": {
+        "Ethereum": "0x1234...5678",
+        "Solana": "ABC123...XYZ789",
+        "Bitcoin": "bc1q...example"
+      },
+      "donatedCampaigns": [],
+      "totalDonated": 0,
+      "preferredChains": [],
+      "profilePicture": "",
+      "bio": "Hi! I'm a passionate supporter of transparent giving and web3 impact. I use GiveHub to connect causes with donors, share progress, and make every contribution count.",
+      "location": "San Francisco, CA",
+      "website": "https://johndoe.com"
     }
   ]
 }

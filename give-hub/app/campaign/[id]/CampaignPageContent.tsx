@@ -145,8 +145,8 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
             <Image
               src={editPreview.image || '/placeholder.png'}
               alt={editPreview.title}
-              layout="fill"
-              objectFit="cover"
+              fill
+              className="object-cover"
             />
             <button
               type="button"
@@ -185,8 +185,8 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
                     <Image
                         src={editPreview.image || '/placeholder.png'}
                         alt={editPreview.title}
-                        layout="fill"
-                        objectFit="cover"
+                        fill
+                        className="object-cover"
                     />
                     {/* Edit image icon overlay */}
                     <button
@@ -217,13 +217,16 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
         {/* Header */}
         <div className="flex justify-between items-start mb-6">
           <div>
-            <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">{campaign.title}</h1>
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900 tracking-tight">{campaign.title}</h1>
             <div className="flex items-center mt-2 text-gray-600">
               <p>Created by <Link href={`/profile/${campaign.creatorId}`} className="font-semibold text-blue-600 hover:underline">{campaign.creator?.username || 'Anonymous'}</Link></p>
             </div>
           </div>
           {isOwner && (
-            <button onClick={() => setIsEditing(true)} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition">
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-4 py-2 rounded-full border-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300 transition font-semibold"
+            >
               Edit Campaign
             </button>
           )}
@@ -234,7 +237,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
           {/* Left/Main Column */}
           <div className="lg:col-span-2">
             <div className="w-full h-96 relative mb-6 rounded-lg overflow-hidden shadow-xl">
-              <Image src={campaign.image || '/placeholder.png'} alt={campaign.title} layout="fill" objectFit="cover" priority />
+              <Image src={campaign.image || '/placeholder.png'} alt={campaign.title} fill className="object-cover" priority />
             </div>
             <div className="bg-white p-6 rounded-lg shadow">
               <h2 className="text-2xl font-bold mb-4">Story</h2>
@@ -261,7 +264,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
 
                 <button 
                   onClick={() => setShowPaymentModal(true)} 
-                  className="w-full bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 text-white py-4 rounded-full font-bold text-lg transition-all hover:scale-105 shadow-lg mb-6"
+                  className="mx-auto block md:inline-block bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-6 py-3 rounded-full font-semibold text-base transition-colors shadow mb-6"
                 >
                   Donate Now
                 </button>

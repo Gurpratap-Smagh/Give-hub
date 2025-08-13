@@ -1,16 +1,24 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/auth-context'
 
 export default function AuthPage() {
+  const searchParams = useSearchParams()
   const [isSignUp, setIsSignUp] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const router = useRouter()
   const { signin, signup } = useAuth()
+
+  // Sync mode from URL (?mode=signin|signup)
+  useEffect(() => {
+    const mode = searchParams.get('mode')
+    if (mode === 'signup') setIsSignUp(true)
+    else if (mode === 'signin') setIsSignUp(false)
+  }, [searchParams])
   
   const [formData, setFormData] = useState({
     username: '',
@@ -49,6 +57,8 @@ export default function AuthPage() {
             router.push('/profile')
           }, 2000)
         } else {
+          // Stay on Sign Up when signup fails (e.g., existing username/email)
+          setIsSignUp(true)
           setError(result.error || 'Failed to create account')
         }
       } else {
@@ -67,6 +77,8 @@ export default function AuthPage() {
       }
     } catch (error) {
       console.error('Auth error:', error)
+      // Stay on Sign Up on errors
+      setIsSignUp(true)
       setError('Network error. Please try again.')
     } finally {
       setIsLoading(false)
@@ -220,7 +232,8 @@ export default function AuthPage() {
               {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
               <button
                 onClick={() => {
-                  setIsSignUp(!isSignUp)
+                  const next = !isSignUp
+                  setIsSignUp(next)
                   setError('')
                   setSuccess('')
                   setFormData({
@@ -230,6 +243,9 @@ export default function AuthPage() {
                     confirmPassword: '',
                     role: 'user'
                   })
+                  // Reflect mode in URL for deep linking
+                  const targetMode = next ? 'signup' : 'signin'
+                  router.replace(`/auth?mode=${targetMode}`)
                 }}
                 className="text-blue-600 hover:text-blue-800 font-semibold"
                 disabled={isLoading}

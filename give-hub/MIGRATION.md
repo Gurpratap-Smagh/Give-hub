@@ -3,11 +3,44 @@
 ## Overview
 This guide provides step-by-step instructions for migrating from the JSON mock database to production-ready storage systems: AI agent storage, Metachain integration, or MongoDB.
 
+## Status: Only the "Big 3" left
+The template is migration-ready. The remaining work is limited to swapping the data layer for the following "Big 3":
+
+- AI Agent (knowledge store/query + optional generation hooks)
+- Metachain transactions (on-chain reads/writes for donations and proofs)
+- MongoDB (primary database)
+
+All swap points are centralized and referenced below. No repository structure changes are required.
+
 ## Current Architecture
 - **Mock Database**: JSON files in `_dev/mock-db/`
 - **Authentication**: JWT tokens with HTTP-only cookies
 - **API Routes**: RESTful endpoints in `app/api/`
 - **Frontend**: Next.js 15 with Server Components
+
+## Swap Points Map (Group by concern)
+
+1) Data access layer (DB)
+- Primary facade: `lib/mock-db/database.ts` (currently JSON-based)
+- Usage pattern: All API routes import a `db`-like interface and call methods such as `getAllCampaigns()`, `findUserById()`, `createCampaign()`, `updateCampaign()`, `searchCampaigns()`
+- Swap action: Replace the implementation of `db` with MongoDB or AI-backed versions while preserving the same method signatures
+
+2) Authentication (already production-ready libs in place)
+- JWT: `lib/auth.ts` (uses `jsonwebtoken`), bcrypt installed and wired
+- API usage: `app/api/auth/*`, `app/api/profile/route.ts`
+- No structural changes required for migrations below
+
+3) Transactions and on-chain reads (Metachain)
+- Smart contract client location: `lib/metachain/` (scaffold in this guide)
+- Integration points: donation create/read flows in API and any on-chain proof hooks used by campaign components
+- Swap action: Route donation write/read to Metachain client and persist resulting tx metadata via selected DB (MongoDB or AI)
+
+4) Search
+- Current: phrase-based, parameter-specific in `app/page.tsx`, with optimized helpers in `lib/mock-db/database.ts`
+- Swap action: For MongoDB, use text/compound indexes; for AI Agent, route queries through client adapter preserving the same search function signature
+
+5) Media (unchanged here)
+- Profile and campaign images currently base64 in JSON; when moving to production, switch to cloud storage (S3/Cloudinary) by swapping only the storage calls while keeping API contract unchanged
 
 ## Migration Paths
 

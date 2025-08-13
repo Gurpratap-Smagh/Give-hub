@@ -19,12 +19,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useAuth } from '@/lib/auth/auth-context'
 import { Card } from './card' // ACCESS: Base card component for consistent styling
 import { ChainChips } from './chain-chips' // ACCESS: Blockchain selection component
 import { formatCurrency } from '@/lib/utils/format' // ACCESS: Currency formatting utilities
-import { donate } from '@/lib/contracts' // ACCESS: Contract interaction functions
-import type { Campaign } from '@/_dev/mock' // TEMP: Use lib/types.ts Campaign instead
-// TODO: import type { Campaign } from '@/lib/utils/types'
+import { notify } from '@/lib/utils/notify'
+import { makeDonationOnContract } from '@/lib/services/contracts' // ACCESS: Contract interaction functions
+import type { Campaign } from '@/components/campaigns-grid' // TEMP: Centralize types later
 
 /**
  * Props for DonateDialog component
@@ -52,29 +53,46 @@ export function DonateDialog({ isOpen, onClose, campaign, selectedChain }: Donat
   // REGION: State management
   const [amount, setAmount] = useState('')
   const [memo, setMemo] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const { user } = useAuth()
+  type UserWithUsername = { username?: string } | null | undefined
   // TODO: Add transaction status tracking
   // const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'confirmed' | 'failed'>('idle')
   // const [txHash, setTxHash] = useState<string | null>(null)
 
   const handleDonate = async () => {
-    if (!amount || parseFloat(amount) <= 0) return
+    // Require a valid amount; name is optional and auto-resolved
+    const parsed = parseFloat((amount || '').replace(/,/g, '.'))
+    if (isNaN(parsed) || parsed <= 0) {
+      notify('Please enter a positive amount to donate.', 'error')
+      return
+    }
 
     setIsLoading(true)
     try {
-      await donate({
+      // Resolve donor display name: prefer user input, fallback to logged-in username, then Anonymous
+      const nameToShow = (displayName || '').trim() || (user as UserWithUsername)?.username || 'Anonymous'
+      const finalMemo = memo?.trim()
+        ? `${memo.trim()} — Donor: ${nameToShow}`
+        : `Donor: ${nameToShow}`
+      await makeDonationOnContract({
         campaignId: campaign.id,
-        amount: parseFloat(amount),
+        amount: parsed,
         chain: selectedChain,
-        memo
+        memo: finalMemo,
       })
+      notify(`Successfully donated $${parsed} via ${selectedChain}!`, 'success')
       
       // Reset form and close dialog
       setAmount('')
       setMemo('')
+      setDisplayName('')
       onClose()
     } catch (error) {
       console.error('Donation failed:', error)
+      const message = error instanceof Error ? error.message : 'Donation failed. Please try again.'
+      notify(message, 'error')
     } finally {
       setIsLoading(false)
     }
@@ -156,10 +174,25 @@ export function DonateDialog({ isOpen, onClose, campaign, selectedChain }: Donat
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
                 min="0"
-                step="0.01"
+                step="any"
                 className="w-full pl-8 pr-4 py-3 bg-[color:var(--panel-2)] border border-white/10 rounded-lg focus:border-[color:var(--primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)]/20 placeholder-[color:var(--muted)]"
               />
             </div>
+          </div>
+
+          {/* Donor Display Name (optional) */}
+          <div className="mb-6">
+            <label htmlFor="displayName" className="block text-sm font-medium mb-3">
+              Display name to show (optional)
+            </label>
+            <input
+              id="displayName"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={(user as UserWithUsername)?.username ? `Defaults to ${(user as UserWithUsername)?.username}` : 'Defaults to Anonymous'}
+              className="w-full px-4 py-3 bg-[color:var(--panel-2)] border border-white/10 rounded-lg focus:border-[color:var(--primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)]/20 placeholder-[color:var(--muted)]"
+            />
           </div>
 
           {/* Memo Input */}
@@ -178,17 +211,17 @@ export function DonateDialog({ isOpen, onClose, campaign, selectedChain }: Donat
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3">
+          <div className="flex items-center justify-center gap-3">
             <button
               onClick={onClose}
-              className="flex-1 bg-transparent hover:bg-white/5 border border-white/10 rounded-full px-6 py-3 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+              className="bg-transparent hover:bg-white/5 border border-white/10 rounded-full px-4 py-2.5 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
             >
               Cancel
             </button>
             <button
               onClick={handleDonate}
-              disabled={!amount || parseFloat(amount) <= 0 || isLoading}
-              className="flex-1 bg-[color:var(--primary)] hover:bg-[color:var(--primary-600)] active:bg-[color:var(--primary-700)] disabled:bg-[color:var(--muted)] disabled:cursor-not-allowed text-black rounded-full px-6 py-3 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
+              disabled={isLoading || !amount}
+              className="bg-[color:var(--primary)] hover:bg-[color:var(--primary-600)] active:bg-[color:var(--primary-700)] disabled:bg-[color:var(--muted)] disabled:cursor-not-allowed text-black rounded-full px-6 py-3 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] min-w-32"
             >
               {isLoading ? 'Processing...' : `Donate $${amount || '0'}`}
             </button>

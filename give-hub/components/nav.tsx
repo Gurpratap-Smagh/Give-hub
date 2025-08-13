@@ -203,6 +203,7 @@ export function Nav() {
                 </svg>
               </button>
             )}
+            {/* Creator action inline on md+; moved into profile dropdown for <md */}
             {user?.role === 'creator' && (
               isStudio ? (
                 <Link href="/create" className="hidden md:inline-flex items-center px-4 py-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
@@ -241,6 +242,31 @@ export function Nav() {
                 
                 {showProfileDropdown && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    {user?.role === 'creator' && (
+                      isStudio ? (
+                        <Link 
+                          href="/create" 
+                          className="md:hidden flex items-center px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
+                          onClick={() => setShowProfileDropdown(false)}
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Create Campaign
+                        </Link>
+                      ) : (
+                        <Link 
+                          href="/studio" 
+                          className="md:hidden flex items-center px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
+                          onClick={() => setShowProfileDropdown(false)}
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.343-3 3v5h6v-5c0-1.657-1.343-3-3-3z" />
+                          </svg>
+                          Creator Studio
+                        </Link>
+                      )
+                    )}
                     <Link 
                       href="/profile" 
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -264,7 +290,7 @@ export function Nav() {
                 )}
               </div>
             ) : (
-              <Link href="/auth" className="hidden md:inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <Link href="/auth?mode=signin" className="hidden md:inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 Login
               </Link>
             )}
@@ -303,7 +329,7 @@ export function Nav() {
                 </button>
               </>
             ) : (
-              <Link href="/auth" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <Link href="/auth?mode=signin" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 Login
               </Link>
             )}
