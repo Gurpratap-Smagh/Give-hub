@@ -61,10 +61,24 @@ Environment is automatically loaded from `.env.local` when present.
 -   Home page uses server-side data (`db.getAllCampaigns()`) and passes to a client grid
     -   Grid shows 6 cards fully + next 3 blurred before "See more" (sticky button)
     -   On expand, remaining items render unblurred
+    -   Grid resets to props when navigating (e.g., leaving search or clicking home), ensuring search results do not persist
 -   Campaign creation UI with category dropdown and "Other" free text
     -   Stylish "Edit with AI" button (alerts for now)
 -   Campaign cards show category as a small grey pill
+-   Search:
+    -   Navbar search supports parameter selection (Title, Creator, Category)
+    -   Regex pattern input (case-insensitive) on the home page; only matching cards are rendered
+    -   "Back to all campaigns" and home navigation reset the grid to show all campaigns
 -   DB search helper `db.searchCampaigns(query)` for filtering by any schema field and text query `q`
+
+## Search Usage
+
+- Enter a regex in the navbar search, pick a parameter, and press Enter.
+- Examples:
+  - Title: `^Edu.*`
+  - Creator: `john\\d+`
+  - Category: `health|medical`
+- Click the logo or "Back to all campaigns" to reset to the full list.
 
 ## Migration Roadmap
 

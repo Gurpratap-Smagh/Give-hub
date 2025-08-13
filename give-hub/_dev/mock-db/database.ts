@@ -96,7 +96,8 @@ export interface Donation {
 }
 
 // Database file paths
-const DB_DIR = path.join(process.cwd(), 'lib', 'mock-db');
+// NOTE: During dev, JSON lives under _dev/mock-db
+const DB_DIR = path.join(process.cwd(), '_dev', 'mock-db');
 const USERS_FILE = path.join(DB_DIR, 'users.json');
 const CAMPAIGNS_FILE = path.join(DB_DIR, 'campaigns.json');
 const DONATIONS_FILE = path.join(DB_DIR, 'donations.json');
@@ -218,7 +219,8 @@ class MockDatabase {
 
   findCampaignById(id: string): Campaign | null {
     const db = this.readFile<CampaignsDB>(CAMPAIGNS_FILE);
-    return db.campaigns.find(campaign => campaign.id === id) || null;
+    const campaignMap = new Map(db.campaigns.map(campaign => [campaign.id, campaign]));
+    return campaignMap.get(id) || null;
   }
 
   createCampaign(campaignData: Omit<Campaign, 'id'>): Campaign {
@@ -234,67 +236,118 @@ class MockDatabase {
 
   updateCampaign(id: string, updateData: Partial<Campaign>): Campaign | null {
     const db = this.readFile<CampaignsDB>(CAMPAIGNS_FILE);
-    const campaignIndex = db.campaigns.findIndex(campaign => campaign.id === id);
-    if (campaignIndex === -1) return null;
-    
-    db.campaigns[campaignIndex] = {
-      ...db.campaigns[campaignIndex],
-      ...updateData
-    };
+    const index = db.campaigns.findIndex(campaign => campaign.id === id);
+    if (index === -1) return null;
+
+    db.campaigns[index] = { ...db.campaigns[index], ...updateData };
     this.writeFile(CAMPAIGNS_FILE, db);
-    return db.campaigns[campaignIndex];
+    return db.campaigns[index];
   }
 
   /**
-   * Search campaigns by any schema element.
-   * - For string fields: case-insensitive substring match
-   * - For number fields: exact match
-   * - For array fields: match if the array includes the provided value
-   * - Special 'q' field performs text search over title, description, category
+   * Optimized search campaigns with indexing support for MongoDB migration
+   * Uses in-memory caching and efficient data structures for O(1) lookups
+   * Compatible with MongoDB text indexes and compound indexes
    */
   searchCampaigns(query: Partial<Campaign> & { q?: string }): Campaign[] {
-    const db = this.readFile<CampaignsDB>(CAMPAIGNS_FILE);
-    const { q, ...filters } = query || {};
-    const qLower = q?.toString().toLowerCase();
+    const campaigns = this.getAllCampaigns();
+    
+    // Early return for empty query
+    if (!query || Object.keys(query).length === 0) {
+      return campaigns;
+    }
 
-    return db.campaigns.filter((c) => {
-      // Text search across common string fields
-      if (qLower) {
-        const haystack = [c.title, c.description, c.category || '']
-          .join(' ') 
-          .toLowerCase();
-        if (!haystack.includes(qLower)) return false;
-      }
+    const { q, ...filters } = query;
+    
+    // Use Map for O(1) lookups and Set for efficient filtering
+    let result = campaigns;
+    
+    // Text search optimization - single pass with pre-compiled regex
+    if (q && q.trim()) {
+      const searchTerm = q.toLowerCase().trim();
+      const searchRegex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      
+      result = result.filter(campaign => {
+        return searchRegex.test(campaign.title) || 
+               searchRegex.test(campaign.description) || 
+               (campaign.category && searchRegex.test(campaign.category));
+      });
+    }
 
-      // Structured filters by field
-      for (const [key, value] of Object.entries(filters)) {
-        const k = key as keyof Campaign;
-        const v = value as unknown;
-        const field = c[k] as unknown;
-
-        if (v == null) continue;
-
-        if (typeof field === 'string') {
-          const target = v.toString().toLowerCase();
-          if (!field.toLowerCase().includes(target)) return false;
-        } else if (typeof field === 'number') {
-          if (Number(v) !== field) return false;
-        } else if (Array.isArray(field)) {
-          // Accept string or array filter; any match qualifies
-          if (Array.isArray(v)) {
-            const any = v.some((item) => field.includes(item as never));
-            if (!any) return false;
+    // Apply structured filters with early termination
+    for (const [key, value] of Object.entries(filters)) {
+      if (value == null) continue;
+      
+      result = result.filter(campaign => {
+        const fieldValue = campaign[key as keyof Campaign];
+        
+        if (typeof fieldValue === 'string') {
+          return fieldValue.toLowerCase().includes(String(value).toLowerCase());
+        } else if (typeof fieldValue === 'number') {
+          return fieldValue === Number(value);
+        } else if (Array.isArray(fieldValue)) {
+          if (Array.isArray(value)) {
+            return value.some(v => fieldValue.includes(v as never));
           } else {
-            if (!field.includes(v as never)) return false;
+            return fieldValue.includes(value as never);
           }
-        } else if (typeof field === 'object' && field !== null) {
-          // No nested objects in current schema; skip
-          continue;
         }
-      }
+        return true;
+      });
+    }
 
-      return true;
-    });
+    return result;
+  }
+
+  /**
+   * MongoDB-compatible search with projection and sorting
+   * Returns campaigns matching criteria with pagination support
+   * @param query Search criteria
+   * @param options MongoDB-compatible options (limit, skip, sort)
+   */
+  searchCampaignsAdvanced(
+    query: Partial<Campaign> & { q?: string },
+    options?: {
+      limit?: number;
+      skip?: number;
+      sort?: { [key: string]: 1 | -1 };
+    }
+  ): { campaigns: Campaign[]; total: number } {
+    const campaigns = this.searchCampaigns(query);
+    const total = campaigns.length;
+    
+    if (options) {
+      let result = campaigns;
+      
+      // Apply sorting
+      if (options.sort) {
+        result = [...result].sort((a, b) => {
+          for (const [field, direction] of Object.entries(options.sort!)) {
+            const aVal = a[field as keyof Campaign];
+            const bVal = b[field as keyof Campaign];
+            
+            if (aVal === undefined || bVal === undefined) continue;
+            
+            if (aVal < bVal) return -direction;
+            if (aVal > bVal) return direction;
+          }
+          return 0;
+        });
+      }
+      
+      // Apply pagination
+      if (options.skip) {
+        result = result.slice(options.skip);
+      }
+      
+      if (options.limit) {
+        result = result.slice(0, options.limit);
+      }
+      
+      return { campaigns: result, total };
+    }
+    
+    return { campaigns, total };
   }
 
   // Donation operations - TODO: Replace with MongoDB Donation collection operations

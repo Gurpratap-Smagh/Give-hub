@@ -1,13 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useAuth } from '@/lib/auth-context'
+import { useAuth } from '@/lib/auth/auth-context'
 import Spinner from '@/components/spinner'
 import ProfilePictureUpload from '@/components/profile-picture-upload'
+import { notify } from '@/lib/utils/notify'
 
 export default function ProfilePage() {
   const { user, isLoading } = useAuth()
+  const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
   const [newSignup, setNewSignup] = useState(false)
   const [profileData, setProfileData] = useState({
@@ -101,6 +104,7 @@ export default function ProfilePage() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           profilePicture: profileData.profilePicture,
           bio: profileData.bio,
@@ -111,14 +115,17 @@ export default function ProfilePage() {
       })
 
       if (response.ok) {
-        alert('Profile updated successfully!')
+        notify('Profile updated successfully!', 'success')
         setIsEditing(false)
+        // Refresh the page data to reflect latest profile and exit edit mode
+        router.replace('/profile')
+        router.refresh()
       } else {
-        alert('Failed to update profile. Please try again.')
+        notify('Failed to update profile. Please try again.', 'error')
       }
     } catch (error) {
       console.error('Error updating profile:', error)
-      alert('Error updating profile. Please try again.')
+      notify('Error updating profile. Please try again.', 'error')
     }
   }
 
@@ -213,13 +220,13 @@ export default function ProfilePage() {
                   <div className="flex gap-3">
                     <button
                       onClick={handleSave}
-                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-full font-semibold transition-colors"
+                      className="bg-white text-blue-600 border border-blue-600 hover:bg-blue-50 px-6 py-2 rounded-full font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       Save Changes
                     </button>
                     <button
                       onClick={handleCancel}
-                      className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-full font-semibold transition-colors"
+                      className="bg-gray-50 text-gray-700 border border-gray-300 hover:bg-gray-100 px-6 py-2 rounded-full font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       Cancel
                     </button>
@@ -230,7 +237,7 @@ export default function ProfilePage() {
               <div className="space-y-6">
                 {/* Lower action: Fix with AI (prefill placeholder) */}
                 <div className="flex justify-end -mt-4 mb-2">
-                  {!isEditing && (
+                  {isEditing && (
                     <button
                       onClick={handleFixWithAI}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-200 text-gray-800 hover:bg-blue-50 transition-colors"

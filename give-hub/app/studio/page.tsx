@@ -2,23 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useAuth } from '@/lib/auth-context'
+import { useAuth } from '@/lib/auth/auth-context'
 import Spinner from '@/components/spinner'
+import { Campaign } from '@/_dev/mock-db/database';
 import CampaignsGrid, { Campaign as GridCampaign } from '@/components/campaigns-grid'
 import CampaignEditForm from '@/components/campaign-edit-form'
+import { notify } from '@/lib/utils/notify'
 
-// Client-safe campaign shape (aligns with /api/campaigns response)
-export type Campaign = {
-  id: string
-  title: string
-  description: string
-  image?: string
-  raised: number
-  goal: number
-  creatorId: string
-  chains: ('Ethereum' | 'Solana' | 'Bitcoin')[]
-  category?: string
-}
+
 
 export default function CreatorStudioPage() {
   const { user, isLoading } = useAuth()
@@ -93,10 +84,10 @@ export default function CreatorStudioPage() {
       // Update local state
       setAllCampaigns((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...update } as Campaign : c)))
       setEditing(null)
-      alert('Campaign updated successfully')
+      notify('Campaign updated successfully', 'success')
     } catch (e) {
       console.error(e)
-      alert('Failed to update campaign')
+      notify('Failed to update campaign', 'error')
     } finally {
       setSaving(false)
     }
@@ -203,15 +194,13 @@ export default function CreatorStudioPage() {
           <div className="relative bg-white w-full md:w-[720px] max-h-[90vh] overflow-y-auto rounded-t-2xl md:rounded-2xl shadow-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">Edit Campaign</h3>
+              {saving && <Spinner size={20} />} 
               <button onClick={() => setEditing(null)} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <CampaignEditForm
-              campaign={editing as any}
+              campaign={editing}
               onSave={async (u) => handleSave(u as Partial<Campaign>)}
-              onCancel={() => setEditing(null)}
-              isLoading={saving}
               lockGoalAndChains
-              disclaimerText="For security and transparency, the campaign goal and blockchain selections cannot be changed after launch."
             />
           </div>
         </div>

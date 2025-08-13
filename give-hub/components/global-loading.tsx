@@ -2,7 +2,7 @@
 
 import React from 'react'
 import Spinner from './spinner'
-import { useAuth } from '@/lib/auth-context'
+import { useAuth } from '@/lib/auth/auth-context'
 
 export default function GlobalLoading() {
   const { isLoading } = useAuth()

@@ -1,4 +1,4 @@
-import { cn } from '@/lib/format'
+import { cn } from '@/lib/utils/format'
 
 interface ChainChipsProps {
   chains: ('Ethereum' | 'Solana' | 'Bitcoin')[]

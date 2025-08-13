@@ -15,7 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { authService, validateSignupInput } from '@/lib/auth';
+import { authService, validateSignupInput } from '@/lib/auth/index';
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,7 +64,8 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      // maxAge is in seconds
+      maxAge: 60 * 60 * 24 // 24 hours
     });
     
     return response;

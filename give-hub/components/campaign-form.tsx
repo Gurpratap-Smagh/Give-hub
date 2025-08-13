@@ -25,12 +25,26 @@ export function CampaignForm() {
     setIsLoading(true)
     
     try {
-      // Simulate campaign creation
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // Redirect to the new campaign (mock ID)
-      const mockId = Math.random().toString(36).substr(2, 9)
-      router.push(`/campaign/${mockId}`)
+      const response = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          goal: parseFloat(formData.goal),
+          chains: formData.chains,
+          category: 'Other', // Default category for now
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        router.push(`/campaign/${result.id}`)
+      } else {
+        console.error('Campaign creation failed')
+      }
     } catch (error) {
       console.error('Campaign creation failed:', error)
     } finally {

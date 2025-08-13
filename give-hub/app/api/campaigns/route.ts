@@ -6,8 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/mock-db/database'
-import type { User, Creator } from '@/lib/mock-db/database'
+import { db } from '@/_dev/mock-db/database'
+import type { User, Creator } from '@/_dev/mock-db/database'
 
 export async function GET(req: NextRequest) {
   try {

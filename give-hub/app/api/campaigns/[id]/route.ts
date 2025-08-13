@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/mock-db/database'
+import { db } from '@/_dev/mock-db/database'
 
 export async function GET(
   _req: NextRequest,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authService } from '@/lib/auth'
-import { mockUserOperations } from '@/lib/mock_user'
-import type { User } from '@/lib/mock-db/database'
+import { authService } from '@/lib/auth/index'
+import { db } from '@/_dev/mock-db/database'
+import type { User, Creator } from '@/_dev/mock-db/database'
 
 // GET /api/profile - Get current user profile
 export async function GET(request: NextRequest) {
@@ -12,12 +12,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const authResult = authService.verifyToken(token)
-    if (!authResult.success || !authResult.user) {
+    const authResult = await authService.verifyToken(token)
+    if (!authResult.success || !authResult.userId) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const user = mockUserOperations.findUserById(authResult.user.id)
+    const user = db.findUserById(authResult.userId)
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -42,12 +42,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const authResult = authService.verifyToken(token)
-    if (!authResult.success || !authResult.user) {
+    const authResult = await authService.verifyToken(token)
+    if (!authResult.success || !authResult.userId) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const user = mockUserOperations.findUserById(authResult.user.id)
+    const user = db.findUserById(authResult.userId)
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -61,7 +61,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update user data
-    const updateData: Partial<User> & { updatedAt: string } = {
+    const updateData: Partial<User | Creator> & { updatedAt: string } = {
       updatedAt: new Date().toISOString()
     }
 
@@ -69,9 +69,16 @@ export async function PUT(request: NextRequest) {
     if (bio !== undefined) updateData.bio = bio
     if (location !== undefined) updateData.location = location
     if (website !== undefined) updateData.website = website
-    if (walletAddresses !== undefined) updateData.walletAddresses = walletAddresses
+    if (walletAddresses !== undefined) {
+      // Accept lowercase keys from client and map to DB schema
+      const mapped: { Ethereum?: string; Solana?: string; Bitcoin?: string } = {}
+      if (walletAddresses.ethereum) mapped.Ethereum = walletAddresses.ethereum
+      if (walletAddresses.solana) mapped.Solana = walletAddresses.solana
+      if (walletAddresses.bitcoin) mapped.Bitcoin = walletAddresses.bitcoin
+      updateData.walletAddresses = Object.keys(mapped).length ? mapped : undefined
+    }
 
-    const updatedUser = mockUserOperations.updateUser(authResult.user.id, updateData)
+    const updatedUser = db.updateUser(authResult.userId, updateData)
     
     if (!updatedUser) {
       return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })

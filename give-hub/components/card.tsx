@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { cn } from '@/lib/format'
+import { cn } from '@/lib/utils/format'
 
 interface CardProps {
   children: ReactNode

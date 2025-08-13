@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authService } from '@/lib/auth'
-import { db } from '@/lib/mock-db/database'
+import { authService } from '@/lib/auth/auth'
+import { db } from '@/_dev/mock-db/database'
 
 // PUT /api/campaigns/[id]/edit - Update campaign (creator only)
 export async function PUT(
@@ -14,13 +14,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const authResult = authService.verifyToken(token)
-    if (!authResult.success) {
+    const authResult = await authService.verifyToken(token)
+    if (!authResult.success || !authResult.userId) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const user = authResult.user!
-    if (user.role !== 'creator') {
+    const user = await db.findUserById(authResult.userId)
+    if (!user || user.role !== 'creator') {
       return NextResponse.json({ error: 'Only creators can edit campaigns' }, { status: 403 })
     }
 

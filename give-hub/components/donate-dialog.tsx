@@ -21,10 +21,10 @@
 import { useState } from 'react'
 import { Card } from './card' // ACCESS: Base card component for consistent styling
 import { ChainChips } from './chain-chips' // ACCESS: Blockchain selection component
-import { formatCurrency } from '@/lib/format' // ACCESS: Currency formatting utilities
+import { formatCurrency } from '@/lib/utils/format' // ACCESS: Currency formatting utilities
 import { donate } from '@/lib/contracts' // ACCESS: Contract interaction functions
-import type { Campaign } from '@/lib/mock' // TEMP: Use lib/types.ts Campaign instead
-// TODO: import type { Campaign } from '@/lib/types'
+import type { Campaign } from '@/_dev/mock' // TEMP: Use lib/types.ts Campaign instead
+// TODO: import type { Campaign } from '@/lib/utils/types'
 
 /**
  * Props for DonateDialog component

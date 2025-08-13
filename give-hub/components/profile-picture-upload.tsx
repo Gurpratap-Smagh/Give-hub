@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { User, Creator } from '@/lib/mock-db/database'
+import type { User, Creator } from '@/_dev/mock-db/database'
+import { notify } from '@/lib/utils/notify'
 
 interface ProfilePictureUploadProps {
   currentUser: User | Creator
@@ -48,12 +49,12 @@ export default function ProfilePictureUpload({
   // Handle file selection
   const handleFileSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
+      notify('Please select an image file', 'error')
       return
     }
 
     if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      alert('Image size must be less than 5MB')
+      notify('Image size must be less than 5MB', 'error')
       return
     }
 
@@ -63,7 +64,7 @@ export default function ProfilePictureUpload({
       onPictureChange(base64)
     } catch (error) {
       console.error('Error converting image:', error)
-      alert('Error processing image. Please try again.')
+      notify('Error processing image. Please try again.', 'error')
     } finally {
       setIsUploading(false)
     }

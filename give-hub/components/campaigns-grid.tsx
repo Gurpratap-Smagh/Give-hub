@@ -6,7 +6,7 @@
 
 "use client"
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CampaignCard } from '@/components/campaign-card'
 
 // Client-safe type to avoid importing server-only modules
@@ -50,10 +50,17 @@ function SkeletonCard() {
 }
 
 export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from-gray-50' }: CampaignsGridProps) {
-  const [campaigns] = useState<Campaign[]>(initialCampaigns)
+  const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns)
   const [loading] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const initialRef = useRef(initialCampaigns)
+
+  // Sync internal list when server-provided campaigns change (e.g., leaving search or clicking back)
+  useEffect(() => {
+    setCampaigns(initialCampaigns)
+    setExpanded(false)
+    initialRef.current = initialCampaigns
+  }, [initialCampaigns])
 
   const list = campaigns ?? initialRef.current
   const clearSix = useMemo(() => list.slice(0, 6), [list])

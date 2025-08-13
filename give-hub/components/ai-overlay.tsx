@@ -47,18 +47,22 @@ export default function AIOverlay({ open, onClose }: AIOverlayProps) {
   // Auto-scroll to bottom on new messages
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages, loading])
 
-  const containerClasses = useMemo(() => `fixed inset-x-0 top-16 z-40 pointer-events-none transition-all duration-300 ease-out ${
-    open ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
+  // Position popup above the bottom-right launcher (25px from edges, launcher ~56px tall)
+  // We place the box ~96px above bottom to clear the launcher + gap, aligned to right.
+  const containerClasses = useMemo(() => `fixed bottom-[96px] right-[25px] z-[70] pointer-events-none transition-all duration-200 ease-out ${
+    open ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
   }`, [open])
 
   return (
     <div className={containerClasses}>
-      {/* Align to right under the nav content, without layout shift */}
-      <div className="mx-auto max-w-7xl px-6 flex justify-end">
-        <div className={`pointer-events-auto ${POPUP_WIDTH}`}>
-          <div className="relative rounded-2xl shadow-2xl border border-gray-200/70 bg-white/90 backdrop-blur-xl overflow-hidden">
+      {/* Right-aligned floating container above launcher */}
+      <div className={`pointer-events-auto ${POPUP_WIDTH}`}>
+          <div className="relative rounded-2xl shadow-2xl border border-gray-200/70 bg-white/95 backdrop-blur-xl overflow-hidden">
             {/* Accent top border */}
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-violet-500 to-green-500" />
+
+            {/* Tail (speech-bubble pointer) */}
+            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white/95 border border-gray-200/70 rotate-45 shadow-md" />
 
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3">
@@ -122,7 +126,6 @@ export default function AIOverlay({ open, onClose }: AIOverlayProps) {
             </form>
           </div>
         </div>
-      </div>
     </div>
   )
 }

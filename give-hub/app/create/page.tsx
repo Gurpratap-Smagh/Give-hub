@@ -21,7 +21,8 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { useAuth } from '@/lib/auth-context'
+import { useAuth } from '@/lib/auth/auth-context'
+import { notify } from '@/lib/utils/notify'
 // TODO: import { createCampaign } from '@/lib/api' // Future API integration
 // TODO: import { validateCampaign } from '@/lib/validation' // Zod schema validation
 // TODO: import { optimizeContent } from '@/lib/ai' // AI content enhancement
@@ -71,11 +72,11 @@ export default function CreateCampaignPage() {
 
   const handleImageSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
+      notify('Please select an image file', 'error')
       return
     }
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image size must be less than 5MB')
+      notify('Image size must be less than 5MB', 'error')
       return
     }
     const base64 = await convertToBase64(file)
@@ -102,11 +103,11 @@ export default function CreateCampaignPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.category) {
-      alert('Please select a category')
+      notify('Please select a category', 'error')
       return
     }
     if (formData.category === 'other' && !otherCategory.trim()) {
-      alert('Please specify your category')
+      notify('Please specify your category', 'error')
       return
     }
 
@@ -133,7 +134,7 @@ export default function CreateCampaignPage() {
       router.push(`/campaign/${data.campaign.id}`)
     } catch (error) {
       console.error('Campaign creation failed:', error)
-      alert('Failed to create campaign. Please try again.')
+      notify('Failed to create campaign. Please try again.', 'error')
     } finally {
       setIsSubmitting(false)
     }
