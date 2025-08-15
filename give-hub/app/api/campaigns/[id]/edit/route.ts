@@ -5,7 +5,7 @@ import { db } from '@/_dev/mock-db/database'
 // PUT /api/campaigns/[id]/edit - Update campaign (creator only)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.cookies.get('auth-token')?.value
@@ -24,7 +24,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Only creators can edit campaigns' }, { status: 403 })
     }
 
-    const campaignId = params.id
+    const { id: campaignId } = await context.params
     const campaign = db.findCampaignById(campaignId)
     
     if (!campaign) {

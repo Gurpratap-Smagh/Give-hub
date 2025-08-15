@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CampaignCard } from '@/components/campaign-card'
 
 // Client-safe type to avoid importing server-only modules
-export type Chain = 'Ethereum' | 'Solana' | 'Bitcoin'
+export type Chain = string
 export type Campaign = {
   id: string
   title: string
@@ -21,7 +21,7 @@ export type Campaign = {
   creator?: string
   createdAt?: string | Date
   deadline?: string | Date
-  chains: Chain[]
+  chains: string[]
   /** Optional category label */
   category?: string
 }
@@ -64,8 +64,22 @@ export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from
 
   const list = campaigns ?? initialRef.current
   const clearSix = useMemo(() => list.slice(0, 6), [list])
-  const blurredThree = useMemo(() => list.slice(6, 9), [list])
-  const afterNine = useMemo(() => list.slice(9), [list])
+  const afterSix = useMemo(() => list.slice(6), [list])
+  const shouldGate = !expanded && list.length > 6
+
+  // Lock body scroll until user expands
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const prev = document.body.style.overflow
+    if (shouldGate) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [shouldGate])
 
   return (
     <div className={`space-y-8 ${!expanded ? 'pb-24 md:pb-28 safe-bottom' : ''}`}>
@@ -82,35 +96,26 @@ export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from
               </div>
             ))
           )}
-
-          {/* Next three blurred preview when not expanded */}
-          {!expanded && blurredThree.length > 0 && (
-            <>
-              {blurredThree.map((c) => (
-                <div key={`blur-${c.id}`} className={'filter blur-[2px] opacity-70 h-full'}>
-                  <CampaignCard campaign={c} variant="minimal" />
-                </div>
-              ))}
-            </>
-          )}
-
-          {/* After expand, render everything */}
-          {expanded && list.slice(6).map((c) => (
+          {/* After expand, render everything after first six */}
+          {expanded && afterSix.map((c) => (
             <div key={`ex-${c.id}`} className="h-full">
               <CampaignCard campaign={c} variant="minimal" />
             </div>
           ))}
         </div>
-
-        {/* Gradient mask only when not expanded and there are preview items */
-        }
-        {!expanded && blurredThree.length > 0 && (
-          <div className={`pointer-events-none absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t ${gradientFromClass} to-transparent`} />
+        {/* Bottom overlay: smooth gradient fade (no hard edge) until expanded */}
+        {shouldGate && (
+          <div className="fixed inset-x-0 bottom-0 h-[30svh] pointer-events-none z-20">
+            {/* Theme-aware soft background rise */}
+            <div className={`absolute inset-0 bg-gradient-to-t ${gradientFromClass} via-transparent to-transparent opacity-80`} />
+            {/* Gentle dark veil with gradient so boundary fades smoothly */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
+          </div>
         )}
       </div>
 
       {/* See more button (fixed to viewport bottom, above content) */}
-      {!expanded && (blurredThree.length > 0 || afterNine.length > 0) && (
+      {!expanded && list.length > 6 && (
         <div className="fixed left-0 right-0 bottom-4 md:bottom-6 z-30 flex justify-center pointer-events-none">
           <button
             type="button"

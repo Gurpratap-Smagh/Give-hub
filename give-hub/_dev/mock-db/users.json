@@ -66,12 +66,12 @@
       "password": "hashedpassword101",
       "role": "creator",
       "createdAt": "2024-01-20T00:00:00.000Z",
-      "updatedAt": "2025-08-13T04:58:20.346Z",
+      "updatedAt": "2025-08-14T07:37:30.021Z",
       "profilePicture": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiNGNTlFMEIiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjM1IiByPSIxNSIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMjUgNzVhMjUgMjUgMCAwIDEgNTAgMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSI0NSIgeT0iNDUiIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgZmlsbD0iI0Y1OUUwQiIvPjwvc3ZnPgo=",
       "createdCampaigns": [
         "2"
       ],
-      "totalRaised": 26750,
+      "totalRaised": 26786,
       "verificationStatus": "verified",
       "bio": "Emergency relief organization providing immediate assistance to disaster victims.",
       "website": "https://relieffoundation.org"
@@ -83,13 +83,13 @@
       "password": "hashedpassword202",
       "role": "creator",
       "createdAt": "2024-02-05T00:00:00.000Z",
-      "updatedAt": "2025-08-13T04:57:52.173Z",
+      "updatedAt": "2025-08-15T01:50:14.281Z",
       "profilePicture": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iNTAiIGZpbGw9IiM4QjVDRjYiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjM1IiByPSIxNSIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMjUgNzVhMjUgMjUgMCAwIDEgNTAgMCIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSI0MCIgeT0iNDAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgcng9IjMiIGZpbGw9IiM4QjVDRjYiLz48L3N2Zz4K",
       "createdCampaigns": [
         "3",
         "5"
       ],
-      "totalRaised": 63700,
+      "totalRaised": 95245,
       "verificationStatus": "pending",
       "bio": "Bridging the digital divide through technology education and access programs."
     },
@@ -129,11 +129,11 @@
         "campaign_1755000184820",
         "campaign_1755002767924"
       ],
-      "totalRaised": 0,
+      "totalRaised": 100,
       "verificationStatus": "pending",
       "id": "creator_1754988484427",
       "createdAt": "2025-08-12T08:48:04.427Z",
-      "updatedAt": "2025-08-12T14:13:54.351Z",
+      "updatedAt": "2025-08-14T02:47:28.824Z",
       "profilePicture": "",
       "bio": "Hi! I'm a passionate supporter of transparent giving and web3 impact. I use GiveHub to connect causes with donors, share progress, and make every contribution count.",
       "location": "San Francisco, CA",
@@ -189,14 +189,15 @@
       "role": "creator",
       "id": "creator_1755065969838",
       "createdAt": "2025-08-13T06:19:29.838Z",
-      "updatedAt": "2025-08-13T07:21:47.861Z",
+      "updatedAt": "2025-08-14T12:30:19.844Z",
       "createdCampaigns": [
-        "campaign_1755068116752"
+        "campaign_1755068116752",
+        "campaign_1755157189600"
       ],
-      "totalRaised": 8234.3,
+      "totalRaised": 23460.3,
       "verificationStatus": "pending",
       "profilePicture": "",
-      "bio": "Hi! I'm a passionate supporter of transparent giving and web3 impact. I use GiveHub to connect causes with donors, share progress, and make every contribution count.",
+      "bio": "Passionate about making a difference. I'm particularly interested in how web3 and blockchain technology can enable transparent giving and create real-world impact.",
       "location": "San Francisco, CA",
       "website": "https://johndoe.com",
       "walletAddresses": {
@@ -225,6 +226,42 @@
       "bio": "Hi! I'm a passionate supporter of transparent giving and web3 impact. I use GiveHub to connect causes with donors, share progress, and make every contribution count.",
       "location": "San Francisco, CA",
       "website": "https://johndoe.com"
+    },
+    {
+      "username": "joedsds",
+      "email": "joaaosaao@dd.com",
+      "password": "hashed_http://127.0.0.1:53590/auth?mode=signup",
+      "role": "user",
+      "id": "user_1755217173531",
+      "createdAt": "2025-08-15T00:19:33.531Z",
+      "updatedAt": "2025-08-15T00:19:33.532Z",
+      "walletAddresses": {},
+      "donatedCampaigns": [],
+      "totalDonated": 0,
+      "preferredChains": []
+    },
+    {
+      "username": "noonu",
+      "email": "noonu@icy.com",
+      "password": "hashed_http://localhost:3000/auth?mode=signin",
+      "role": "creator",
+      "id": "creator_1755222828674",
+      "createdAt": "2025-08-15T01:53:48.674Z",
+      "updatedAt": "2025-08-15T01:57:45.042Z",
+      "createdCampaigns": [
+        "campaign_1755222914490"
+      ],
+      "totalRaised": 10000000,
+      "verificationStatus": "pending",
+      "profilePicture": "",
+      "bio": "Passionate about leveraging web3 for real-world impact, focusing on transparent and effective charitable giving from San Francisco.",
+      "location": "San Francisco, CA",
+      "website": "https://johndoe.com",
+      "walletAddresses": {
+        "Ethereum": "0x1234...5678",
+        "Solana": "ABC123...XYZ789",
+        "Bitcoin": "bc1q...example"
+      }
     }
   ]
 }

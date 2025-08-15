@@ -4,9 +4,9 @@
 @tailwind utilities;
 
 :root {
-  --primary: #3b82f6;
+  --primary: #2563eb;
   --primary-600: #2563eb;
-  --primary-700: #1d4ed8;
+  --primary-700: #2563eb;
   /* Secondary is brand black */
   --secondary: #000000;
   /* Accent used by gradients (kept as original green) */
@@ -27,9 +27,21 @@
   --panel-2: #ffffff;
   --text: var(--text-primary);
   /* Chain brand colors (fallbacks) */
-  --eth: #627eea;
+  --eth: #2563eb;
   --sol: #14f195;
   --btc: #f7931a;
+}
+
+/* Dark theme variables */
+:root[data-theme="dark"] {
+  --background: #0b0f1a; /* near-black */
+  --surface: #0f172a;    /* slate-900-ish */
+  --panel-2: #0f172a;
+  --text-primary: #e5e7eb; /* gray-200 */
+  --text-secondary: #cbd5e1; /* slate-300 */
+  --border: #1f2937; /* gray-800 */
+  --ring: #60a5fa; /* blue-400 */
+  --secondary: #ffffff; /* invert gradients that use secondary */
 }
 
 * {
@@ -43,6 +55,133 @@ body {
   background: var(--background);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.6;
+}
+
+/*
+  Dark mode utility overrides
+  Map commonly used Tailwind utility classes to dark equivalents without
+  refactoring every component. This ensures menus, cards, dropdowns, etc. flip properly.
+*/
+:root[data-theme="dark"] {
+  /* backgrounds */
+  /* Base white surfaces -> dark panels */
+  /* .bg-white */
+  --tw-bg-white: var(--panel-2);
+}
+
+/* Override utility classes explicitly (Tailwind emits static classes) */
+:root[data-theme="dark"] .bg-white { background-color: var(--panel-2) !important; }
+:root[data-theme="dark"] .bg-white\/95 { background-color: rgba(15,23,42,.92) !important; }
+:root[data-theme="dark"] .bg-white\/90 { background-color: rgba(15,23,42,.9) !important; }
+:root[data-theme="dark"] .bg-white\/80 { background-color: rgba(15,23,42,.8) !important; }
+:root[data-theme="dark"] .bg-gray-50 { background-color: #0e1628 !important; }
+:root[data-theme="dark"] .bg-gray-100 { background-color: #13203a !important; }
+:root[data-theme="dark"] .bg-gray-200 { background-color: #182445 !important; }
+:root[data-theme="dark"] .bg-gray-300 { background-color: #1d2a52 !important; }
+:root[data-theme="dark"] .hover\:bg-gray-50:hover { background-color: #0e1628 !important; }
+:root[data-theme="dark"] .hover\:bg-gray-100:hover { background-color: #13203a !important; }
+:root[data-theme="dark"] .bg-slate-50 { background-color: #0e1628 !important; }
+:root[data-theme="dark"] .bg-slate-100 { background-color: #13203a !important; }
+:root[data-theme="dark"] .bg-blue-50 { background-color: rgba(59,130,246,0.12) !important; }
+:root[data-theme="dark"] .hover\:bg-blue-50:hover { background-color: rgba(59,130,246,0.16) !important; }
+:root[data-theme="dark"] .bg-green-50 { background-color: rgba(34,197,94,0.12) !important; }
+:root[data-theme="dark"] .bg-purple-50 { background-color: rgba(168,85,247,0.12) !important; }
+:root[data-theme="dark"] .bg-red-50 { background-color: rgba(239,68,68,0.12) !important; }
+
+/* Gradient stop overrides so light overlays look right on dark */
+:root[data-theme="dark"] .from-blue-100 {
+  --tw-gradient-from: rgba(59,130,246,0.24) !important;
+  --tw-gradient-to: rgba(59,130,246,0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+:root[data-theme="dark"] .from-gray-50 {
+  --tw-gradient-from: rgba(15,23,42,0.85) !important; /* slate-900 with higher alpha for darker mask */
+  --tw-gradient-to: rgba(15,23,42,0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+:root[data-theme="dark"] .from-gray-100 {
+  --tw-gradient-from: rgba(15,23,42,0.9) !important;
+  --tw-gradient-to: rgba(15,23,42,0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+:root[data-theme="dark"] .from-slate-50 {
+  --tw-gradient-from: rgba(15,23,42,0.85) !important;
+  --tw-gradient-to: rgba(15,23,42,0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+:root[data-theme="dark"] .text-gray-700 { color: #e5e7eb !important; }
+:root[data-theme="dark"] .text-gray-600 { color: #cbd5e1 !important; }
+:root[data-theme="dark"] .text-gray-500 { color: #94a3b8 !important; }
+:root[data-theme="dark"] .text-gray-800 { color: #f3f4f6 !important; }
+:root[data-theme="dark"] .text-gray-900 { color: #ffffff !important; }
+:root[data-theme="dark"] .text-slate-700 { color: #e5e7eb !important; }
+:root[data-theme="dark"] .text-slate-800 { color: #f3f4f6 !important; }
+:root[data-theme="dark"] .text-slate-900 { color: #ffffff !important; }
+:root[data-theme="dark"] .text-black { color: #ffffff !important; }
+:root[data-theme="dark"] .text-green-800 { color: #bbf7d0 !important; }
+:root[data-theme="dark"] .text-green-700 { color: #86efac !important; }
+:root[data-theme="dark"] .text-purple-800 { color: #e9d5ff !important; }
+:root[data-theme="dark"] .text-purple-700 { color: #d8b4fe !important; }
+:root[data-theme="dark"] .text-red-700 { color: #fecaca !important; }
+/* Keep white text on primary elements for accessibility */
+:root[data-theme="dark"] .bg-blue-600 .text-white,
+:root[data-theme="dark"] .bg-blue-700 .text-white,
+:root[data-theme="dark"] .bg-primary .text-white { color: #ffffff !important; }
+
+/* Borders and rings */
+:root[data-theme="dark"] .border { border-color: var(--border) !important; }
+:root[data-theme="dark"] .border-gray-100 { border-color: #111827 !important; }
+:root[data-theme="dark"] .border-gray-200 { border-color: #1f2937 !important; }
+:root[data-theme="dark"] .border-gray-300 { border-color: #374151 !important; }
+:root[data-theme="dark"] .border-gray-200\/70 { border-color: rgba(31,41,55,.7) !important; }
+:root[data-theme="dark"] .border-gray-400 { border-color: #4b5563 !important; }
+:root[data-theme="dark"] .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #1f2937 !important; }
+:root[data-theme="dark"] .border-green-200 { border-color: rgba(34,197,94,0.4) !important; }
+:root[data-theme="dark"] .border-purple-200 { border-color: rgba(168,85,247,0.4) !important; }
+:root[data-theme="dark"] .border-red-200 { border-color: rgba(239,68,68,0.4) !important; }
+
+/* Rare direct black backgrounds */
+:root[data-theme="dark"] .bg-black { background-color: #000000 !important; }
+:root[data-theme="dark"] .bg-black\/40 { background-color: rgba(0,0,0,0.4) !important; }
+:root[data-theme="dark"] .bg-black\/50 { background-color: rgba(0,0,0,0.5) !important; }
+:root[data-theme="dark"] .bg-black\/60 { background-color: rgba(0,0,0,0.6) !important; }
+:root[data-theme="dark"] .bg-black\/70 { background-color: rgba(0,0,0,0.7) !important; }
+
+/* Profile pictures: ensure black bg behind transparent PNGs */
+:root[data-theme="dark"] .pfp-bg { background-color: #000000 !important; }
+
+/* Dropdowns, cards, popovers that default to white */
+:root[data-theme="dark"] .shadow-lg, 
+:root[data-theme="dark"] .shadow-md, 
+:root[data-theme="dark"] .shadow-sm {
+  /* Keep shadows but reduce lightness to fit dark bg */
+  --tw-shadow-color: rgba(0,0,0,0.7);
+}
+
+/* Inputs */
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+  background-color: var(--panel-2) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+/* Buttons: neutral/white buttons flip to dark surface with blue text/border */
+:root[data-theme="dark"] .bg-white.border-gray-200 { 
+  background-color: var(--panel-2) !important; 
+  border-color: var(--border) !important; 
+}
+:root[data-theme="dark"] .hover\:bg-blue-700:hover { filter: brightness(1.05); }
+
+/* Menu containers often use bg-white */
+:root[data-theme="dark"] .menu, 
+:root[data-theme="dark"] .dropdown, 
+:root[data-theme="dark"] .popover, 
+:root[data-theme="dark"] .modal {
+  background-color: var(--panel-2) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
 }
 
 .text-gradient {

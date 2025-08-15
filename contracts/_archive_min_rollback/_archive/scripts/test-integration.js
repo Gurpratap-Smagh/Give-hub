@@ -1,0 +1,1 @@
+// test-integration.js\nmodule.exports = async function () { /* TODO */ }\n

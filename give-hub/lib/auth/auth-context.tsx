@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import type { User, Creator } from '@/_dev/mock-db/database';
+import type { User, Creator } from '@/lib/utils/types';
 
 // Define the shape of the authentication context
 interface AuthContextType {

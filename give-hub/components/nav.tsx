@@ -4,9 +4,10 @@ import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/auth-context'
-import type { User, Creator } from '@/_dev/mock-db/database'
+import type { User, Creator, Campaign } from '@/lib/utils/types'
 import ProfilePictureUpload from '@/components/profile-picture-upload'
 import AIOverlay from '@/components/ai-overlay'
+import PaymentModal from '@/components/payment-modal'
 
 /**
  * Main Navigation Component
@@ -32,6 +33,12 @@ export function Nav() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchParam, setSearchParam] = useState<'title' | 'creator' | 'category'>('title')
   const [showAI, setShowAI] = useState(false)
+  const [payOpen, setPayOpen] = useState(false)
+  const [payCampaign, setPayCampaign] = useState<Campaign | null>(null)
+  const [payInitialAmount, setPayInitialAmount] = useState<number | undefined>(undefined)
+  const [payInitialChain, setPayInitialChain] = useState<string | undefined>(undefined)
+  // Theme state: light/dark (persisted)
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const { user, signout } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
@@ -69,6 +76,35 @@ export function Nav() {
       setShowSearchDropdown(false)
     }
   }, [pathname, searchParamsNav])
+
+  // Initialize theme from localStorage or system preference and apply to document
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('theme') as 'light' | 'dark' | null
+      let initial: 'light' | 'dark'
+      if (saved === 'light' || saved === 'dark') {
+        initial = saved
+      } else {
+        const prefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        initial = prefersDark ? 'dark' : 'light'
+      }
+      setTheme(initial)
+      if (typeof document !== 'undefined') {
+        document.documentElement.dataset.theme = initial
+      }
+    } catch {}
+  }, [])
+
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light'
+    setTheme(next)
+    try {
+      localStorage.setItem('theme', next)
+    } catch {}
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset.theme = next
+    }
+  }
 
   /**
    * Handle search functionality with parameter-based filtering
@@ -203,6 +239,25 @@ export function Nav() {
                 </svg>
               </button>
             )}
+            {/* Dark mode toggle (desktop) */}
+            <button
+              onClick={() => { setShowAI(false); toggleTheme() }}
+              className="hidden md:inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm border border-gray-200"
+              aria-label="Toggle dark mode"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? (
+                // Sun icon
+                <svg className="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364 6.364l-1.414-1.414M7.05 7.05L5.636 5.636m12.728 0l-1.414 1.414M7.05 16.95l-1.414 1.414M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                </svg>
+              ) : (
+                // Moon icon
+                <svg className="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                </svg>
+              )}
+            </button>
             {/* Creator action inline on md+; moved into profile dropdown for <md */}
             {user?.role === 'creator' && (
               isStudio ? (
@@ -225,7 +280,7 @@ export function Nav() {
                 >
                   <ProfilePictureUpload
                     currentUser={user as User | Creator}
-                    currentPicture={(user as User & { profilePicture?: string })?.profilePicture}
+                    currentPicture={user?.profilePicture}
                     onPictureChange={() => {}}
                     isEditing={false}
                     size="sm"
@@ -277,6 +332,27 @@ export function Nav() {
                       </svg>
                       Edit Profile
                     </Link>
+                    {/* Mobile-only dark mode toggle inside profile dropdown */}
+                    <button
+                      onClick={() => { setShowProfileDropdown(false); toggleTheme() }}
+                      className="md:hidden flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      {theme === 'dark' ? (
+                        <>
+                          <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364 6.364l-1.414-1.414M7.05 7.05L5.636 5.636m12.728 0l-1.414 1.414M7.05 16.95l-1.414 1.414M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                          </svg>
+                          Light mode
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                          </svg>
+                          Dark mode
+                        </>
+                      )}
+                    </button>
                     <button
                       onClick={() => { setShowProfileDropdown(false); signout(); }}
                       className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -290,9 +366,61 @@ export function Nav() {
                 )}
               </div>
             ) : (
-              <Link href="/auth?mode=signin" className="hidden md:inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                Login
-              </Link>
+              <div className="relative" ref={profileDropdownRef}>
+                <button
+                  onClick={() => { setShowAI(false); setShowProfileDropdown(!showProfileDropdown) }}
+                  className="inline-flex items-center space-x-1 px-1.5 py-1 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Anonymous menu"
+                >
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-400 opacity-30">
+                    <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 12c2.485 0 4.5-2.015 4.5-4.5S14.485 3 12 3 7.5 5.015 7.5 7.5 9.515 12 12 12zm0 2c-3.038 0-9 1.522-9 4.5V21h18v-2.5c0-2.978-5.962-4.5-9-4.5z" />
+                    </svg>
+                  </span>
+                  <span className="hidden sm:inline text-xs text-gray-600 opacity-30">Anonymous</span>
+                  <svg 
+                    className={`w-4 h-4 text-gray-600 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`}
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showProfileDropdown && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="px-4 py-2 text-xs text-gray-500">Signed out • Anonymous</div>
+                    <Link 
+                      href="/auth?mode=signin" 
+                      className="flex items-center px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
+                      onClick={() => setShowProfileDropdown(false)}
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 3h4a2 2 0 012 2v4m-7 7l7-7M21 21H3" />
+                      </svg>
+                      Login
+                    </Link>
+                    {/* Mobile-only dark mode toggle inside dropdown when signed out */}
+                    <button
+                      onClick={() => { setShowProfileDropdown(false); toggleTheme() }}
+                      className="md:hidden flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      {theme === 'dark' ? (
+                        <>
+                          <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364 6.364l-1.414-1.414M7.05 7.05L5.636 5.636m12.728 0l-1.414 1.414M7.05 16.95l-1.414 1.414M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                          </svg>
+                          Light mode
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                          </svg>
+                          Dark mode
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -315,7 +443,7 @@ export function Nav() {
                 <Link href="/profile" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="inline-flex items-center px-2 py-1 rounded-md" aria-label="Profile" title="Profile">
                   <ProfilePictureUpload
                     currentUser={user as User | Creator}
-                    currentPicture={(user as User & { profilePicture?: string })?.profilePicture}
+                    currentPicture={user?.profilePicture}
                     onPictureChange={() => {}}
                     isEditing={false}
                     size="sm"
@@ -342,13 +470,49 @@ export function Nav() {
     {/* Floating AI button (bottom-right) */}
     <button
       onClick={() => { setIsMobileMenuOpen(false); setShowSearch(false); setShowAI((v) => !v) }}
-      className="fixed bottom-[25px] right-[25px] h-14 w-14 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 z-[60] inline-flex items-center justify-center"
+      className="fixed bottom-[25px] right-[25px] h-14 w-14 rounded-full bg-blue-600 bg-opacity-5 text-white shadow-lg hover:bg-blue-700 hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500 z-[60] inline-flex items-center justify-center"
       aria-label="Open AI Assistant"
       title="Open AI Assistant"
     >
-      <span className="text-2xl">🤖</span>
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl text-blue-600 ring-2 ring-blue-500 ring-opacity-5 shadow-sm">✦</span>
     </button>
-    {showAI && <AIOverlay open={showAI} onClose={() => setShowAI(false)} />}
+    {showAI && (
+      <AIOverlay
+        open={showAI}
+        onClose={() => setShowAI(false)}
+        onAction={async (action) => {
+          if (action.type === 'open_payment') {
+            try {
+              const res = await fetch(`/api/campaigns/${action.campaignId}`)
+              if (!res.ok) throw new Error('Campaign fetch failed')
+              const data = await res.json()
+              const campaign = data?.campaign
+              if (campaign) {
+                setPayCampaign(campaign)
+                setPayInitialAmount(action.amount)
+                setPayInitialChain(action.chain)
+                setPayOpen(true)
+              }
+            } catch (e) {
+              console.error('Failed to open payment modal:', e)
+            }
+          }
+        }}
+      />
+    )}
+
+    {payCampaign && (
+      <PaymentModal
+        campaign={payCampaign}
+        isOpen={payOpen}
+        onClose={() => setPayOpen(false)}
+        onPaymentSuccess={() => {
+          setPayOpen(false)
+        }}
+        initialAmount={payInitialAmount}
+        initialChain={payInitialChain}
+      />
+    )}
     </>
   )
 }

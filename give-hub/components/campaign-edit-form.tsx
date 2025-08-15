@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
-import { Campaign } from '@/_dev/mock-db/database'
+import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
+import type { Campaign } from '@/_dev/mock-db/database'
 import { notify } from '@/lib/utils/notify'
 
 interface CampaignEditFormProps {
@@ -38,35 +38,43 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
     description: campaign.description,
     goal: campaign.goal,
     category: initialCategory as string,
-    chains: campaign.chains
+    chains: campaign.chains as string[]
   })
+  const [customChain, setCustomChain] = useState('')
   const [otherCategory, setOtherCategory] = useState(
     campaign.category && !presetCategories.includes(campaign.category as PresetCategory)
       ? campaign.category
       : ''
   )
   const formRef = useRef<HTMLFormElement>(null)
-  useImperativeHandle(ref, () => formRef.current as HTMLFormElement);
+  useImperativeHandle(ref, () => {
+    const el = formRef.current as HTMLFormElement & { requestSubmit: () => void };
+    return Object.assign((el || ({} as unknown)) as HTMLFormElement & { requestSubmit: () => void }, {
+      applyAI: (partial: Partial<Pick<typeof formData, 'title' | 'description' | 'category'>>) => {
+        setFormData(prev => ({ ...prev, ...partial }))
+      }
+    })
+  });
 
-  const emitChange = (next: typeof formData, otherCat: string = otherCategory) => {
-    const mappedCategory = next.category === 'other' ? otherCat : next.category
-    const partial: Partial<Campaign> = { ...next, category: mappedCategory }
+  // Defer parent onChange notifications to the commit phase
+  useEffect(() => {
+    const mappedCategory = formData.category === 'other' ? otherCategory : formData.category
+    const partial: Partial<Campaign> = { ...formData, category: mappedCategory }
     onChange?.(partial)
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData, otherCategory])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => {
-      const next = {
+      return {
         ...prev,
         [name]: name === 'goal' ? parseFloat(value) || 0 : value
       }
-      emitChange(next)
-      return next
     })
   }
 
-  const handleChainToggle = (chain: "Ethereum" | "Solana" | "Bitcoin") => {
+  const handleChainToggle = (chain: string) => {
     setFormData(prev => {
       const next = {
         ...prev,
@@ -74,9 +82,21 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
           ? prev.chains.filter(c => c !== chain)
           : [...prev.chains, chain]
       }
-      emitChange(next)
       return next
     })
+  }
+
+  const addCustomChain = () => {
+    if (lockGoalAndChains) return
+    const raw = (customChain || '').trim()
+    if (!raw) return
+    const normalized = raw.replace(/\s+/g, ' ').trim()
+    setFormData(prev => (
+      prev.chains.includes(normalized)
+        ? prev
+        : { ...prev, chains: [...prev.chains, normalized] }
+    ))
+    setCustomChain('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -154,7 +174,7 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
             <input
               type="text"
               value={otherCategory}
-              onChange={(e) => { setOtherCategory(e.target.value); emitChange(formData, e.target.value) }}
+              onChange={(e) => { setOtherCategory(e.target.value) }}
               placeholder="Specify your category"
               className="mt-2 w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
             />
@@ -164,22 +184,43 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
 
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-3">Supported Blockchains</label>
-        <div className="flex flex-wrap gap-3">
-          {(['Ethereum', 'Solana', 'Bitcoin'] as const).map((chain) => (
+        {/* Selected chains with remove */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {formData.chains.map((chain) => (
+            <span key={chain} className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm ${lockGoalAndChains ? 'bg-gray-100 border border-gray-200 text-gray-500' : 'bg-white/10 border border-white/15'}`}>
+              {chain}
+              {!lockGoalAndChains && (
+                <button type="button" onClick={() => setFormData(prev => ({ ...prev, chains: prev.chains.filter(c => c !== chain) }))} className="hover:text-red-500">×</button>
+              )}
+            </span>
+          ))}
+        </div>
+        {/* Suggestions */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {['Ethereum','Solana','Bitcoin','ZetaChain'].filter(s => !formData.chains.includes(s)).map(s => (
             <button
-              key={chain}
+              key={s}
               type="button"
-              onClick={() => !lockGoalAndChains && handleChainToggle(chain)}
-              className={`px-4 py-2 rounded-full border-2 transition-all ${
-                formData.chains.includes(chain)
-                  ? (lockGoalAndChains ? 'border-gray-300 bg-gray-50 text-gray-500' : 'border-blue-500 bg-blue-50 text-blue-700')
-                  : (lockGoalAndChains ? 'border-gray-200 bg-gray-50 text-gray-400' : 'border-gray-200 text-gray-600 hover:border-gray-300')
-              } ${lockGoalAndChains ? 'cursor-not-allowed' : ''}`}
+              onClick={() => !lockGoalAndChains && handleChainToggle(s)}
+              className={`px-3 py-1 rounded-full text-sm ${lockGoalAndChains ? 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white/5 border border-gray-200/30 text-gray-600 hover:bg-white/10 hover:border-gray-300 hover:text-gray-800'}`}
               aria-disabled={lockGoalAndChains}
             >
-              {chain}
+              + {s}
             </button>
           ))}
+        </div>
+        {/* Custom chain input */}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={customChain}
+            onChange={(e) => setCustomChain(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomChain() } }}
+            placeholder="Add chain (e.g., ZetaChain)"
+            disabled={lockGoalAndChains}
+            className={`flex-1 p-2 border-2 rounded-lg ${lockGoalAndChains ? 'border-gray-200 bg-gray-50 cursor-not-allowed' : 'border-gray-200 focus:outline-none focus:border-blue-500'}`}
+          />
+          <button type="button" onClick={addCustomChain} disabled={lockGoalAndChains} className={`px-4 py-2 rounded-lg ${lockGoalAndChains ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gray-800 text-white hover:bg-black'}`}>Add</button>
         </div>
       </div>
     </form>

@@ -38,7 +38,7 @@ export interface User {
   // User-specific fields
   donatedCampaigns?: string[]; // Campaign IDs user has donated to
   totalDonated?: number;
-  preferredChains?: ("Ethereum" | "Solana" | "Bitcoin")[];
+  preferredChains?: string[];
 }
 
 export interface Creator extends User {
@@ -61,7 +61,7 @@ export interface Campaign {
   title: string;
   goal: number;
   raised: number;
-  chains: ("Ethereum" | "Solana" | "Bitcoin")[];
+  chains: string[];
   description: string;
   /** Optional campaign category (e.g., education, healthcare, other-custom) */
   category?: string;
@@ -82,7 +82,7 @@ export interface DonationDB {
   campaignId: string;
   name: string;
   amount: number;
-  chain: "Ethereum" | "Solana" | "Bitcoin";
+  chain: string;
   timestamp: string; // ISO string for JSON compatibility
 }
 
@@ -91,7 +91,7 @@ export interface Donation {
   campaignId: string;
   name: string;
   amount: number;
-  chain: "Ethereum" | "Solana" | "Bitcoin";
+  chain: string;
   timestamp: Date;
 }
 

@@ -16,6 +16,7 @@
  */
 
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import './globals.css' // ACCESS: Tailwind CSS base styles, custom utilities
 import { Nav } from '@/components/nav' // ACCESS: Global navigation component
 import GlobalLoading from '@/components/global-loading'
@@ -39,6 +40,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Set theme ASAP to avoid flicker */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => { try { const saved = localStorage.getItem('theme'); const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; const theme = saved || (prefersDark ? 'dark' : 'light'); document.documentElement.dataset.theme = theme; } catch(_) {} })();`,
+          }}
+        />
+        {/* Global <img> error fallback to placeholder (applies everywhere, dynamically) */}
+        <Script src="/img-fallback.js" strategy="afterInteractive" />
+      </head>
       <body className="min-h-screen antialiased x-limitscroll" suppressHydrationWarning>
         {/* Providers */}
         <AuthProvider>

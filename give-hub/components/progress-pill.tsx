@@ -8,7 +8,8 @@ interface ProgressPillProps {
 }
 
 export function ProgressPill({ raised, goal, size = 'lg' }: ProgressPillProps) {
-  const percentage = Math.min((raised / goal) * 100, 100)
+  const rawPercentage = goal > 0 ? (raised / goal) * 100 : 0
+  const barPercentage = Math.min(rawPercentage, 100)
   
   return (
     <div className={cn(
@@ -47,7 +48,7 @@ export function ProgressPill({ raised, goal, size = 'lg' }: ProgressPillProps) {
           size === 'md' && "w-12 h-12 text-sm",
           size === 'sm' && "w-10 h-10 text-xs"
         )}>
-          {Math.round(percentage)}%
+          {Math.round(rawPercentage)}%
         </div>
       </div>
 
@@ -60,7 +61,7 @@ export function ProgressPill({ raised, goal, size = 'lg' }: ProgressPillProps) {
       )}>
         <div
           className="h-full bg-gradient-to-r from-[color:var(--primary)] to-[color:var(--accent)] transition-all duration-500 ease-out"
-          style={{ width: `${percentage}%` }}
+          style={{ width: `${barPercentage}%` }}
         />
       </div>
 
@@ -68,10 +69,10 @@ export function ProgressPill({ raised, goal, size = 'lg' }: ProgressPillProps) {
       {size === 'lg' && (
         <div className="flex justify-between items-center mt-4 text-sm text-[color:var(--muted)]">
           <span>
-            {percentage >= 100 ? 'Goal reached!' : `${(100 - percentage).toFixed(0)}% to go`}
+            {rawPercentage >= 100 ? 'Goal reached!' : `${(100 - barPercentage).toFixed(0)}% to go`}
           </span>
           <span>
-            {Math.round((raised / goal) * 100) >= 100 ? '🎉 Funded' : '💪 In progress'}
+            {Math.round(rawPercentage) >= 100 ? '🎉 Funded' : '💪 In progress'}
           </span>
         </div>
       )}

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import type { User, Creator } from '@/_dev/mock-db/database'
+import { useState, useRef, useEffect } from 'react'
+import type { User, Creator } from '@/lib/utils/types'
 import { notify } from '@/lib/utils/notify'
 
 interface ProfilePictureUploadProps {
@@ -98,11 +98,16 @@ export default function ProfilePictureUpload({
     }
   }
 
+  // Narrow currentUser for display-only properties
+  type SafeUser = Pick<User, 'name' | 'profilePicture'> & Partial<Pick<Creator, 'username'>>
+  const cu = currentUser as unknown as SafeUser
+
   // Generate default avatar if no picture
   const getDefaultAvatar = () => {
     const colors = ['#4F96FF', '#FF6565', '#10B981', '#F59E0B', '#8B5CF6', '#6366F1']
-    const color = colors[currentUser.username.length % colors.length]
-    const initial = currentUser.username.charAt(0).toUpperCase()
+    const display = cu.username || cu.name || 'U'
+    const color = colors[display.length % colors.length]
+    const initial = String(display).charAt(0).toUpperCase()
     
     return `data:image/svg+xml;base64,${btoa(`
       <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -112,13 +117,39 @@ export default function ProfilePictureUpload({
     `)}`
   }
 
-  const displayPicture = currentPicture || currentUser.profilePicture || getDefaultAvatar()
+  // Cute fallback avatar if image fails to load
+  const getCuteFallback = () => {
+    return `data:image/svg+xml;base64,${btoa(`
+      <svg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'>
+        <defs>
+          <linearGradient id='g' x1='0' x2='1' y1='0' y2='1'>
+            <stop offset='0%' stop-color='#60a5fa'/>
+            <stop offset='100%' stop-color='#a78bfa'/>
+          </linearGradient>
+        </defs>
+        <rect width='100' height='100' rx='20' fill='url(#g)'/>
+        <circle cx='35' cy='40' r='6' fill='white'/>
+        <circle cx='65' cy='40' r='6' fill='white'/>
+        <path d='M30 63 C 40 75, 60 75, 70 63' stroke='white' stroke-width='6' fill='none' stroke-linecap='round'/>
+        <circle cx='30' cy='70' r='6' fill='white' opacity='0.3'/>
+        <circle cx='70' cy='70' r='6' fill='white' opacity='0.3'/>
+      </svg>
+    `)}`
+  }
+
+  const displayPicture = currentPicture || cu.profilePicture || getDefaultAvatar()
+  const [imageSrc, setImageSrc] = useState(displayPicture)
+
+  // Keep imageSrc in sync when display picture changes (e.g., after upload)
+  useEffect(() => {
+    setImageSrc(displayPicture)
+  }, [displayPicture])
 
   return (
     <div className="flex flex-col items-center gap-3">
       {/* Profile Picture Display */}
       <div 
-        className={`${sizeClasses[size]} relative rounded-full overflow-hidden border-4 border-white shadow-lg ${
+        className={`${sizeClasses[size]} relative rounded-full overflow-hidden bg-gray-100 pfp-bg border-4 border-white shadow-lg ${
           isEditing ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''
         } ${dragActive ? 'ring-4 ring-blue-500 ring-opacity-50' : ''}`}
         onClick={handleClick}
@@ -128,9 +159,11 @@ export default function ProfilePictureUpload({
         onDrop={handleDrop}
       >
         <img 
-          src={displayPicture} 
-          alt={`${currentUser.username}'s profile picture`}
+          src={imageSrc} 
+          alt={`${(cu.username || cu.name || 'User')}'s profile picture`}
           className="w-full h-full object-cover"
+          onError={() => setImageSrc(getCuteFallback())}
+          draggable={false}
         />
         
         {/* Upload Overlay */}

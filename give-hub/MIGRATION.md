@@ -1,14 +1,41 @@
+### 4. Payments Adapter (ZetaChain-ready)
+
+The UI (`components/payment-modal.tsx`) calls `processDonation()` from `lib/payments/`. This keeps payment logic isolated and swappable.
+
+Steps to enable ZetaChain later:
+
+1. Implement `processWithZetaChain()` in `lib/payments/index.ts` to call your on-chain payment flow (via viem or ZetaChain SDK).
+2. Provide any required environment variables (RPC, contract, keys) in `.env.local`.
+3. Set `NEXT_PUBLIC_PAYMENT_PROVIDER=zetachain` to switch the provider.
+4. Keep `onPaymentSuccess` callback as-is; it receives `(amount, chain)` and updates UI.
+
+Until implemented, the adapter returns `{ ok: false }` with a friendly message.
+
+### AI Image Generation Configuration
+
+The AI route supports both Gemini image-generation and Imagen via Gemini API.
+
+```bash
+GEMINI_API_KEY=your_google_gemini_api_key
+# Optional (if you have Imagen access):
+USE_IMAGEN=true
+IMAGEN_MODEL=imagen-4.0-generate-preview-06-06
+```
+
+Notes:
+- Gemini path sets `responseModalities` to include TEXT and IMAGE, as required.
+- The client `app/create/page.tsx` shows a ✦ button to generate an image and applies the result as base64.
 # GiveHub Migration Guide
 
-## Overview
+## Status: AI implemented; DB and chain left
 This guide provides step-by-step instructions for migrating from the JSON mock database to production-ready storage systems: AI agent storage, Metachain integration, or MongoDB.
 
 ## Status: Only the "Big 3" left
-The template is migration-ready. The remaining work is limited to swapping the data layer for the following "Big 3":
+The template is migration-ready. The remaining work is limited to swapping the data layer and on-chain payments:
 
-- AI Agent (knowledge store/query + optional generation hooks)
-- Metachain transactions (on-chain reads/writes for donations and proofs)
-- MongoDB (primary database)
+- AI image generation: Implemented via Gemini API (Gemini image model or Imagen) at `app/api/ai/generate-image/route.ts`; used by `app/create/page.tsx` (✦ button).
+- Metachain/ZetaChain transactions (on-chain donations and proofs): adapter in `lib/payments/` to swap providers.
+- MongoDB (primary database) for persistent storage.
 
 All swap points are centralized and referenced below. No repository structure changes are required.
 
@@ -41,6 +68,11 @@ All swap points are centralized and referenced below. No repository structure ch
 
 5) Media (unchanged here)
 - Profile and campaign images currently base64 in JSON; when moving to production, switch to cloud storage (S3/Cloudinary) by swapping only the storage calls while keeping API contract unchanged
+
+6) Payments (new adapter)
+- Primary facade: `lib/payments/index.ts` exposes `processDonation()`
+- Current default provider: `mock` (REST to `/api/payments`)
+- Swap action: Implement `processWithZetaChain()` and set `NEXT_PUBLIC_PAYMENT_PROVIDER=zetachain` to route UI payments through ZetaChain
 
 ## Migration Paths
 

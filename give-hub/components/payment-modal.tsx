@@ -1,22 +1,40 @@
 "use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth/auth-context'
-import type { Campaign } from '@/_dev/mock-db/database'
+import type { Campaign } from '@/lib/utils/types'
+import { processDonation } from '@/lib/payments'
 
 interface PaymentModalProps {
   campaign: Campaign
   isOpen: boolean
   onClose: () => void
   onPaymentSuccess: (amount: number, chain: string) => void
+  initialAmount?: number
+  initialChain?: string
 }
 
-export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSuccess }: PaymentModalProps) {
+export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSuccess, initialAmount, initialChain }: PaymentModalProps) {
+  const hasUsername = (u: unknown): u is { username: string } =>
+    typeof u === 'object' && u !== null && 'username' in (u as Record<string, unknown>) && typeof (u as { username?: unknown }).username === 'string'
+
   const [amount, setAmount] = useState('')
-  const [selectedChain, setSelectedChain] = useState<string>(campaign.chains[0] || 'Ethereum')
+  const [selectedChain, setSelectedChain] = useState<string>(initialChain || campaign.chains[0] || 'Ethereum')
   const [donorName, setDonorName] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const { user } = useAuth()
+
+  useEffect(() => {
+    if (isOpen) {
+      if (typeof initialAmount === 'number' && initialAmount > 0) {
+        setAmount(String(initialAmount))
+      }
+      if (initialChain) {
+        setSelectedChain(initialChain)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -26,30 +44,20 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
     setIsProcessing(true)
     
     try {
-      // Mock payment processing
-      const response = await fetch('/api/payments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          campaignId: campaign.id,
-          amount: parseFloat((amount || '').replace(/,/g, '.')),
-          chain: selectedChain,
-          donorName: (donorName || '').trim() || user?.username || 'Anonymous',
-        }),
+      const result = await processDonation({
+        campaignId: campaign.id,
+        amount: parseFloat((amount || '').replace(/,/g, '.')),
+        chain: selectedChain,
+        donorName: (donorName || '').trim() || (user && hasUsername(user) ? user.username : 'Anonymous'),
       })
 
-      if (response.ok) {
-        await response.json() // Process response but don't store unused result
-        onPaymentSuccess(parseFloat((amount || '').replace(/,/g, '.')), selectedChain)
-        onClose()
-        // Reset form
-        setAmount('')
-        setDonorName('')
-      } else {
-        throw new Error('Payment failed')
-      }
+      if (!result.ok) throw new Error(result.error || 'Payment failed')
+
+      onPaymentSuccess(parseFloat((amount || '').replace(/,/g, '.')), selectedChain)
+      onClose()
+      // Reset form
+      setAmount('')
+      setDonorName('')
     } catch (error) {
       console.error('Payment error:', error)
       alert('Payment failed. Please try again.')
@@ -85,7 +93,7 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
           <div className="w-full bg-gray-200 rounded-full h-2 mt-2 overflow-visible">
             <div 
               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${(campaign.raised / campaign.goal) * 100}%` }}
+              style={{ width: `${Math.min((campaign.goal > 0 ? (campaign.raised / campaign.goal) * 100 : 0), 100)}%` }}
             />
           </div>
         </div>
@@ -99,7 +107,7 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
             type="text"
             value={donorName}
             onChange={(e) => setDonorName(e.target.value)}
-            placeholder={user?.username || "Enter your name"}
+            placeholder={(user && hasUsername(user) ? user.username : undefined) || "Enter your name"}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>

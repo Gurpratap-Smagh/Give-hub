@@ -25,11 +25,29 @@
 "use client"
 
 import Link from 'next/link'
+import Image from 'next/image'
+import { useEffect, useState } from 'react'
 import { formatCurrency } from '@/lib/utils/format' // ACCESS: Currency formatting utilities
 // TODO: import { Campaign } from '@/lib/utils/types' // Use centralized types
 
+// 2:1 aspect placeholder image (SVG data URL) to keep card sizes consistent
+const CARD_PLACEHOLDER_2x1 = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="800" height="400" viewBox="0 0 800 400">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#e5e7eb" />
+        <stop offset="1" stop-color="#d1d5db" />
+      </linearGradient>
+    </defs>
+    <rect width="800" height="400" fill="url(#g)"/>
+    <g fill="#9ca3af">
+      <circle cx="400" cy="190" r="36"/>
+      <rect x="340" y="238" width="120" height="14" rx="7"/>
+    </g>
+  </svg>
+`)
+
 // Client-safe types for this component (avoid importing server-only modules)
-type Chain = 'Ethereum' | 'Solana' | 'Bitcoin'
 type Campaign = {
   id: string
   title: string
@@ -40,7 +58,7 @@ type Campaign = {
   creator?: string
   createdAt?: string | Date
   deadline?: string | Date
-  chains: Chain[]
+  chains: string[]
   /** Optional category label */
   category?: string
 }
@@ -74,33 +92,39 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
     ? rawCategory.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     : undefined
   
+  // Always maintain a valid image source for consistent sizing
+  const [imgSrc, setImgSrc] = useState<string>(campaign.image || CARD_PLACEHOLDER_2x1)
+  useEffect(() => {
+    setImgSrc(campaign.image || CARD_PLACEHOLDER_2x1)
+  }, [campaign.image])
+  
   // Minimal variant for home page grid display
   if (variant === 'minimal') {
     return (
       <Link href={`/campaign/${campaign.id}`}>
-        <div className="relative bg-white rounded-xl border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-md hover:border-gray-300 transform hover:-translate-y-1 h-full flex flex-col">
-          {/* Category pill */}
+        <div className="relative bg-white rounded-xl border border-gray-200 p-3 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-md hover:border-gray-300 transform hover:-translate-y-1 flex flex-col">
+          {/* Category chip pinned to card's top-right (5px by 5px) */}
           {displayCategory && (
-            <div className="absolute top-3 right-3 z-10">
+            <div className="absolute top-[5px] right-[5px] z-10">
               <span className="px-2.5 py-1 text-[10px] leading-none font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200 shadow-sm">
                 {displayCategory}
               </span>
             </div>
           )}
-          {/* Blockchain Chain Indicators - Building Block: Multi-chain support display */}
-          <div className="flex gap-2 mb-4">
-            {campaign.chains.map((chain) => (
-              <span
-                key={chain}
-                className="px-3 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 shadow-sm"
-              >
-                {chain}
-              </span>
-            ))}
+          {/* Image (always render; fallback placeholder keeps size consistent) */}
+          <div className="w-40 h-20 relative rounded-lg overflow-hidden mb-1">
+            <Image
+              src={imgSrc}
+              alt={campaign.title}
+              fill
+              unoptimized
+              className="object-cover"
+              onError={() => setImgSrc(CARD_PLACEHOLDER_2x1)}
+            />
           </div>
           
-          {/* Campaign Title - Building Block: Campaign identification (emphasize title over amount) */}
-          <h3 className="text-xl font-bold text-gray-900 mb-4 line-clamp-2 hover:text-[color:var(--primary)] transition-colors">
+          {/* Campaign Title - single-line ellipsis to keep card heights consistent */}
+          <h3 className="text-xl font-bold text-gray-900 mb-2 truncate hover:text-[color:var(--primary)] transition-colors">
             {campaign.title}
           </h3>
           
@@ -133,17 +157,7 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
   // Detailed variant for campaign detail page
   return (
     <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-100 hover:shadow-2xl transition-shadow duration-300">
-      {/* Blockchain Chain Indicators - Building Block: Multi-chain support display */}
-      <div className="flex gap-2 mb-6">
-        {campaign.chains.map((chain) => (
-          <span
-            key={chain}
-            className="px-4 py-2 text-sm font-medium rounded-full bg-blue-50 text-blue-600 shadow-sm border border-blue-100"
-          >
-            {chain}
-          </span>
-        ))}
-      </div>
+      {/* Chain pills removed to prioritize imagery per design */}
       
       {/* Campaign Title - Building Block: Campaign identification (emphasize title) */}
       <h1 className="text-3xl font-extrabold text-gray-900 mb-4">

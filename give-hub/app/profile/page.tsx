@@ -12,6 +12,7 @@ export default function ProfilePage() {
   const { user, isLoading } = useAuth()
   const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
   const [newSignup, setNewSignup] = useState(false)
   const [profileData, setProfileData] = useState({
     name: user?.username || '',
@@ -134,14 +135,33 @@ export default function ProfilePage() {
     setIsEditing(false)
   }
 
-  // Prefill profile using AI placeholder. Later this will call AI to suggest content and update image.
-  const handleFixWithAI = () => {
-    setIsEditing(true)
-    setProfileData((prev) => ({
-      ...prev,
-      bio:
-        "Hi! I'm a passionate supporter of transparent giving and web3 impact. I use GiveHub to connect causes with donors, share progress, and make every contribution count.",
-    }))
+  // Use AI to improve the bio based on current context
+  const handleFixWithAI = async () => {
+    try {
+      setIsEditing(true)
+      setAiLoading(true)
+      const prompt = `TASK: Rewrite this GiveHub user bio.\n\nRules:\n- Keep it authentic, friendly, and specific.\n- 1–2 short paragraphs, concise.\n- No links, no emojis, no headings, no lists.\n- Do not add unrelated suggestions or campaign recommendations.\n\nCurrent bio:\n"${profileData.bio}"\n\nContext:\nname=${profileData.name || (user as any)?.username || ''}; location=${profileData.location || ''}; interests=web3, impact, transparent giving.\n\nOutput: Return ONLY the rewritten bio text, nothing else.`
+      const res = await fetch('/api/ai/assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ prompt, mode: 'rewrite' }),
+      })
+      if (!res.ok) throw new Error(`AI request failed (${res.status})`)
+      const data = (await res.json()) as { text?: string }
+      const improved = (data.text || '').trim()
+      if (!improved) {
+        notify('AI did not return suggestions. Try again.', 'error')
+        return
+      }
+      setProfileData((prev) => ({ ...prev, bio: improved }))
+      notify('Bio improved with AI suggestions', 'success')
+    } catch (e) {
+      console.error(e)
+      notify('Failed to get AI suggestions. Please try again.', 'error')
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   return (
@@ -240,10 +260,11 @@ export default function ProfilePage() {
                   {isEditing && (
                     <button
                       onClick={handleFixWithAI}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-200 text-gray-800 hover:bg-blue-50 transition-colors"
+                      disabled={aiLoading}
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-200 transition-colors ${aiLoading ? 'opacity-60 cursor-not-allowed' : 'text-gray-800 hover:bg-blue-50'}`}
                       title="Prefill description with AI template"
                     >
-                      <span className="text-sm font-semibold">Fix with <span className="text-blue-600">AI</span></span>
+                      <span className="text-sm font-semibold">{aiLoading ? 'Thinking…' : <>Fix with <span className="text-blue-600">AI</span></>}</span>
                     </button>
                   )}
                 </div>

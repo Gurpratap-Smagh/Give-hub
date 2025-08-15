@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/_dev/mock-db/database'
+import type { Creator } from '@/_dev/mock-db/database'
 
 /**
  * POST /api/payments
@@ -38,23 +39,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if campaign supports the selected chain
-    const supportedChains: ("Ethereum" | "Solana" | "Bitcoin")[] = campaign.chains
-    if (!supportedChains.includes(chain as "Ethereum" | "Solana" | "Bitcoin")) {
+    // Check if campaign supports the selected chain (dynamic strings)
+    if (typeof chain !== 'string') {
+      return NextResponse.json(
+        { error: 'Invalid chain type' },
+        { status: 400 }
+      )
+    }
+    const supportedChains: string[] = campaign.chains
+    if (!supportedChains.includes(chain)) {
       return NextResponse.json(
         { error: `Campaign does not support ${chain} payments` },
         { status: 400 }
       )
     }
 
-    // Check if donation would exceed goal
+    // Compute new total (allow exceeding goal)
     const newTotal = campaign.raised + amount
-    if (newTotal > campaign.goal) {
-      return NextResponse.json(
-        { error: `Donation would exceed campaign goal. Maximum donation: $${campaign.goal - campaign.raised}` },
-        { status: 400 }
-      )
-    }
 
     // TODO: SMART CONTRACT INTEGRATION
     // Replace this mock payment processing with actual blockchain transaction
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
       campaignId,
       name: donorName,
       amount,
-      chain: chain as "Ethereum" | "Solana" | "Bitcoin"
+      chain: chain as string
     })
 
     // Update campaign raised amount
@@ -93,8 +94,8 @@ export async function POST(request: NextRequest) {
     // Update creator's total raised amount
     const creator = db.findUserById(campaign.creatorId)
     if (creator && creator.role === 'creator') {
-      const creatorData = creator as any // TODO: Replace with proper Creator type in MongoDB migration
-      db.updateUser(creator.id, {
+      const creatorData = creator as Creator
+      db.updateUser(creatorData.id, {
         totalRaised: (creatorData.totalRaised || 0) + amount
       })
     }

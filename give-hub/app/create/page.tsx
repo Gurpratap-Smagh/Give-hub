@@ -45,6 +45,7 @@ export default function CreateCampaignPage() {
   const formRef = useRef<HTMLFormElement>(null)
   const [otherCategory, setOtherCategory] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [imageGenLoading, setImageGenLoading] = useState(false)
   const router = useRouter()
   const { user } = useAuth()
 
@@ -83,6 +84,46 @@ export default function CreateCampaignPage() {
     setImage(base64)
   }
 
+  // Generate an image from current description using Gemini (creator-only)
+  const generateImageFromDescription = async () => {
+    if (!user || user.role !== 'creator') {
+      return notify('Only creators can generate images.', 'error')
+    }
+    if (!formData.description || !formData.description.trim()) {
+      return notify('Please add a description first.', 'error')
+    }
+    try {
+      setImageGenLoading(true)
+      const selectedCategory = formData.category === 'other' ? (otherCategory || 'other') : (formData.category || 'general')
+      const prompt = `Generate a single high-quality 2:1 landscape image that fills a 2:1 cover frame perfectly (edge-to-edge, no borders, no text or watermarks). Compose safely so key subjects remain fully visible within the 2:1 crop.\n\nSubject description:\n${formData.description}\n\nCategory/theme: ${selectedCategory}\n\nStyle: photorealistic or clean illustration, balanced lighting, clear focal point, visually appealing for a cover.`
+      const res = await fetch('/api/ai/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ prompt })
+      })
+      const data: { imageBase64?: string; mime?: string; error?: string; message?: string; details?: string } = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = data.error || data.details || data.message || 'Failed to generate image.'
+        notify(msg, 'error')
+        return
+      }
+      const base64 = data.imageBase64
+      if (!base64) {
+        return notify('The AI did not return an image. Try refining the description.', 'error')
+      }
+      const dataUrl = `data:${data.mime || 'image/png'};base64,${base64}`
+      setImage(dataUrl)
+      notify('Generated image applied', 'success')
+    } catch (e) {
+      console.error(e)
+      const msg = e instanceof Error ? e.message : 'Image generation failed. Please try again.'
+      notify(msg, 'error')
+    } finally {
+      setImageGenLoading(false)
+    }
+  }
+
   /**
    * Toggle blockchain selection
    * @param chain - Blockchain name to toggle
@@ -110,6 +151,10 @@ export default function CreateCampaignPage() {
       notify('Please specify your category', 'error')
       return
     }
+    if (!formData.chains || formData.chains.length === 0) {
+      notify('Please select at least one blockchain', 'error')
+      return
+    }
 
     setIsSubmitting(true)
     try {
@@ -120,7 +165,7 @@ export default function CreateCampaignPage() {
           title: formData.title,
           description: formData.description,
           goal: Number(formData.goal),
-          chains: formData.chains as ('Ethereum' | 'Solana' | 'Bitcoin')[],
+          chains: formData.chains,
           category: formData.category === 'other' ? otherCategory.trim() : formData.category,
           creatorId: user?.id,
           image
@@ -151,12 +196,49 @@ export default function CreateCampaignPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => {
-              const friendlyGoal = formData.goal ? ` a goal of $${Number(formData.goal).toLocaleString()}` : ''
-              const rawCategory = formData.category === 'other' ? (otherCategory || 'Other') : formData.category
-              const categoryText = rawCategory ? ` in the ${rawCategory} category` : ''
-              const suggested = `We are launching "${formData.title || 'our campaign'}"${categoryText} on GiveHub to create meaningful impact.${friendlyGoal}. Your support will help us reach more people, deliver transparent updates, and turn generosity into real-world change. Join us and share this campaign to amplify the mission.`
-              setFormData(prev => ({ ...prev, description: suggested }))
+            onClick={async () => {
+              try {
+                const payload = {
+                  title: formData.title,
+                  description: formData.description,
+                  goal: formData.goal,
+                  category: formData.category === 'other' ? (otherCategory || 'Other') : formData.category,
+                  chains: formData.chains
+                }
+                const prompt = `TASK: Rewrite the campaign title and description.\n\nRules:\n- Keep the title short and clear.\n- Description: 2–5 concise sentences, inspiring and specific.\n- Do not invent facts.\n- No headings, no lists, no markdown, no commentary.\n\nInput JSON:\n${JSON.stringify(payload)}\n\nOutput: Return ONLY a strict JSON object with keys \"title\" and \"description\".`
+                const res = await fetch('/api/ai/assist', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ prompt, mode: 'rewrite' })
+                })
+                const data = await res.json().catch(() => ({}))
+                const text = (data.text || '').trim()
+                // Extract JSON object from possible fenced response
+                const unfence = (s: string) => s.replace(/^```[a-zA-Z]*\n?|```$/g, '').trim()
+                const extractJson = (s: string) => {
+                  const m = s.match(/\{[\s\S]*\}/)
+                  return m ? m[0] : ''
+                }
+                const jsonStr = extractJson(unfence(text))
+                if (!jsonStr) {
+                  notify('AI did not return usable suggestions.', 'error')
+                  return
+                }
+                const update = JSON.parse(jsonStr)
+                if (typeof update.title === 'string' || typeof update.description === 'string') {
+                  setFormData(prev => ({
+                    ...prev,
+                    title: typeof update.title === 'string' ? update.title : prev.title,
+                    description: typeof update.description === 'string' ? update.description : prev.description
+                  }))
+                  notify('Applied AI suggestions', 'success')
+                } else {
+                  notify('AI suggestions missing title/description.', 'error')
+                }
+              } catch (e) {
+                console.error('AI assist failed', e)
+                notify('Failed to apply AI suggestions.', 'error')
+              }
             }}
             className="px-4 py-2 rounded-full border-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300"
           >
@@ -321,18 +403,32 @@ export default function CreateCampaignPage() {
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-400">No image selected</div>
             )}
-            {/* Pencil overlay trigger */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute top-3 right-3 inline-flex items-center justify-center w-10 h-10 rounded-full bg-black/50 hover:bg-black/60 transition text-white shadow-md"
-              title="Change image"
-            >
-              {/* Pencil icon */}
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                <path d="M16.862 3.487a1.5 1.5 0 0 1 2.121 0l1.53 1.53a1.5 1.5 0 0 1 0 2.121l-9.9 9.9a1.5 1.5 0 0 1-.67.386l-4.019 1.004a.75.75 0 0 1-.91-.91l1.003-4.02a1.5 1.5 0 0 1 .386-.669l9.9-9.9Zm-2.828 2.828L5.9 14.45a.5.5 0 0 0-.129.223l-.692 2.773 2.773-.692a.5.5 0 0 0 .223-.13l8.134-8.133-2.167-2.167Z" />
-              </svg>
-            </button>
+            {/* Overlay controls */}
+            <div className="absolute top-3 right-3 flex items-center gap-2">
+              {user?.role === 'creator' && (
+                <button
+                  type="button"
+                  onClick={generateImageFromDescription}
+                  disabled={imageGenLoading}
+                  className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${imageGenLoading ? 'bg-blue-600/40 cursor-not-allowed' : 'bg-blue-600/50 hover:bg-blue-600/60'} text-white shadow-md backdrop-blur-sm focus:outline-none`}
+                  title="Generate image"
+                >
+                  <span className="text-lg leading-none">✦</span>
+                </button>
+              )}
+              {/* Pencil overlay trigger */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-black/50 hover:bg-black/60 transition text-white shadow-md"
+                title="Change image"
+              >
+                {/* Pencil icon */}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path d="M16.862 3.487a1.5 1.5 0 0 1 2.121 0l1.53 1.53a1.5 1.5 0 0 1 0 2.121l-9.9 9.9a1.5 1.5 0 0 1-.67.386l-4.019 1.004a.75.75 0 0 1-.91-.91l1.003-4.02a1.5 1.5 0 0 1 .386-.669l9.9-9.9Zm-2.828 2.828L5.9 14.45a.5.5 0 0 0-.129.223l-.692 2.773 2.773-.692a.5.5 0 0 0 .223-.13l8.134-8.133-2.167-2.167Z" />
+                </svg>
+              </button>
+            </div>
           </div>
           {/* Content */}
           <div className="p-5">

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from './card'
-import { ChainChips } from './chain-chips'
+// Removed unused ChainChips (dynamic chains handled inline)
 
 export function CampaignForm() {
   const router = useRouter()
@@ -11,9 +11,10 @@ export function CampaignForm() {
     title: '',
     description: '',
     goal: '',
-    chains: ['Ethereum'] as ('Ethereum' | 'Solana' | 'Bitcoin')[]
+    chains: ['Ethereum'] as string[]
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [customChain, setCustomChain] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -52,13 +53,26 @@ export function CampaignForm() {
     }
   }
 
-  const handleChainToggle = (chain: 'Ethereum' | 'Solana' | 'Bitcoin') => {
+  const handleChainToggle = (chain: string) => {
     setFormData(prev => ({
       ...prev,
       chains: prev.chains.includes(chain)
         ? prev.chains.filter(c => c !== chain)
         : [...prev.chains, chain]
     }))
+  }
+
+  const addCustomChain = () => {
+    const raw = (customChain || '').trim()
+    if (!raw) return
+    // Normalize spacing/case lightly
+    const normalized = raw.replace(/\s+/g, ' ').trim()
+    setFormData(prev => (
+      prev.chains.includes(normalized)
+        ? prev
+        : { ...prev, chains: [...prev.chains, normalized] }
+    ))
+    setCustomChain('')
   }
 
   return (
@@ -111,28 +125,43 @@ export function CampaignForm() {
           <p className="text-sm text-[color:var(--muted)] mb-4">
             Choose which blockchains donors can use to contribute to your campaign.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {(['Ethereum', 'Solana', 'Bitcoin'] as const).map((chain) => (
-              <button
-                key={chain}
-                type="button"
-                onClick={() => handleChainToggle(chain)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)] ${
-                  formData.chains.includes(chain)
-                    ? 'bg-[color:var(--primary)] text-black'
-                    : 'bg-white/5 border border-white/10 text-[color:var(--muted)] hover:bg-white/10 hover:border-white/20 hover:text-white'
-                }`}
-              >
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{
-                    backgroundColor: chain === 'Ethereum' ? 'var(--eth)' :
-                                   chain === 'Solana' ? 'var(--sol)' : 'var(--btc)'
-                  }}
-                />
+          {/* Selected chains with remove */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {formData.chains.map((chain) => (
+              <span key={chain} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-sm">
                 {chain}
+                <button type="button" onClick={() => setFormData(prev => ({ ...prev, chains: prev.chains.filter(c => c !== chain) }))} className="hover:text-red-400">
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+
+          {/* Suggestions */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {['Ethereum','Solana','Bitcoin','ZetaChain'].filter(s => !formData.chains.includes(s)).map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => handleChainToggle(s)}
+                className="px-3 py-1 rounded-full text-sm bg-white/5 border border-white/10 text-[color:var(--muted)] hover:bg-white/10 hover:border-white/20 hover:text-white"
+              >
+                + {s}
               </button>
             ))}
+          </div>
+
+          {/* Custom chain input */}
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={customChain}
+              onChange={(e) => setCustomChain(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomChain() } }}
+              placeholder="Add chain (e.g., ZetaChain)"
+              className="flex-1 px-3 py-2 bg-[color:var(--panel-2)] border border-white/10 rounded-lg focus:border-[color:var(--primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--primary)]/20 placeholder-[color:var(--muted)]"
+            />
+            <button type="button" onClick={addCustomChain} className="px-4 py-2 rounded-lg bg-white/10 border border-white/10 hover:bg-white/15">Add</button>
           </div>
           {formData.chains.length === 0 && (
             <p className="text-sm text-red-400 mt-2">Please select at least one blockchain.</p>

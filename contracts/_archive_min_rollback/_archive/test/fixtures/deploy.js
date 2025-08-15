@@ -1,0 +1,1 @@
+module.exports = async function fixture() { /* TODO */ }\n

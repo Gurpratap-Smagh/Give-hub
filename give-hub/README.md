@@ -16,7 +16,7 @@ This repository contains the frontend application built with the Next.js App Rou
 - **UI Components:** [Shadcn UI](https://ui.shadcn.com/) (using Radix UI and Tailwind CSS)
 - **Blockchain Integration (Planned):** [ZetaChain](https://www.zetachain.com/) via [viem](https://viem.sh/)
 - **Database (Planned):** [MongoDB](https://www.mongodb.com/)
-- **AI Integration (Planned):** Campaign creation assistance via Gemini AI.
+- **AI Integration:** Campaign image generation via Gemini API (Gemini image model or Imagen) with `/api/ai/generate-image` and client integration on `app/create/page.tsx`.
 
 ## Getting Started
 
@@ -38,6 +38,21 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to see the a
 
 Environment is automatically loaded from `.env.local` when present.
 
+### AI Image Generation Configuration
+
+Add the following to `.env.local` to enable image generation:
+
+```bash
+GEMINI_API_KEY=your_google_gemini_api_key
+# Optional: enable Imagen via Gemini API (preferred if you have access)
+USE_IMAGEN=true
+IMAGEN_MODEL=imagen-4.0-generate-preview-06-06
+```
+
+Notes:
+- Gemini image generation requires `responseModalities` to include both TEXT and IMAGE; the API route handles this.
+- If your key only has access to text models (e.g., 2.5 Flash), enable `USE_IMAGEN=true` for Imagen.
+
 ## Project Structure
 
 -   `app/`: Contains all pages and layouts, following the Next.js App Router structure.
@@ -58,6 +73,7 @@ Environment is automatically loaded from `.env.local` when present.
     -   Persists to JSON mock DB and links created campaign to creator
     -   Supports optional `category`, including custom values
 -   Authentication (JWT): signup/signin/signout, client context, role-based UI
+-   AI image generation on create page (✦ button) calling `POST /api/ai/generate-image`
 -   Home page uses server-side data (`db.getAllCampaigns()`) and passes to a client grid
     -   Grid shows 6 cards fully + next 3 blurred before "See more" (sticky button)
     -   On expand, remaining items render unblurred
@@ -70,6 +86,18 @@ Environment is automatically loaded from `.env.local` when present.
     -   Regex pattern input (case-insensitive) on the home page; only matching cards are rendered
     -   "Back to all campaigns" and home navigation reset the grid to show all campaigns
 -   DB search helper `db.searchCampaigns(query)` for filtering by any schema field and text query `q`
+
+## Payments (Adapter)
+
+Payments are routed through a small adapter at `lib/payments/index.ts` so future ZetaChain integration is easy. By default it uses a mock REST endpoint.
+
+Configure provider (now or later):
+
+```bash
+NEXT_PUBLIC_PAYMENT_PROVIDER=mock # future: zetachain
+```
+
+To integrate ZetaChain later, implement `processWithZetaChain()` in `lib/payments/index.ts` and set the provider accordingly.
 
 ## Search Usage
 

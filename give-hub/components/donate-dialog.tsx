@@ -25,7 +25,7 @@ import { ChainChips } from './chain-chips' // ACCESS: Blockchain selection compo
 import { formatCurrency } from '@/lib/utils/format' // ACCESS: Currency formatting utilities
 import { notify } from '@/lib/utils/notify'
 import { makeDonationOnContract } from '@/lib/services/contracts' // ACCESS: Contract interaction functions
-import type { Campaign } from '@/components/campaigns-grid' // TEMP: Centralize types later
+import type { Campaign } from '@/lib/utils/types'
 
 /**
  * Props for DonateDialog component
@@ -38,7 +38,7 @@ interface DonateDialogProps {
   isOpen: boolean
   onClose: () => void
   campaign: Campaign
-  selectedChain: 'Ethereum' | 'Solana' | 'Bitcoin'
+  selectedChain: string
 }
 
 /**

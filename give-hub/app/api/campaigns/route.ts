@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       title: string;
       description: string;
       goal: number;
-      chains: ("Ethereum" | "Solana" | "Bitcoin")[];
+      chains: string[];
       category?: string;
       creatorId?: string;
       image?: string;

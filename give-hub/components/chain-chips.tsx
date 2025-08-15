@@ -1,25 +1,23 @@
 import { cn } from '@/lib/utils/format'
 
 interface ChainChipsProps {
-  chains: ('Ethereum' | 'Solana' | 'Bitcoin')[]
-  selectedChain: 'Ethereum' | 'Solana' | 'Bitcoin'
-  onChainChange: (chain: 'Ethereum' | 'Solana' | 'Bitcoin', event: React.MouseEvent) => void
+  chains: string[]
+  selectedChain: string
+  onChainChange: (chain: string, event: React.MouseEvent) => void
   size?: 'sm' | 'md'
 }
 
-const chainConfig = {
-  Ethereum: {
-    color: 'var(--eth)',
-    label: 'Ethereum'
-  },
-  Solana: {
-    color: 'var(--sol)',
-    label: 'Solana'
-  },
-  Bitcoin: {
-    color: 'var(--btc)',
-    label: 'Bitcoin'
-  }
+// Simple dynamic color resolver with known chain fallbacks
+const knownColors: Record<string, string> = {
+  ethereum: 'var(--eth)',
+  solana: 'var(--sol)',
+  bitcoin: 'var(--btc)',
+  zeta: 'var(--primary)', // Zetachain-ready fallback
+}
+
+function colorForChain(chain: string): string {
+  const key = (chain || '').toLowerCase().trim()
+  return knownColors[key] || 'var(--ring)'
 }
 
 export function ChainChips({ chains, selectedChain, onChainChange, size = 'md' }: ChainChipsProps) {
@@ -29,9 +27,8 @@ export function ChainChips({ chains, selectedChain, onChainChange, size = 'md' }
       size === 'sm' ? 'gap-1' : 'gap-2'
     )}>
       {chains.map((chain) => {
-        const config = chainConfig[chain]
         const isSelected = selectedChain === chain
-        
+        const dotColor = colorForChain(chain)
         return (
           <button
             key={chain}
@@ -49,9 +46,9 @@ export function ChainChips({ chains, selectedChain, onChainChange, size = 'md' }
                 "rounded-full",
                 size === 'sm' ? 'w-2 h-2' : 'w-3 h-3'
               )}
-              style={{ backgroundColor: config.color }}
+              style={{ backgroundColor: dotColor }}
             />
-            {config.label}
+            {chain}
           </button>
         )
       })}
