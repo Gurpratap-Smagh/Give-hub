@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/_dev/mock-db/database';
+import { db } from '@/lib/db';
 import { authService, validateSigninInput, validateSignupInput, type SigninData, type SignupData } from './auth';
 
 export { authService, validateSigninInput, validateSignupInput };
@@ -32,7 +32,7 @@ export function authMiddleware(
         return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
       }
 
-      const user = db.findUserById(verify.userId);
+      const user = await db.findUserById(verify.userId);
       if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 401 });
       }

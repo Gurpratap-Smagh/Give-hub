@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authService } from '@/lib/auth/index'
-import { db } from '@/_dev/mock-db/database'
-import type { User, Creator } from '@/_dev/mock-db/database'
+import { db } from '@/lib/db'
+import type { User, Creator } from '@/lib/db'
 
 // GET /api/profile - Get current user profile
 export async function GET(request: NextRequest) {
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const user = db.findUserById(authResult.userId)
+    const user = await db.findUserById(authResult.userId)
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -78,7 +78,7 @@ export async function PUT(request: NextRequest) {
       updateData.walletAddresses = Object.keys(mapped).length ? mapped : undefined
     }
 
-    const updatedUser = db.updateUser(authResult.userId, updateData)
+    const updatedUser = await db.updateUser(authResult.userId, updateData)
     
     if (!updatedUser) {
       return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })

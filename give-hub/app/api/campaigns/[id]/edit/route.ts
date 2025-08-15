@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authService } from '@/lib/auth/auth'
-import { db } from '@/_dev/mock-db/database'
+import { db } from '@/lib/db'
 
 // PUT /api/campaigns/[id]/edit - Update campaign (creator only)
 export async function PUT(
@@ -25,7 +25,7 @@ export async function PUT(
     }
 
     const { id: campaignId } = await context.params
-    const campaign = db.findCampaignById(campaignId)
+    const campaign = await db.findCampaignById(campaignId)
     
     if (!campaign) {
       return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
@@ -72,7 +72,7 @@ export async function PUT(
       chains
     }
 
-    const updatedCampaign = db.updateCampaign(campaignId, updateData)
+    const updatedCampaign = await db.updateCampaign(campaignId, updateData)
     
     if (!updatedCampaign) {
       return NextResponse.json({ error: 'Failed to update campaign' }, { status: 500 })

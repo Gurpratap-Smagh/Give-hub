@@ -6,14 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/_dev/mock-db/database'
-import type { User, Creator } from '@/_dev/mock-db/database'
+import { db } from '@/lib/db'
+import type { User, Creator } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
     // Touch request to satisfy no-unused-vars lint without altering behavior
     void req.nextUrl;
-    const campaigns = db.getAllCampaigns()
+    const campaigns = await db.getAllCampaigns()
     return NextResponse.json({ success: true, campaigns })
   } catch (error) {
     console.error('GET /api/campaigns error:', error)
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
     }
 
-    const newCampaign = db.createCampaign({
+    const newCampaign = await db.createCampaign({
       title,
       description,
       goal: Number(goal),
@@ -60,11 +60,11 @@ export async function POST(req: NextRequest) {
 
     // Optionally link to creator profile
     if (creatorId) {
-      const user = db.findUserById(creatorId) as User | Creator | null
+      const user = await db.findUserById(creatorId) as User | Creator | null
       if (user && user.role === 'creator') {
         const creator = user as Creator
         const existing = Array.isArray(creator.createdCampaigns) ? creator.createdCampaigns : []
-        db.updateUser(creatorId, { createdCampaigns: [...existing, newCampaign.id] })
+        await db.updateUser(creatorId, { createdCampaigns: [...existing, newCampaign.id] })
       }
     }
 

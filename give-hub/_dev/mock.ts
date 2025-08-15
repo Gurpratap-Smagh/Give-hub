@@ -1,13 +1,11 @@
-import { MockDatabase } from './mock-db/database';
-import type { Campaign, Donation } from './types';
-
-const db = MockDatabase.getInstance();
+import { db } from '@/_dev/mock-db/database';
+import type { Campaign, Donation } from '@/_dev/mock-db/database';
 
 function getAllCampaigns(): Campaign[] {
   return db.getAllCampaigns();
 }
 
-function findCampaignById(id: string): Campaign | undefined {
+function findCampaignById(id: string): Campaign | null {
   return db.findCampaignById(id);
 }
 

@@ -108,11 +108,15 @@ export default function ProfilePictureUpload({
     const display = cu.username || cu.name || 'U'
     const color = colors[display.length % colors.length]
     const initial = String(display).charAt(0).toUpperCase()
+    // Detect theme for background adaptation (client-only)
+    const isDark = typeof document !== 'undefined' && document.documentElement?.dataset?.theme === 'dark'
+    const bg = isDark ? '#000000' : color
+    const text = '#FFFFFF'
     
     return `data:image/svg+xml;base64,${btoa(`
-      <svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" r="50" fill="${color}"/>
-        <text x="50" y="50" text-anchor="middle" dominant-baseline="central" fill="white" font-size="36" font-family="system-ui">${initial}</text>
+      <svg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'>
+        <rect width='100' height='100' rx='20' fill='${bg}'/>
+        <text x='50' y='50' text-anchor='middle' dominant-baseline='central' fill='${text}' font-size='36' font-family='system-ui'>${initial}</text>
       </svg>
     `)}`
   }
@@ -149,9 +153,9 @@ export default function ProfilePictureUpload({
     <div className="flex flex-col items-center gap-3">
       {/* Profile Picture Display */}
       <div 
-        className={`${sizeClasses[size]} relative rounded-full overflow-hidden bg-gray-100 pfp-bg border-4 border-white shadow-lg ${
+        className={`${sizeClasses[size]} relative rounded-full overflow-hidden bg-gray-100 pfp-bg shadow-lg ${
           isEditing ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''
-        } ${dragActive ? 'ring-4 ring-blue-500 ring-opacity-50' : ''}`}
+        } ring-blue-500 ${dragActive ? 'ring-2' : 'ring-1'}`}
         onClick={handleClick}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}

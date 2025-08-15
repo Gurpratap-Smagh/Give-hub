@@ -6,7 +6,7 @@
  * to interact with a deployed smart contract on a network like Ethereum or Solana.
  */
 
-import { Campaign, Donation } from './types';
+import type { Campaign } from '@/lib/utils/types';
 
 // Mock function to simulate fetching campaign data from a smart contract
 export async function getCampaignFromContract(campaignId: string): Promise<Partial<Campaign> | null> {
@@ -17,10 +17,9 @@ export async function getCampaignFromContract(campaignId: string): Promise<Parti
 
   // In a real scenario, you would call a 'view' function on your smart contract.
   // For now, we'll return some mock data.
-  const mockContractData = {
-    totalRaised: 12500.50,
-    contributorCount: 150,
-    isActive: true,
+  // Return only fields that exist on Campaign to satisfy typing
+  const mockContractData: Partial<Campaign> = {
+    raised: 12500.5,
   };
 
   console.log(`[Contract Mock] Fetched data for campaign ${campaignId}.`);
@@ -28,8 +27,10 @@ export async function getCampaignFromContract(campaignId: string): Promise<Parti
 }
 
 // Mock function to simulate making a donation through a smart contract
-export async function makeDonationOnContract(donation: Donation): Promise<{ transactionHash: string; blockNumber: number }> {
-  console.log(`[Contract Mock] Processing donation of ${donation.amount} for campaign ${donation.campaignId}.`);
+export type ContractDonation = { campaignId: string; amount: number; chain: string; memo?: string };
+
+export async function makeDonationOnContract(donation: ContractDonation): Promise<{ transactionHash: string; blockNumber: number }> {
+  console.log(`[Contract Mock] Processing donation of ${donation.amount} for campaign ${donation.campaignId} on ${donation.chain}.`);
 
   // Simulate a transaction being sent to the blockchain
   await new Promise(resolve => setTimeout(resolve, 2500));

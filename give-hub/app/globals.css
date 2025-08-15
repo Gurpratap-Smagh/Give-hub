@@ -4,9 +4,9 @@
 @tailwind utilities;
 
 :root {
-  --primary: #2563eb;
-  --primary-600: #2563eb;
-  --primary-700: #2563eb;
+  --primary: #2441ff;
+  --primary-600: #2441ff;
+  --primary-700: #2441ff;
   /* Secondary is brand black */
   --secondary: #000000;
   /* Accent used by gradients (kept as original green) */
@@ -14,7 +14,7 @@
   --secondary-600: #059669;
   --muted: #64748b;
   --muted-light: #94a3b8;
-  --ring: #3b82f6;
+  --ring: #1512d3;
   --background: #ffffff;
   --surface: #f8fafc;
   --border: #e2e8f0;
@@ -27,10 +27,19 @@
   --panel-2: #ffffff;
   --text: var(--text-primary);
   /* Chain brand colors (fallbacks) */
-  --eth: #2563eb;
+  --eth: #1512d3;
   --sol: #14f195;
   --btc: #f7931a;
 }
+
+/* Map Tailwind blue utility classes to brand primary color (global) */
+.bg-blue-600 { background-color: var(--primary) !important; }
+.hover\:bg-blue-700:hover { background-color: var(--primary) !important; }
+.text-blue-600 { color: var(--primary) !important; }
+.ring-blue-500 { --tw-ring-color: var(--primary) !important; }
+.ring-blue-600 { --tw-ring-color: var(--primary) !important; }
+.border-blue-600 { border-color: var(--primary) !important; }
+.hover\:text-blue-600:hover { color: var(--primary) !important; }
 
 /* Dark theme variables */
 :root[data-theme="dark"] {
@@ -172,7 +181,7 @@ body {
   background-color: var(--panel-2) !important; 
   border-color: var(--border) !important; 
 }
-:root[data-theme="dark"] .hover\:bg-blue-700:hover { filter: brightness(1.05); }
+/* Removed brightness filter on blue hover in dark mode to preserve intended opacity */
 
 /* Menu containers often use bg-white */
 :root[data-theme="dark"] .menu, 

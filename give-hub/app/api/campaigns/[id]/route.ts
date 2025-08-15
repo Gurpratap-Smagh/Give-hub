@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/_dev/mock-db/database'
+import { db } from '@/lib/db'
 
 export async function GET(
   _req: NextRequest,
@@ -14,12 +14,12 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const campaign = db.findCampaignById(id)
+    const campaign = await db.findCampaignById(id)
     if (!campaign) {
       return NextResponse.json({ success: false, error: 'Campaign not found' }, { status: 404 })
     }
 
-    const donations = db.getDonationsByCampaign(id)
+    const donations = await db.getDonationsByCampaign(id)
 
     return NextResponse.json({
       success: true,

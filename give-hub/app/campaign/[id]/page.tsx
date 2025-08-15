@@ -1,6 +1,6 @@
-import { db } from '@/_dev/mock-db/database'
+import { db } from '@/lib/db'
 import { notFound } from 'next/navigation'
-import type { Campaign, User, Creator } from '@/_dev/mock-db/database'
+import type { Campaign, User, Creator } from '@/lib/db'
 import CampaignPageContent from './CampaignPageContent'
 
 /**
@@ -17,13 +17,13 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   const campaignId = resolvedParams.id
 
   // Fetch data on the server
-  const campaignData = db.findCampaignById(campaignId)
+  const campaignData = await db.findCampaignById(campaignId)
   if (!campaignData) {
     notFound()
   }
 
   // Fetch creator details
-  const creator = db.findUserById(campaignData.creatorId) as User | Creator | null
+  const creator = await db.findUserById(campaignData.creatorId) as User | Creator | null
 
   // Combine campaign with creator info
   const campaign: Campaign & { creator?: User | Creator | null } = {
@@ -31,7 +31,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
     creator,
   }
 
-  const donationsData = db.getDonationsByCampaign(campaignId)
+  const donationsData = await db.getDonationsByCampaign(campaignId)
 
   // Render the client component with the fetched data
   return (

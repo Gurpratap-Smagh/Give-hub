@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import type { Campaign, Donation, Creator } from '@/_dev/mock-db/database'
+import type { Campaign, Donation, Creator } from '@/lib/db'
 import Spinner from '@/components/spinner'
 import Link from 'next/link'
 import Image from 'next/image'

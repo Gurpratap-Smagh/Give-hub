@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { db } from "@/_dev/mock-db/database";
-import type { Creator, Campaign } from "@/_dev/mock-db/database";
+import { db } from "@/lib/db";
+import type { Creator, Campaign } from "@/lib/db";
 import { generateWithSystem } from "@/lib/gemini";
 import { NextRequest } from "next/server";
 import { authService } from "@/lib/auth";
@@ -74,8 +74,8 @@ NORMALIZE: ${NORMALIZE_DOC}`}`;
 async function callExecutor(instruction: string, chatContext?: ChatMessage[]): Promise<string> {
   try {
     // Get full campaign database for intelligent responses
-    const allCampaigns = db.getAllCampaigns();
-    const campaignContext = allCampaigns.map(c => ({
+    const allCampaigns = await db.getAllCampaigns() as Campaign[];
+    const campaignContext = allCampaigns.map((c: Campaign) => ({
       id: c.id,
       title: c.title,
       category: c.category || 'Other',
@@ -228,19 +228,19 @@ export async function POST(req: NextRequest) {
       // Step 1: Normalize and tokenize the query; avoid substring false-positives (e.g., 'cat' in 'education')
       const cleanedQ = (q && q.trim()) ? normalizeQuery(q) : normalizeQuery(prompt);
       const tokens = Array.from(new Set((cleanedQ || '').split(/\s+/).filter(Boolean)));
-      let searchResults = db.getAllCampaigns();
+      let searchResults: Campaign[] = await db.getAllCampaigns() as Campaign[];
 
       // Structured pre-filter by category (exact, case-insensitive)
       if (category) {
         const cat = String(category).toLowerCase();
-        searchResults = searchResults.filter(c => (c.category || '').toLowerCase() === cat);
+        searchResults = searchResults.filter((c: Campaign) => (c.category || '').toLowerCase() === cat);
       }
 
       // Word-boundary token match across title/category/description (OR semantics)
       if (tokens.length) {
         const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regexes = tokens.map(t => new RegExp(`\\b${escape(t)}\\b`, 'i'));
-        searchResults = searchResults.filter(c => {
+        searchResults = searchResults.filter((c: Campaign) => {
           const fields = [c.title, c.category || '', c.description || ''];
           return regexes.some(rx => fields.some(f => rx.test(f)));
         });
@@ -248,13 +248,13 @@ export async function POST(req: NextRequest) {
 
       // Step 2: Manual in-memory filtering for ranges.
       if (goal) {
-        searchResults = searchResults.filter(c => 
+        searchResults = searchResults.filter((c: Campaign) => 
           (goal.min ? (c.goal || 0) >= goal.min : true) &&
           (goal.max ? (c.goal || 0) <= goal.max : true)
         );
       }
       if (raised) {
-        searchResults = searchResults.filter(c => 
+        searchResults = searchResults.filter((c: Campaign) => 
           (raised.min ? (c.raised || 0) >= raised.min : true) &&
           (raised.max ? (c.raised || 0) <= raised.max : true)
         );
@@ -335,17 +335,17 @@ Present these results to the user in a friendly, engaging, and helpful way. You 
       const p = (plan.params || {}) as { interests?: string };
       const interests = String(p.interests ?? '').trim();
       const ids = (context?.lastResults || []).map(r => r.id);
-      const all = db.getAllCampaigns();
-      let candidates = all.filter(c => ids.includes(c.id));
+      const all: Campaign[] = await db.getAllCampaigns() as Campaign[];
+      let candidates: Campaign[] = all.filter((c: Campaign) => ids.includes(c.id));
       
       // If no previous results, be proactive and intelligent
       if (!candidates.length) {
-        const results = all.filter(c =>
+        const results = all.filter((c: Campaign) =>
           c.title.toLowerCase().includes((interests || prompt).toLowerCase())
           || (c.category?.toLowerCase() || '').includes((interests || prompt).toLowerCase())
           || (c.description?.toLowerCase() || '').includes((interests || prompt).toLowerCase())
         );
-        candidates = results.slice(0, 10);
+        candidates = (results as Campaign[]).slice(0, 10);
         
         if (!candidates.length) {
           // Be creative - suggest trending or featured campaigns
@@ -354,7 +354,7 @@ Present these results to the user in a friendly, engaging, and helpful way. You 
       }
       
       // Give executor complete campaign data and creative freedom
-      const campaignData = candidates.map(c => ({
+      const campaignData = candidates.map((c: Campaign) => ({
         id: c.id,
         title: c.title,
         category: c.category || 'Other',
@@ -393,7 +393,7 @@ Present these results to the user in a friendly, engaging, and helpful way. You 
       
       return NextResponse.json({ 
         text,
-        results: candidates.map(c => ({ id: c.id, title: c.title, category: c.category, chains: c.chains, goal: c.goal, raised: c.raised, description: c.description }))
+        results: candidates.map((c: Campaign) => ({ id: c.id, title: c.title, category: c.category, chains: c.chains, goal: c.goal, raised: c.raised, description: c.description }))
       });
     }
 
@@ -405,8 +405,8 @@ Present these results to the user in a friendly, engaging, and helpful way. You 
         return NextResponse.json({ text: askEnable });
       }
 
-      const all = db.getAllCampaigns();
-      let match: ReturnType<typeof db.getAllCampaigns>[number] | null = null;
+      const all: Campaign[] = await db.getAllCampaigns() as Campaign[];
+      let match: Campaign | null = null;
       const wantsRepeat = /\b(again|same)\b/i.test(prompt);
       const lastDonation = extractLastDonation(context?.messages);
       const promptAmt = parseAmountFromText(prompt) || 0;
@@ -457,13 +457,13 @@ Present these results to the user in a friendly, engaging, and helpful way. You 
 
       // Final fallback: search by provided title string
       if (!match && title) {
-        const searchResults = db.searchCampaigns({ q: title });
+        const searchResults: Campaign[] = await db.searchCampaigns({ q: title }) as Campaign[];
         if (searchResults.length === 0) {
           const msg = await callExecutor(`No campaign found for title "${title}". Ask user to specify exact title or run a search first, briefly.`);
           return NextResponse.json({ text: msg });
         }
         if (searchResults.length > 1) {
-          const list = searchResults.map((c, i) => `${i + 1}. ${c.title}`).join('\n');
+          const list = searchResults.map((c: Campaign, i: number) => `${i + 1}. ${c.title}`).join('\n');
           const msg = await callExecutor(`Multiple campaigns match. Present this numbered list and ask user to choose a number, briefly.\n${list}`);
           return NextResponse.json({ text: msg, results: searchResults });
         }
@@ -510,30 +510,30 @@ Present these results to the user in a friendly, engaging, and helpful way. You 
         if (token) {
           const ver = await authService.verifyToken(token);
           if (ver.success && ver.userId) {
-            const u = db.findUserById(ver.userId);
+            const u = await db.findUserById(ver.userId);
             if (u) donorName = u.username;
           }
         }
       } catch {}
 
       const mockTransactionId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const donation = db.createDonation({
+      const donation = await db.createDonation({
         campaignId: m.id,
         name: donorName,
         amount,
         chain: chain as Chain
       });
 
-      const updated = db.updateCampaign(m.id, { raised: newTotal });
+      const updated = await db.updateCampaign(m.id, { raised: newTotal });
       if (!updated) {
         return NextResponse.json({ text: 'Payment processed but failed to update campaign totals. Please refresh the page to verify.' }, { status: 500 });
       }
 
-      const creator = db.findUserById(m.creatorId);
+      const creator = await db.findUserById(m.creatorId);
       if (creator && creator.role === 'creator') {
         const creatorUser = creator as Creator;
         const current = creatorUser.totalRaised || 0;
-        db.updateUser(creatorUser.id, { totalRaised: current + amount });
+        await db.updateUser(creatorUser.id, { totalRaised: current + amount });
       }
 
       const confirmation = await callExecutor(

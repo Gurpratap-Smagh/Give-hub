@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/_dev/mock-db/database'
-import type { Creator } from '@/_dev/mock-db/database'
+import { db } from '@/lib/db'
+import type { Creator } from '@/lib/db'
 
 /**
  * POST /api/payments
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find campaign
-    const campaign = db.findCampaignById(campaignId)
+    const campaign = await db.findCampaignById(campaignId)
     if (!campaign) {
       return NextResponse.json(
         { error: 'Campaign not found' },
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 1000))
 
     // Create donation record
-    const donation = db.createDonation({
+    const donation = await db.createDonation({
       campaignId,
       name: donorName,
       amount,
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Update campaign raised amount
-    const updatedCampaign = db.updateCampaign(campaignId, {
+    const updatedCampaign = await db.updateCampaign(campaignId, {
       raised: newTotal
     })
 
@@ -92,10 +92,10 @@ export async function POST(request: NextRequest) {
 
     // TODO: UPDATE CREATOR STATS
     // Update creator's total raised amount
-    const creator = db.findUserById(campaign.creatorId)
+    const creator = await db.findUserById(campaign.creatorId)
     if (creator && creator.role === 'creator') {
       const creatorData = creator as Creator
-      db.updateUser(creatorData.id, {
+      await db.updateUser(creatorData.id, {
         totalRaised: (creatorData.totalRaised || 0) + amount
       })
     }

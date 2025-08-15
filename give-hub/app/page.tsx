@@ -17,8 +17,8 @@
  */
 import Link from 'next/link'
 import CampaignsGrid from '../components/campaigns-grid' // Client grid w/ loading and see-more UX
-import { db } from '@/_dev/mock-db/database'
-import type { Campaign } from '@/_dev/mock-db/database'
+import { db } from '@/lib/db'
+import type { Campaign } from '@/lib/db'
 // TODO: import { getCampaigns } from '@/lib/api' // Future API integration
 
 /**
@@ -36,36 +36,36 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
     const rawLower = raw.toLowerCase()
 
     if (!raw) {
-      campaigns = db.getAllCampaigns()
+      campaigns = await db.getAllCampaigns()
     } else {
       switch (searchParameter) {
         case 'title': {
-          const all = db.getAllCampaigns()
+          const all = await db.getAllCampaigns()
           campaigns = all.filter(c => c.title.toLowerCase().includes(rawLower))
           break
         }
         case 'creator': {
-          const all = db.getAllCampaigns()
-          campaigns = all.filter(campaign => {
-            const creator = db.findUserById(campaign.creatorId)
-            return creator?.username?.toLowerCase().includes(rawLower) ?? false
-          })
+          const all = await db.getAllCampaigns()
+          const pairs = await Promise.all(all.map(async (c: Campaign) => ({ c, creator: await db.findUserById(c.creatorId) })))
+          campaigns = pairs
+            .filter(p => (p.creator?.username?.toLowerCase().includes(rawLower)) ?? false)
+            .map(p => p.c)
           break
         }
         case 'category': {
-          const all = db.getAllCampaigns()
+          const all = await db.getAllCampaigns()
           campaigns = all.filter(c => (c.category?.toLowerCase() ?? '').includes(rawLower))
           break
         }
         default: {
           // Fallback to title-only search as a sensible default
-          const all = db.getAllCampaigns()
+          const all = await db.getAllCampaigns()
           campaigns = all.filter(c => c.title.toLowerCase().includes(rawLower))
         }
       }
     }
   } else {
-    campaigns = db.getAllCampaigns()
+    campaigns = await db.getAllCampaigns()
   }
   return (
     <div className="min-h-screen bg-gray-50">

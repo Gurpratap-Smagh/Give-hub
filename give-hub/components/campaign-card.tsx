@@ -97,6 +97,20 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
   useEffect(() => {
     setImgSrc(campaign.image || CARD_PLACEHOLDER_2x1)
   }, [campaign.image])
+  // Preflight image load: if campaign.image fails to load, switch to placeholder even if the card image hasn't rendered yet
+  useEffect(() => {
+    if (!campaign.image) return
+    let active = true
+    const test = new window.Image()
+    // allow CORS-friendly fetch when possible
+    try { test.crossOrigin = 'anonymous' } catch {}
+    test.onload = () => { /* ok, keep original */ }
+    test.onerror = () => {
+      if (active) setImgSrc(CARD_PLACEHOLDER_2x1)
+    }
+    test.src = campaign.image
+    return () => { active = false }
+  }, [campaign.image])
   
   // Minimal variant for home page grid display
   if (variant === 'minimal') {
@@ -105,7 +119,7 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
         <div className="relative bg-white rounded-xl border border-gray-200 p-3 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-md hover:border-gray-300 transform hover:-translate-y-1 flex flex-col">
           {/* Category chip pinned to card's top-right (5px by 5px) */}
           {displayCategory && (
-            <div className="absolute top-[5px] right-[5px] z-10">
+            <div className="absolute top-[10px] right-[10px] z-10">
               <span className="px-2.5 py-1 text-[10px] leading-none font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200 shadow-sm">
                 {displayCategory}
               </span>
@@ -114,12 +128,22 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
           {/* Image (always render; fallback placeholder keeps size consistent) */}
           <div className="w-40 h-20 relative rounded-lg overflow-hidden mb-1">
             <Image
+              key={imgSrc}
               src={imgSrc}
               alt={campaign.title}
               fill
               unoptimized
+              loading="eager"
+              priority
+              sizes="(max-width: 640px) 160px, (max-width: 1024px) 160px, 160px"
               className="object-cover"
+              referrerPolicy="no-referrer"
               onError={() => setImgSrc(CARD_PLACEHOLDER_2x1)}
+              onLoadingComplete={(img) => {
+                if (!img.naturalWidth || !img.naturalHeight) {
+                  setImgSrc(CARD_PLACEHOLDER_2x1)
+                }
+              }}
             />
           </div>
           

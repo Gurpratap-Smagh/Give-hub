@@ -96,9 +96,16 @@ export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from
               </div>
             ))
           )}
-          {/* After expand, render everything after first six */}
-          {expanded && afterSix.map((c) => (
-            <div key={`ex-${c.id}`} className="h-full">
+          {/* Always render items after first six so their images/fallbacks mount.
+              When not expanded, visually gate them with blur/opacity and disable interaction. */}
+          {afterSix.map((c) => (
+            <div
+              key={`ex-${c.id}`}
+              className={`h-full transition ${
+                !expanded ? 'pointer-events-none select-none opacity-70 [filter:blur(2px)]' : ''
+              }`}
+              aria-hidden={!expanded}
+            >
               <CampaignCard campaign={c} variant="minimal" />
             </div>
           ))}
@@ -113,6 +120,8 @@ export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from
           </div>
         )}
       </div>
+              
+
 
       {/* See more button (fixed to viewport bottom, above content) */}
       {!expanded && list.length > 6 && (

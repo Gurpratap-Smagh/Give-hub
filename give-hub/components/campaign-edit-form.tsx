@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
-import type { Campaign } from '@/_dev/mock-db/database'
+import type { Campaign } from '@/lib/db'
 import { notify } from '@/lib/utils/notify'
 
 interface CampaignEditFormProps {

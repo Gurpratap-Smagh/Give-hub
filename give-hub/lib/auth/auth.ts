@@ -1,5 +1,5 @@
-import { db } from '@/_dev/mock-db/database';
-import type { UserRole, User, Creator } from '@/_dev/mock-db/database';
+import { db } from '@/lib/db';
+import type { UserRole, User, Creator } from '@/lib/db';
 import { JWTPayload } from 'jose';
 import { SignJWT, jwtVerify } from 'jose';
 
@@ -49,8 +49,8 @@ export const authService = {
     const hashedPassword = await mockHash(data.password);
     // Route creator signups to proper creator creation to ensure required fields
     const created: User | Creator = data.role === 'creator'
-      ? db.createCreator({ ...(data as Omit<Creator, 'id' | 'createdAt' | 'updatedAt'>), password: hashedPassword })
-      : db.createUser({ ...(data as Omit<User, 'id' | 'createdAt' | 'updatedAt'>), password: hashedPassword });
+      ? await db.createCreator({ ...(data as Omit<Creator, 'id' | 'createdAt' | 'updatedAt'>), password: hashedPassword })
+      : await db.createUser({ ...(data as Omit<User, 'id' | 'createdAt' | 'updatedAt'>), password: hashedPassword });
 
     const token = await encrypt({ userId: created.id, role: created.role });
 

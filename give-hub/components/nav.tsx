@@ -470,11 +470,11 @@ export function Nav() {
     {/* Floating AI button (bottom-right) */}
     <button
       onClick={() => { setIsMobileMenuOpen(false); setShowSearch(false); setShowAI((v) => !v) }}
-      className="fixed bottom-[25px] right-[25px] h-14 w-14 rounded-full bg-blue-600 bg-opacity-5 text-white shadow-lg hover:bg-blue-700 hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500 z-[60] inline-flex items-center justify-center"
+      className="fixed bottom-[25px] right-[25px] h-9 w-9 rounded-full bg-blue-600 bg-opacity-5 text-white shadow-lg hover:bg-blue-700 hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500 z-[60] inline-flex items-center justify-center"
       aria-label="Open AI Assistant"
       title="Open AI Assistant"
     >
-      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl text-blue-600 ring-2 ring-blue-500 ring-opacity-5 shadow-sm">✦</span>
+      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-xl text-blue-600 ring-1 ring-blue-500 ring-opacity-5 shadow-sm">✦</span>
     </button>
     {showAI && (
       <AIOverlay

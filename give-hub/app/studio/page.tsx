@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth/auth-context'
 import Spinner from '@/components/spinner'
-import { Campaign } from '@/_dev/mock-db/database';
+import type { Campaign } from '@/lib/db';
 import CampaignsGrid, { Campaign as GridCampaign } from '@/components/campaigns-grid'
 import CampaignEditForm from '@/components/campaign-edit-form'
 import { notify } from '@/lib/utils/notify'

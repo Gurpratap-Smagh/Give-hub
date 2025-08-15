@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/_dev/mock-db/database'
+import { db } from '@/lib/db'
 
 /**
  * GET /api/campaigns/[id]/donations
@@ -11,14 +11,14 @@ import { db } from '@/_dev/mock-db/database'
  * 3. AI: Add donation analytics and insights
  */
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const campaignId = params.id
+    const { id: campaignId } = await params
 
     // Validate campaign exists
-    const campaign = db.findCampaignById(campaignId)
+    const campaign = await db.findCampaignById(campaignId)
     if (!campaign) {
       return NextResponse.json(
         { error: 'Campaign not found' },
@@ -27,7 +27,7 @@ export async function GET(
     }
 
     // Fetch donations for this campaign
-    const donations = db.getDonationsByCampaign(campaignId)
+    const donations = await db.getDonationsByCampaign(campaignId)
 
     return NextResponse.json(donations)
 
