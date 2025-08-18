@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { useAuth } from '@/lib/auth/auth-context'
 import Spinner from '@/components/spinner'
 import type { Campaign } from '@/lib/db';
-import CampaignsGrid, { Campaign as GridCampaign } from '@/components/campaigns-grid'
+import CampaignsGrid from '@/components/campaigns-grid'
 import CampaignEditForm from '@/components/campaign-edit-form'
 import { notify } from '@/lib/utils/notify'
+// No-escrow: withdrawals disabled, so web3 withdraw actions are removed from UI
 
 
 
@@ -20,6 +21,7 @@ export default function CreatorStudioPage() {
   // Edit state
   const [editing, setEditing] = useState<Campaign | null>(null)
   const [saving, setSaving] = useState(false)
+  // No-escrow: remove withdraw states
 
   // Fetch all campaigns (client-side) and filter to creator
   useEffect(() => {
@@ -55,7 +57,7 @@ export default function CreatorStudioPage() {
     return myCampaigns.reduce((sum, c) => sum + (Number(c.raised) || 0), 0)
   }, [myCampaigns])
 
-  const gridCampaigns: GridCampaign[] = useMemo(() => {
+  const gridCampaigns: Campaign[] = useMemo(() => {
     return myCampaigns.map((c) => ({
       id: c.id,
       title: c.title,
@@ -63,16 +65,20 @@ export default function CreatorStudioPage() {
       image: c.image,
       raised: c.raised,
       goal: c.goal,
+      creatorId: c.creatorId,
       chains: c.chains,
       category: c.category,
     }))
   }, [myCampaigns])
+
+  // No-escrow: remove on-chain campaign helpers (unused)
 
   // Save handler for edits
   const handleSave = async (update: Partial<Campaign>) => {
     if (!editing) return
     try {
       setSaving(true)
+      // Placeholder: Web3 integration removed. Off-chain update only.
       const res = await fetch(`/api/campaigns/${editing.id}/edit`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -92,6 +98,8 @@ export default function CreatorStudioPage() {
       setSaving(false)
     }
   }
+
+  // No-escrow: withdrawals removed
 
   if (isLoading) {
     return (
@@ -163,6 +171,7 @@ export default function CreatorStudioPage() {
             </div>
           </div>
         </div>
+        {/* On-chain Controls removed in no-escrow mode */}
       </div>
 
       {/* Error */}

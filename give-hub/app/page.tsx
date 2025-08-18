@@ -19,7 +19,6 @@ import Link from 'next/link'
 import CampaignsGrid from '../components/campaigns-grid' // Client grid w/ loading and see-more UX
 import { db } from '@/lib/db'
 import type { Campaign } from '@/lib/db'
-// TODO: import { getCampaigns } from '@/lib/api' // Future API integration
 
 /**
  * Home page component - campaign discovery and browsing
@@ -36,36 +35,33 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
     const rawLower = raw.toLowerCase()
 
     if (!raw) {
-      campaigns = await db.getAllCampaigns()
+      const result = await db.searchCampaignsAdvanced({}) as { campaigns: Campaign[], total: number }
+      campaigns = result.campaigns
     } else {
+      const query: { [key: string]: { $regex: string; $options: string } } = {} 
       switch (searchParameter) {
         case 'title': {
-          const all = await db.getAllCampaigns()
-          campaigns = all.filter(c => c.title.toLowerCase().includes(rawLower))
+          query.title = { $regex: rawLower, $options: 'i' }
           break
         }
         case 'creator': {
-          const all = await db.getAllCampaigns()
-          const pairs = await Promise.all(all.map(async (c: Campaign) => ({ c, creator: await db.findUserById(c.creatorId) })))
-          campaigns = pairs
-            .filter(p => (p.creator?.username?.toLowerCase().includes(rawLower)) ?? false)
-            .map(p => p.c)
+          query['creator.username'] = { $regex: rawLower, $options: 'i' }
           break
         }
         case 'category': {
-          const all = await db.getAllCampaigns()
-          campaigns = all.filter(c => (c.category?.toLowerCase() ?? '').includes(rawLower))
+          query.category = { $regex: rawLower, $options: 'i' }
           break
         }
         default: {
-          // Fallback to title-only search as a sensible default
-          const all = await db.getAllCampaigns()
-          campaigns = all.filter(c => c.title.toLowerCase().includes(rawLower))
+          query.title = { $regex: rawLower, $options: 'i' }
         }
       }
+      const result = await db.searchCampaignsAdvanced(query) as { campaigns: Campaign[], total: number }
+      campaigns = result.campaigns
     }
   } else {
-    campaigns = await db.getAllCampaigns()
+    const result = await db.searchCampaignsAdvanced({}) as { campaigns: Campaign[], total: number }
+    campaigns = result.campaigns
   }
   return (
     <div className="min-h-screen bg-gray-50">
@@ -110,4 +106,3 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
     </div>
   )
 }
-

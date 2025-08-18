@@ -28,7 +28,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { formatCurrency } from '@/lib/utils/format' // ACCESS: Currency formatting utilities
-// TODO: import { Campaign } from '@/lib/utils/types' // Use centralized types
+import type { Campaign } from '@/lib/db'
 
 // 2:1 aspect placeholder image (SVG data URL) to keep card sizes consistent
 const CARD_PLACEHOLDER_2x1 = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
@@ -47,21 +47,7 @@ const CARD_PLACEHOLDER_2x1 = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
   </svg>
 `)
 
-// Client-safe types for this component (avoid importing server-only modules)
-type Campaign = {
-  id: string
-  title: string
-  description: string
-  image?: string
-  raised: number
-  goal: number
-  creator?: string
-  createdAt?: string | Date
-  deadline?: string | Date
-  chains: string[]
-  /** Optional category label */
-  category?: string
-}
+// Using canonical Campaign type from '@/lib/db'
 
 /**
  * Props for CampaignCard component
@@ -139,7 +125,8 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
               className="object-cover"
               referrerPolicy="no-referrer"
               onError={() => setImgSrc(CARD_PLACEHOLDER_2x1)}
-              onLoadingComplete={(img) => {
+              onLoad={(e) => {
+                const img = e.currentTarget
                 if (!img.naturalWidth || !img.naturalHeight) {
                   setImgSrc(CARD_PLACEHOLDER_2x1)
                 }

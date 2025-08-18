@@ -6,19 +6,35 @@ const ContractOwnershipSchema = new Schema({
   blockchainProof: { type: String },
 }, { _id: false });
 
+// On-chain mapping schema (chainId, contract address, on-chain campaignId)
+const OnChainSchema = new Schema({
+  chainId: { type: Number, required: true, index: true },
+  contract: { type: String, required: true, index: true },
+  campaignId: { type: String, required: true, index: true },
+}, { _id: false });
+
 const DonationSchema = new Schema({
   name: { type: String, required: true },
   amount: { type: Number, required: true },
   chain: { type: String, required: true },
   timestamp: { type: Date, default: Date.now },
+  // Optional on-chain metadata
+  txHash: { type: String },
 }, { _id: false });
 
 const CampaignSchema = new Schema({
   id: { type: String, index: true, unique: true },
-  title: { type: String, required: true, index: 'text' },
+  // On-chain linkage fields
+  onchainId: { type: Number, index: true, sparse: true },
+  // New: store full on-chain mapping provided by API
+  onChain: { type: OnChainSchema, required: false },
+  uuid: { type: String, index: true, unique: true, sparse: true }, // bytes32 hex string
+  creatorAddress: { type: String, index: true }, // EVM address
+  active: { type: Boolean, default: true, index: true },
+  title: { type: String, required: true },
   goal: { type: Number, required: true },
   raised: { type: Number, default: 0 },
-  chains: { type: [String], required: true },
+  chains: { type: [String], default: [] },
   description: { type: String, required: true },
   category: { type: String },
   creatorId: { type: String, required: true, index: true },

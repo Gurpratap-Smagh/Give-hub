@@ -8,23 +8,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CampaignCard } from '@/components/campaign-card'
+import type { Campaign } from '@/lib/db'
 
-// Client-safe type to avoid importing server-only modules
-export type Chain = string
-export type Campaign = {
-  id: string
-  title: string
-  description: string
-  image?: string
-  raised: number
-  goal: number
-  creator?: string
-  createdAt?: string | Date
-  deadline?: string | Date
-  chains: string[]
-  /** Optional category label */
-  category?: string
-}
+// Use shared Campaign type from '@/lib/db' (kept compatible across mock and Mongo adapters)
 
 interface CampaignsGridProps {
   initialCampaigns?: Campaign[]
@@ -63,42 +49,88 @@ export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from
   }, [initialCampaigns])
 
   const list = campaigns ?? initialRef.current
-  const clearSix = useMemo(() => list.slice(0, 6), [list])
-  const afterSix = useMemo(() => list.slice(6), [list])
-  const shouldGate = !expanded && list.length > 6
+  // Feature flag: enable dynamic layout only when env is active.
+  // NOTE: In Next.js client components, only NEXT_PUBLIC_* env vars are exposed.
+  const layoutDEnv = (process.env.NEXT_PUBLIC_layoutD ?? process.env.NEXT_PUBLIC_LAYOUTD ?? '').toString().trim().toLowerCase()
+  const isLayoutD = ['1', 'true', 'yes', 'on'].includes(layoutDEnv)
+  // Column logic by total count: <4 => 1 col, 4-8 => 2 cols, >8 => 3 cols
+  const desiredCols = useMemo(() => {
+    const n = list.length
+    if (n < 4) return 1
+    if (n <= 8) return 2
+    return 3
+  }, [list.length])
+  // Gate when more than 2 rows would be shown (pre-expansion)
+  const visibleCount = useMemo(() => desiredCols * 2, [desiredCols])
+  const clearVisible = useMemo(() => list.slice(0, visibleCount), [list, visibleCount])
+  const afterVisible = useMemo(() => list.slice(visibleCount), [list, visibleCount])
+  const shouldGate = !expanded && list.length > visibleCount
 
-  // Lock body scroll until user expands
+  const gridColsClasses = useMemo(() => {
+    const md = desiredCols >= 2 ? 'md:grid-cols-2' : 'md:grid-cols-1'
+    const lg = desiredCols === 3 ? 'lg:grid-cols-3' : desiredCols === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
+    return `grid grid-cols-1 ${md} ${lg} gap-8`
+  }, [desiredCols])
+
+  const cardScaleClass = useMemo(() => {
+    if (desiredCols === 1) return 'scale-[1.06] sm:scale-[1.08]'
+    if (desiredCols === 2) return 'scale-[1.03]'
+    return ''
+  }, [desiredCols])
+
+  // Original behavior (fallback when layoutD flag is off): fixed 3-per-row grid with 6 visible cards pre-expand
+  const oldClearSix = useMemo(() => list.slice(0, 6), [list])
+  const oldAfterSix = useMemo(() => list.slice(6), [list])
+  const shouldGateOld = !expanded && list.length > 6
+  const gridColsFixed = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'
+
+  // Derived render branches based on flag
+  const gridClass = isLayoutD ? gridColsClasses : gridColsFixed
+  const visibleCards = isLayoutD ? clearVisible : oldClearSix
+  const extraCards = isLayoutD ? afterVisible : oldAfterSix
+  const skeletonLen = isLayoutD ? visibleCount : 6
+  const gatingActive = isLayoutD ? shouldGate : shouldGateOld
+  const containerPaddingClass = isLayoutD
+    ? (gatingActive ? 'pb-24 md:pb-28 safe-bottom' : '')
+    : (!expanded ? 'pb-24 md:pb-28 safe-bottom' : '')
+
+  // Lock page scroll until user expands
   useEffect(() => {
     if (typeof document === 'undefined') return
-    const prev = document.body.style.overflow
-    if (shouldGate) {
+    const prevBody = document.body.style.overflow
+    const prevHtml = document.documentElement.style.overflow
+    if (gatingActive) {
       document.body.style.overflow = 'hidden'
+      // Only in dynamic layout mode, also lock the root element to prevent any overscroll
+      if (isLayoutD) document.documentElement.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
+      if (isLayoutD) document.documentElement.style.overflow = ''
     }
     return () => {
-      document.body.style.overflow = prev
+      document.body.style.overflow = prevBody
+      document.documentElement.style.overflow = prevHtml
     }
-  }, [shouldGate])
+  }, [gatingActive, isLayoutD])
 
   return (
-    <div className={`space-y-8 ${!expanded ? 'pb-24 md:pb-28 safe-bottom' : ''}`}>
+    <div className={`space-y-8 ${containerPaddingClass}`}>
       {/* Grid */}
       <div className="relative">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className={gridClass}>
           {/* First six visible or skeletons */}
           {loading && (!campaigns || campaigns.length === 0) ? (
-            Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={`sk-${i}`} />)
+            Array.from({ length: skeletonLen }).map((_, i) => <SkeletonCard key={`sk-${i}`} />)
           ) : (
-            clearSix.map((c) => (
-              <div key={c.id} className="h-full">
+            visibleCards.map((c) => (
+              <div key={c.id} className={`h-full transform-gpu ${isLayoutD ? cardScaleClass : ''}`}>
                 <CampaignCard campaign={c} variant="minimal" />
               </div>
             ))
           )}
           {/* Always render items after first six so their images/fallbacks mount.
               When not expanded, visually gate them with blur/opacity and disable interaction. */}
-          {afterSix.map((c) => (
+          {extraCards.map((c) => (
             <div
               key={`ex-${c.id}`}
               className={`h-full transition ${
@@ -111,7 +143,7 @@ export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from
           ))}
         </div>
         {/* Bottom overlay: smooth gradient fade (no hard edge) until expanded */}
-        {shouldGate && (
+        {gatingActive && (
           <div className="fixed inset-x-0 bottom-0 h-[30svh] pointer-events-none z-20">
             {/* Theme-aware soft background rise */}
             <div className={`absolute inset-0 bg-gradient-to-t ${gradientFromClass} via-transparent to-transparent opacity-80`} />
@@ -124,7 +156,7 @@ export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from
 
 
       {/* See more button (fixed to viewport bottom, above content) */}
-      {!expanded && list.length > 6 && (
+      {!expanded && gatingActive && (
         <div className="fixed left-0 right-0 bottom-4 md:bottom-6 z-30 flex justify-center pointer-events-none">
           <button
             type="button"

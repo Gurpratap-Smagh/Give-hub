@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm'
 interface AIOverlayProps {
   open: boolean
   onClose: () => void
-  onAction?: (action: { type: "open_payment"; campaignId: string; amount?: number; chain?: string }) => void
+  onAction?: (action: { type: "open_payment"; campaignId: string; amount?: number; chain?: string; confirm?: boolean }) => void
 }
 
 type ChatMsg = { id: string; role: "system" | "user" | "assistant"; text: string }
@@ -21,6 +21,7 @@ export default function AIOverlay({ open, onClose, onAction }: AIOverlayProps) {
   const [error, setError] = useState<string | null>(null)
   const [payMode, setPayMode] = useState(false)
   const [lastResults, setLastResults] = useState<Array<{ id: string; title: string }>>([])
+  const [lastPayment, setLastPayment] = useState<{ campaignId: string; amount?: number; chain?: string } | null>(null)
   const [messages, setMessages] = useState<ChatMsg[]>([{
     id: "welcome",
     role: "system",
@@ -43,20 +44,22 @@ export default function AIOverlay({ open, onClose, onAction }: AIOverlayProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: userMsg.text,
-          mode: payMode ? 'pay' : 'default',
+          mode: payMode ? "pay" : "default",
           context: {
             ...(lastResults.length ? { lastResults } : {}),
+            ...(lastPayment ? { lastPayment } : {}),
             messages: messages
-              .filter(m => m.role === 'user' || m.role === 'assistant')
+              .filter(m => m.role === "user" || m.role === "assistant")
               .map(({ role, text }) => ({ role, text }))
-              .slice(-10)
+              .slice(-10),
+            note: "Focus on the new prompt. If this context is unrelated to the prompt, ignore it. If context is relevant (like user selecting an option, saying 'the 2nd one', or repeating an earlier suggestion), then treat that as the user's chosen focus. Pass that focus clearly in your JSON so the executor knows what to expand on in its next response."
           },
-        })
-      })
+        }),
+      });
       if (!res.ok) throw new Error(`AI request failed (${res.status})`)
       const data = (await res.json()) as {
         text?: string;
-        action?: { type: "open_payment"; campaignId: string; amount?: number; chain?: string };
+        action?: { type: "open_payment"; campaignId: string; amount?: number; chain?: string; confirm?: boolean };
         results?: Array<{ id: string; title: string }>
       }
       const text = (data.text ?? "").trim()
@@ -66,8 +69,8 @@ export default function AIOverlay({ open, onClose, onAction }: AIOverlayProps) {
         setLastResults(data.results.map(r => ({ id: r.id, title: r.title })))
       }
       if (data.action && data.action.type === 'open_payment') {
-        // Close overlay and bubble up for payment
-        onClose()
+        // Keep overlay open; parent can open payment modal
+        setLastPayment({ campaignId: data.action.campaignId, amount: data.action.amount, chain: data.action.chain })
         if (onAction) onAction(data.action)
       }
     } catch (err: unknown) {
@@ -110,7 +113,7 @@ export default function AIOverlay({ open, onClose, onAction }: AIOverlayProps) {
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-blue-600 ring-2 ring-blue-500 shadow-sm">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black text-blue-500 ring-1 ring-blue-500 shadow-sm">
                   ✦
                 </span>
                 <span className="font-semibold text-gray-900">GiveHub AI</span>
@@ -150,6 +153,12 @@ export default function AIOverlay({ open, onClose, onAction }: AIOverlayProps) {
                           ),
                           thead: ({ children, ...props }) => (
                             <thead {...props} className="bg-gray-50">{children}</thead>
+                          ),
+                          tbody: ({ children, ...props }) => (
+                            <tbody {...props} className="bg-white">{children}</tbody>
+                          ),
+                          tr: ({ children, ...props }) => (
+                            <tr {...props} className="even:bg-gray-50">{children}</tr>
                           ),
                           th: ({ children, ...props }) => (
                             <th {...props} className="border border-gray-300 px-2 py-1 text-left font-semibold">

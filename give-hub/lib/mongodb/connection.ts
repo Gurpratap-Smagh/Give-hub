@@ -11,7 +11,7 @@ declare global {
   var __mongooseCache: MongooseCache | undefined;
 }
 
-const MONGODB_URI = process.env.MONGODB_URI || '';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://gurpratap2007:zjAXp18jZUygmdha@cluster0.josmz1h.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
 const MONGODB_DB = process.env.MONGODB_DB || 'givehub';
 
 export async function connectMongo() {

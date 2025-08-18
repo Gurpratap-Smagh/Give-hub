@@ -35,7 +35,4 @@ const UserSchema = new Schema({
   socialLinks: { type: SocialLinksSchema, default: {} },
 }, { collection: 'users' });
 
-UserSchema.index({ username: 1 });
-UserSchema.index({ email: 1 });
-
 export const UserModel = models.User || model('User', UserSchema);

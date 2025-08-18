@@ -25,7 +25,7 @@ import { ChainChips } from './chain-chips' // ACCESS: Blockchain selection compo
 import { formatCurrency } from '@/lib/utils/format' // ACCESS: Currency formatting utilities
 import { notify } from '@/lib/utils/notify'
 import { makeDonationOnContract } from '@/lib/services/contracts' // ACCESS: Contract interaction functions
-import type { Campaign } from '@/lib/utils/types'
+import type { Campaign } from '@/lib/db'
 
 /**
  * Props for DonateDialog component

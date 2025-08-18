@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/auth-context'
-import type { User, Creator, Campaign } from '@/lib/utils/types'
+import type { User, Creator, Campaign } from '@/lib/db'
 import ProfilePictureUpload from '@/components/profile-picture-upload'
 import AIOverlay from '@/components/ai-overlay'
 import PaymentModal from '@/components/payment-modal'
@@ -37,6 +37,7 @@ export function Nav() {
   const [payCampaign, setPayCampaign] = useState<Campaign | null>(null)
   const [payInitialAmount, setPayInitialAmount] = useState<number | undefined>(undefined)
   const [payInitialChain, setPayInitialChain] = useState<string | undefined>(undefined)
+  const [payAutoSubmit, setPayAutoSubmit] = useState<boolean>(false)
   // Theme state: light/dark (persisted)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const { user, signout } = useAuth()
@@ -149,7 +150,7 @@ export function Nav() {
         <div className="flex items-center justify-between h-16">
           {/* Logo - Building Block: Brand identity */}
           <div className="flex items-center space-x-8">
-            <Link href="/" className="text-xl font-bold text-gray-900">
+            <Link href="/" className="text-xl font-bold text-gray-900 focus:outline-none focus:ring-0">
               <span className="tracking-tight">Give</span>
               <span className="text-blue-600 tracking-tight">Hub</span>
             </Link>
@@ -474,7 +475,7 @@ export function Nav() {
       aria-label="Open AI Assistant"
       title="Open AI Assistant"
     >
-      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-xl text-blue-600 ring-1 ring-blue-500 ring-opacity-5 shadow-sm">✦</span>
+      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-black text-xl text-blue-500 ring-1 ring-blue-500 shadow-sm">✦</span>
     </button>
     {showAI && (
       <AIOverlay
@@ -491,6 +492,7 @@ export function Nav() {
                 setPayCampaign(campaign)
                 setPayInitialAmount(action.amount)
                 setPayInitialChain(action.chain)
+                setPayAutoSubmit(!!action.confirm)
                 setPayOpen(true)
               }
             } catch (e) {
@@ -505,12 +507,24 @@ export function Nav() {
       <PaymentModal
         campaign={payCampaign}
         isOpen={payOpen}
-        onClose={() => setPayOpen(false)}
+        onClose={() => { setPayOpen(false); setPayAutoSubmit(false) }}
         onPaymentSuccess={() => {
           setPayOpen(false)
+          setPayAutoSubmit(false)
         }}
         initialAmount={payInitialAmount}
         initialChain={payInitialChain}
+        onPaymentError={() => {
+          // Keep AI overlay open; simply close the payment modal
+          setPayOpen(false)
+          setPayAutoSubmit(false)
+        }}
+        onCancel={() => {
+          // User closed the modal; keep AI overlay open for next steps
+          setPayOpen(false)
+          setPayAutoSubmit(false)
+        }}
+        autoSubmit={payAutoSubmit}
       />
     )}
     </>

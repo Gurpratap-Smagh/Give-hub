@@ -18,14 +18,18 @@
 
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useContext } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { useAuth } from '@/lib/auth/auth-context'
+import { AuthContext } from '../../lib/auth/auth-context' // Corrected path
+import type { AuthContextType } from '../../lib/auth/auth-context' // Assume type export if available, otherwise define it
 import { notify } from '@/lib/utils/notify'
-// TODO: import { createCampaign } from '@/lib/api' // Future API integration
-// TODO: import { validateCampaign } from '@/lib/validation' // Zod schema validation
-// TODO: import { optimizeContent } from '@/lib/ai' // AI content enhancement
+import { 
+  connectWallet, 
+  ensureWalletOnChain, 
+  createCampaignOnChain, 
+  isCreator
+} from '@/lib/web3/client'
 
 /**
  * Campaign creation page component
@@ -33,12 +37,13 @@ import { notify } from '@/lib/utils/notify'
  */
 export default function CreateCampaignPage() {
   // REGION: State management
+  const context = useContext(AuthContext) as AuthContextType | null // Type context safely
+  const router = useRouter()
   const [formData, setFormData] = useState({
     title: '',
     description: '',
+    category: '',
     goal: '',
-    chains: [] as string[],
-    category: ''
   })
   const [image, setImage] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -46,8 +51,13 @@ export default function CreateCampaignPage() {
   const [otherCategory, setOtherCategory] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [imageGenLoading, setImageGenLoading] = useState(false)
-  const router = useRouter()
-  const { user } = useAuth()
+  const [isAiEditing, setIsAiEditing] = useState(false)
+  const [error, setError] = useState('')
+
+  if (!context) {
+    throw new Error('AuthContext must be used within an AuthProvider')
+  }
+  const { user } = context // Type-safe access if AuthContextType defines user
 
   // REGION: Event handlers
   /**
@@ -89,13 +99,13 @@ export default function CreateCampaignPage() {
     if (!user || user.role !== 'creator') {
       return notify('Only creators can generate images.', 'error')
     }
-    if (!formData.description || !formData.description.trim()) {
-      return notify('Please add a description first.', 'error')
-    }
     try {
       setImageGenLoading(true)
       const selectedCategory = formData.category === 'other' ? (otherCategory || 'other') : (formData.category || 'general')
-      const prompt = `Generate a single high-quality 2:1 landscape image that fills a 2:1 cover frame perfectly (edge-to-edge, no borders, no text or watermarks). Compose safely so key subjects remain fully visible within the 2:1 crop.\n\nSubject description:\n${formData.description}\n\nCategory/theme: ${selectedCategory}\n\nStyle: photorealistic or clean illustration, balanced lighting, clear focal point, visually appealing for a cover.`
+      const subject = (formData.description && formData.description.trim())
+        ? formData.description
+        : `Title: ${formData.title || 'Charitable campaign'}`
+      const prompt = `Generate a single high-quality 2:1 landscape image that fills a 2:1 cover frame perfectly (edge-to-edge, no borders, no text or watermarks). Compose safely so key subjects remain fully visible within the 2:1 crop.\n\nSubject description:\n${subject}\n\nCategory/theme: ${selectedCategory}\n\nStyle: photorealistic or clean illustration, balanced lighting, clear focal point, visually appealing for a cover.`
       const res = await fetch('/api/ai/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,24 +135,15 @@ export default function CreateCampaignPage() {
   }
 
   /**
-   * Toggle blockchain selection
-   * @param chain - Blockchain name to toggle
-   */
-  const handleChainToggle = (chain: string) => {
-    setFormData({
-      ...formData,
-      chains: formData.chains.includes(chain)
-        ? formData.chains.filter(c => c !== chain)
-        : [...formData.chains, chain]
-    })
-  }
-
-  /**
-   * Handle form submission - currently placeholder
-   * MIGRATION: Replace with API call and validation
+   * Handle form submission with Web3 integration
+   * Creates campaign on-chain first, then saves to database
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!user) {
+      setError('You must be logged in to create a campaign.')
+      return
+    }
     if (!formData.category) {
       notify('Please select a category', 'error')
       return
@@ -151,37 +152,172 @@ export default function CreateCampaignPage() {
       notify('Please specify your category', 'error')
       return
     }
-    if (!formData.chains || formData.chains.length === 0) {
-      notify('Please select at least one blockchain', 'error')
-      return
-    }
 
     setIsSubmitting(true)
+    setError('')
+    
+    let onChainCampaignId: bigint | null = null;
+    
     try {
-      const res = await fetch('/api/campaigns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: formData.title,
-          description: formData.description,
-          goal: Number(formData.goal),
-          chains: formData.chains,
-          category: formData.category === 'other' ? otherCategory.trim() : formData.category,
-          creatorId: user?.id,
-          image
+      // Step 1: Check if Web3 is enabled via environment variable
+      const paymentProvider = process.env.NEXT_PUBLIC_PAYMENT_PROVIDER;
+      
+      if (paymentProvider === 'zetachain') {
+        notify('Connecting to wallet...', 'info')
+        
+        // Step 2: Connect wallet and ensure correct network
+        const { address, chainId } = await connectWallet()
+        const targetChainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
+        
+        if (chainId !== targetChainId) {
+          notify(`Switching to ZetaChain network...`, 'info')
+          await ensureWalletOnChain(targetChainId)
+        }
+        
+        // Step 3: Check if creator already exists on-chain (automatic registration in createCampaign)
+        const creatorExists = await isCreator(address)
+        if (!creatorExists) {
+          notify('Registering as creator on-chain...', 'info')
+          // Registration happens automatically in createCampaign for CrossChainCrowdfund
+        }
+        
+        // Step 4: Create campaign on-chain
+        notify('Creating campaign on blockchain...', 'info')
+        onChainCampaignId = await createCampaignOnChain({
+          preferredZRC20: process.env.NEXT_PUBLIC_WZETA_ADDRESS || "0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf"
         })
-      })
-      const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to create campaign')
+        
+        notify('Campaign created on blockchain!', 'success')
+        console.debug('[create] On-chain campaign created. ID:', onChainCampaignId?.toString())
       }
-      // Redirect to the new campaign page; campaign page shows its own loading
-      router.push(`/campaign/${data.campaign.id}`)
-    } catch (error) {
-      console.error('Campaign creation failed:', error)
-      notify('Failed to create campaign. Please try again.', 'error')
+
+      // Step 5: Save campaign to off-chain database
+      const campaignData: Record<string, unknown> = {
+        title: formData.title,
+        imgSrc: image,
+        description: formData.description,
+        category: formData.category === 'other' ? otherCategory.trim() : formData.category,
+        goal: parseFloat(formData.goal),
+        creatorId: user.id,
+      }
+      // Attach on-chain mapping if we created on-chain and have required envs
+      if (onChainCampaignId) {
+        const chainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
+        const contract = process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS || ''
+        if (contract && contract.length === 42) {
+          campaignData.onChain = {
+            chainId,
+            contract,
+            campaignId: onChainCampaignId.toString(),
+          }
+          console.debug('[create] Attaching onChain mapping to payload:', campaignData.onChain)
+        } else {
+          console.error('[create] Missing or invalid NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS; on-chain mapping will NOT be persisted.', { contract })
+          notify('On-chain campaign created, but missing contract env to save mapping. Please set NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS.', 'error')
+        }
+      } else if (paymentProvider === 'zetachain') {
+        console.warn('[create] Expected on-chain campaign ID but did not obtain one; saving off-chain only.')
+      }
+      
+      const response = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(campaignData),
+      });
+      
+      if (!response.ok) throw new Error('Failed to create campaign')
+      
+      const result = await response.json()
+      notify('Campaign created successfully!', 'success')
+      console.debug('[create] API response:', result)
+      const persistedOnChain = Boolean(result?.campaign?.onChain || result?.onChain)
+      if (persistedOnChain) {
+        console.log('[create] On-chain mapping persisted on server:', (result?.campaign?.onChain || result?.onChain))
+      } else if (paymentProvider === 'zetachain') {
+        console.error('[create] Server saved campaign WITHOUT on-chain mapping. Verify env and API handling.')
+      }
+      
+      // Navigate to the created campaign
+      router.push(`/campaign/${result.campaign?.id || result.id}`)
+      
+    } catch (err: unknown) {
+      const errorMsg = (err as Error).message || 'An error occurred'
+      setError(errorMsg)
+      notify(errorMsg, 'error')
+      
+      // If on-chain creation succeeded but off-chain failed, show different message
+      if (onChainCampaignId) {
+        notify(`Campaign created on blockchain (ID: ${onChainCampaignId}) but failed to save locally. Please contact support.`, 'error')
+      }
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleAiEdit = async () => {
+    if (isAiEditing) return;
+    console.debug('[Create] handleAiEdit: clicked')
+    setIsAiEditing(true);
+    try {
+      const payload = {
+        title: formData.title,
+        description: formData.description,
+        goal: formData.goal,
+        category: formData.category === 'other' ? (otherCategory || 'Other') : formData.category,
+      }
+      const prompt = `TASK: Rewrite the campaign title and description.\n\nRules:\n- Keep the title short and clear.\n- Description: 2–5 concise sentences, inspiring and specific.\n- Do not invent facts.\n- No headings, no lists, no markdown, no commentary.\n\nInput JSON:\n${JSON.stringify(payload)}\n\nOutput: Return ONLY a strict JSON object with keys \"title\" and \"description\".`
+      console.debug('[Create] handleAiEdit: POST /api/ai/assist (rewrite)')
+      const res = await fetch('/api/ai/assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ prompt, mode: 'rewrite' })
+      })
+      console.debug('[Create] handleAiEdit: response status', res.status)
+      if (!res.ok) {
+        const errData: unknown = await res.json().catch(() => ({}))
+        const errObj = (typeof errData === 'object' && errData) ? errData as { error?: string; message?: string } : {}
+        const msg = errObj.error || errObj.message || 'AI request failed.'
+        notify(msg, 'error')
+        return
+      }
+      const data = await res.json().catch(() => ({})) as { text?: string }
+      const text = (data.text || '').trim()
+      let update: Partial<{ title: string; description: string }> | null = null
+      // Robust: remove Markdown fences and extract JSON
+      const unfence = (s: string) => s
+        .replace(/^```[a-zA-Z]*\n?|```$/g, '')
+        .replace(/```[\s\S]*?```/g, (m) => m.replace(/```[a-zA-Z]*\n?|```/g, ''))
+      const extractJson = (s: string) => {
+        const cleaned = unfence(s).trim()
+        if (cleaned.startsWith('{') && cleaned.endsWith('}')) return cleaned
+        const start = cleaned.indexOf('{')
+        const end = cleaned.lastIndexOf('}')
+        if (start !== -1 && end !== -1 && end > start) return cleaned.slice(start, end + 1)
+        return ''
+      }
+      const maybeJson = extractJson(text)
+      if (maybeJson) {
+        try { update = JSON.parse(maybeJson) } catch {}
+      }
+      if (!update || (!update.title && !update.description)) {
+        // Fallback: treat text as improved description
+        update = { description: text }
+      }
+      setFormData(prev => ({
+        ...prev,
+        title: typeof update?.title === 'string' && update.title.trim() ? update.title : prev.title,
+        description: typeof update?.description === 'string' && update.description.trim() ? update.description : prev.description
+      }))
+      console.debug('[Create] handleAiEdit: applied update', update)
+      notify('Applied AI suggestions', 'success')
+    } catch (e) {
+      console.error('AI assist failed', e)
+      notify('Failed to apply AI suggestions.', 'error')
+    } finally {
+      setIsAiEditing(false)
     }
   }
 
@@ -196,53 +332,11 @@ export default function CreateCampaignPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={async () => {
-              try {
-                const payload = {
-                  title: formData.title,
-                  description: formData.description,
-                  goal: formData.goal,
-                  category: formData.category === 'other' ? (otherCategory || 'Other') : formData.category,
-                  chains: formData.chains
-                }
-                const prompt = `TASK: Rewrite the campaign title and description.\n\nRules:\n- Keep the title short and clear.\n- Description: 2–5 concise sentences, inspiring and specific.\n- Do not invent facts.\n- No headings, no lists, no markdown, no commentary.\n\nInput JSON:\n${JSON.stringify(payload)}\n\nOutput: Return ONLY a strict JSON object with keys \"title\" and \"description\".`
-                const res = await fetch('/api/ai/assist', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ prompt, mode: 'rewrite' })
-                })
-                const data = await res.json().catch(() => ({}))
-                const text = (data.text || '').trim()
-                // Extract JSON object from possible fenced response
-                const unfence = (s: string) => s.replace(/^```[a-zA-Z]*\n?|```$/g, '').trim()
-                const extractJson = (s: string) => {
-                  const m = s.match(/\{[\s\S]*\}/)
-                  return m ? m[0] : ''
-                }
-                const jsonStr = extractJson(unfence(text))
-                if (!jsonStr) {
-                  notify('AI did not return usable suggestions.', 'error')
-                  return
-                }
-                const update = JSON.parse(jsonStr)
-                if (typeof update.title === 'string' || typeof update.description === 'string') {
-                  setFormData(prev => ({
-                    ...prev,
-                    title: typeof update.title === 'string' ? update.title : prev.title,
-                    description: typeof update.description === 'string' ? update.description : prev.description
-                  }))
-                  notify('Applied AI suggestions', 'success')
-                } else {
-                  notify('AI suggestions missing title/description.', 'error')
-                }
-              } catch (e) {
-                console.error('AI assist failed', e)
-                notify('Failed to apply AI suggestions.', 'error')
-              }
-            }}
+            onClick={handleAiEdit}
+            disabled={isAiEditing}
             className="px-4 py-2 rounded-full border-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300"
           >
-            Edit with AI
+            {isAiEditing ? 'Thinking...' : 'Edit with AI'}
           </button>
           <button
             type="button"
@@ -294,16 +388,15 @@ export default function CreateCampaignPage() {
             {/* Funding Goal */}
             <div>
               <label className="block text-lg font-semibold text-gray-900 mb-3">
-                Funding Goal (USD) *
+                Funding Goal
               </label>
               <div className="relative">
-                <span className="absolute left-4 top-4 text-gray-500 text-lg font-medium">$</span>
                 <input
                   type="number"
                   name="goal"
                   value={formData.goal}
                   onChange={handleInputChange}
-                  className="w-full pl-8 pr-4 py-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-lg"
+                  className="w-full pl-4 pr-4 py-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-lg"
                   placeholder="50000"
                   min="1"
                   required
@@ -346,42 +439,6 @@ export default function CreateCampaignPage() {
                 </div>
               )}
             </div>
-
-            {/* Blockchain Selection */}
-            <div>
-              <label className="block text-lg font-semibold text-gray-900 mb-3">
-                Supported Blockchains *
-              </label>
-              <p className="text-gray-600 mb-4">
-                Choose which blockchains you want to accept donations from:
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {['Ethereum', 'Solana', 'Bitcoin'].map((chain) => (
-                  <button
-                    key={chain}
-                    type="button"
-                    onClick={() => handleChainToggle(chain)}
-                    className={`p-4 rounded-lg border-2 transition-all font-semibold ${
-                      formData.chains.includes(chain)
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="text-center">
-                      <div className="text-2xl mb-2">
-                        {chain === 'Ethereum' ? '⟠' : chain === 'Solana' ? '◎' : '₿'}
-                      </div>
-                      <div>{chain}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {formData.chains.length === 0 && (
-                <p className="text-red-500 text-sm mt-2">Please select at least one blockchain</p>
-              )}
-            </div>
-
-            {/* Image selection moved to preview card pencil overlay */}
 
             {/* Submit moved to header */}
           </form>
@@ -450,8 +507,7 @@ export default function CreateCampaignPage() {
                 <div className="bg-green-500 h-2 rounded-full" style={{ width: '0%' }} />
               </div>
               <div className="mt-2 text-sm text-gray-700 flex items-center justify-between">
-                <span>$0 raised</span>
-                <span>Goal: ${formData.goal || '0'}</span>
+                <span>Goal: {formData.goal}</span>
               </div>
             </div>
           </div>
@@ -481,6 +537,7 @@ export default function CreateCampaignPage() {
         }}
         className="hidden"
       />
+      {error && <p>{error}</p>}
     </div>
   )
 }

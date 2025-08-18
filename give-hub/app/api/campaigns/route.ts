@@ -5,72 +5,72 @@
  * NOTE: Keep interface stable for easy MongoDB swap
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import type { User, Creator } from '@/lib/db'
+import { authMiddleware, type AuthedRequest } from '@/lib/auth'
+import type { Campaign } from '@/lib/db'
 
-export async function GET(req: NextRequest) {
+// Note: authMiddleware reads 'auth-token' cookie, verifies JWT, and attaches request.user
+
+export async function GET() {
   try {
-    // Touch request to satisfy no-unused-vars lint without altering behavior
-    void req.nextUrl;
     const campaigns = await db.getAllCampaigns()
-    return NextResponse.json({ success: true, campaigns })
+    return NextResponse.json({ success: true, campaigns }, { status: 200 })
   } catch (error) {
     console.error('GET /api/campaigns error:', error)
-    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 })
   }
 }
 
-export async function POST(req: NextRequest) {
+export const POST = authMiddleware(async (req: AuthedRequest) => {
   try {
     const body = await req.json()
-    const {
-      title,
-      description,
-      goal,
-      chains,
-      category,
-      creatorId,
-      image
-    } = body as {
-      title: string;
-      description: string;
-      goal: number;
-      chains: string[];
-      category?: string;
-      creatorId?: string;
-      image?: string;
-    }
-
-    if (!title || !description || !goal || !chains || chains.length === 0) {
+    const { title, imgSrc, description, category, goal, onChain } = body || {}
+    if (!title || !category || goal === undefined || goal === null) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
     }
 
-    const newCampaign = await db.createCampaign({
-      title,
-      description,
+    // Build data to satisfy DB adapter type Omit<Campaign, 'id'>
+    const campaignData: Omit<Campaign, 'id'> & { onChain?: Campaign['onChain'] } = {
+      // Required
+      title: String(title),
       goal: Number(goal),
       raised: 0,
-      chains,
-      category,
-      // ensure campaigns are linked to their creator for /studio filtering
-      creatorId: creatorId || '',
-      image
-    })
+      description: String(description ?? ''),
+      category: String(category),
+      creatorId: req.user.id,
+      // Optional/extra fields
+      image: imgSrc ? String(imgSrc) : undefined,
+      active: true,
+      verified: false,
+      chains: [],
+      // Leave uuid/contract fields undefined; DB layer/schema will ignore extras
+    } as Omit<Campaign, 'id'>
 
-    // Optionally link to creator profile
-    if (creatorId) {
-      const user = await db.findUserById(creatorId) as User | Creator | null
-      if (user && user.role === 'creator') {
-        const creator = user as Creator
-        const existing = Array.isArray(creator.createdCampaigns) ? creator.createdCampaigns : []
-        await db.updateUser(creatorId, { createdCampaigns: [...existing, newCampaign.id] })
+    // Optionally attach on-chain mapping if provided (validated)
+    if (onChain !== undefined) {
+      const oc = onChain as { chainId?: unknown; contract?: unknown; campaignId?: unknown }
+      const chainId = Number(oc.chainId)
+      const contract = typeof oc.contract === 'string' ? oc.contract : ''
+      const campaignId = typeof oc.campaignId === 'string' ? oc.campaignId : ''
+
+      if (!Number.isFinite(chainId) || chainId <= 0) {
+        return NextResponse.json({ success: false, error: 'onChain.chainId must be a positive number' }, { status: 400 })
       }
+      if (!contract) {
+        return NextResponse.json({ success: false, error: 'onChain.contract is required' }, { status: 400 })
+      }
+      if (!campaignId) {
+        return NextResponse.json({ success: false, error: 'onChain.campaignId is required' }, { status: 400 })
+      }
+
+      campaignData.onChain = { chainId, contract, campaignId }
     }
 
+    const newCampaign = await db.createCampaign(campaignData)
     return NextResponse.json({ success: true, campaign: newCampaign }, { status: 201 })
   } catch (error) {
     console.error('POST /api/campaigns error:', error)
-    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 })
   }
-}
+})

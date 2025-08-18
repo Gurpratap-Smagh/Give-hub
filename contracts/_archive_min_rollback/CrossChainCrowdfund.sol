@@ -19,10 +19,7 @@ contract CrossChainCrowdfund is UniversalContract {
 
     /// @dev Creator struct for better organization
     struct Creator {
-        address walletAddress;
         address preferredZRC20;     // ZRC-20 token they want to receive
-        uint256 totalReceived;       // Total received across all campaigns
-        uint256[] campaignIds;       // All campaigns by this creator
         bool exists;
     }
 
@@ -42,24 +39,8 @@ contract CrossChainCrowdfund is UniversalContract {
     /// @dev Campaign with better tracking
     struct Campaign {
         address creator;
-        string  title;
-        string  description;
         address preferredZRC20;      
-        uint256 goal;                
-        uint256 totalRaised;         // Total in preferred token terms
-        uint256 totalContributions;  // Number of contributions
-        uint64  createdAt;
-        uint64  deadline;            // Campaign deadline
         bool    active;
-        bool    fundsWithdrawn;      // Track if creator withdrew funds
-    }
-
-    /// @dev User/Donor tracking
-    struct Donor {
-        address walletAddress;
-        uint256 totalDonated;        // Total donated across all campaigns
-        uint256[] contributionIds;   // All contributions made
-        mapping(uint256 => uint256) campaignDonations; // campaignId => total donated
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -69,10 +50,7 @@ contract CrossChainCrowdfund is UniversalContract {
     event CampaignCreated(
         uint256 indexed campaignId, 
         address indexed creator, 
-        string title,
-        address preferredZRC20, 
-        uint256 goal,
-        uint64 deadline
+        address preferredZRC20
     );
     
     event ContributionReceived(
@@ -85,19 +63,7 @@ contract CrossChainCrowdfund is UniversalContract {
         string originChain
     );
     
-    event FundsWithdrawn(
-        uint256 indexed campaignId, 
-        address indexed creator, 
-        uint256 amount,
-        address token
-    );
-    
-    event TokenSwapped(
-        address indexed fromToken,
-        address indexed toToken,
-        uint256 amountIn,
-        uint256 amountOut
-    );
+    event TokenSwapped(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut);
 
     /*//////////////////////////////////////////////////////////////
                               ERRORS
@@ -105,14 +71,10 @@ contract CrossChainCrowdfund is UniversalContract {
 
     error NotCreator();
     error CampaignInactive();
-    error CampaignExpired();
     error InvalidToken();
     error InvalidCampaign();
     error ZeroAmount();
-    error AlreadyWithdrawn();
-    error InsufficientBalance();
     error SwapFailed();
-    error DeadlineInPast();
 
     /*//////////////////////////////////////////////////////////////
                              STORAGE
@@ -123,15 +85,13 @@ contract CrossChainCrowdfund is UniversalContract {
     // Core mappings
     mapping(address => Creator) public creators;
     mapping(uint256 => Campaign) public campaigns;
-    mapping(address => Donor) public donors;
-    mapping(uint256 => Contribution) public contributions;
-    
-    // Campaign fund tracking
-    mapping(uint256 => mapping(address => uint256)) public campaignTokenBalances; // campaignId => token => balance
     
     // Counters
     uint256 public nextCampaignId;
     uint256 public nextContributionId;
+
+    // Optional: store contributions by ID for lightweight history
+    mapping(uint256 => Contribution) public contributions;
     
     // Token mappings for chain identification
     mapping(address => string) public tokenToChainName;
@@ -186,48 +146,31 @@ contract CrossChainCrowdfund is UniversalContract {
     //////////////////////////////////////////////////////////////*/
 
     function createCampaign(
-        string memory title,
-        string memory description,
-        address preferredZRC20,
-        uint256 goal,
-        uint64 deadline
+        address preferredZRC20
     ) external returns (uint256 campaignId) {
-        if (deadline <= block.timestamp) revert DeadlineInPast();
         if (preferredZRC20 == address(0)) revert InvalidToken();
-        
+
         campaignId = ++nextCampaignId;
-        
-        // Initialize creator if first time
+
+        // Initialize or update creator record minimally
         if (!creators[msg.sender].exists) {
             creators[msg.sender] = Creator({
-                walletAddress: msg.sender,
                 preferredZRC20: preferredZRC20,
-                totalReceived: 0,
-                campaignIds: new uint256[](0),
                 exists: true
             });
+        } else {
+            // Optional: update preferred token for creator
+            creators[msg.sender].preferredZRC20 = preferredZRC20;
         }
-        
-        // Create campaign
+
+        // Create minimal campaign
         campaigns[campaignId] = Campaign({
             creator: msg.sender,
-            title: title,
-            description: description,
             preferredZRC20: preferredZRC20,
-            goal: goal,
-            totalRaised: 0,
-            totalContributions: 0,
-            createdAt: uint64(block.timestamp),
-            deadline: deadline,
-            active: true,
-            fundsWithdrawn: false
+            active: true
         });
-        
-        // Update creator
-        creators[msg.sender].campaignIds.push(campaignId);
-        creators[msg.sender].preferredZRC20 = preferredZRC20;
-        
-        emit CampaignCreated(campaignId, msg.sender, title, preferredZRC20, goal, deadline);
+
+        emit CampaignCreated(campaignId, msg.sender, preferredZRC20);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -246,15 +189,9 @@ contract CrossChainCrowdfund is UniversalContract {
         Campaign storage campaign = campaigns[campaignId];
         if (campaign.creator == address(0)) revert InvalidCampaign();
         if (!campaign.active) revert CampaignInactive();
-        if (block.timestamp > campaign.deadline) revert CampaignExpired();
-        
+
         // Derive donor address from context
         address donorAddress = _deriveDonorAddress(ctx);
-        
-        // Initialize donor if first time
-        if (donors[donorAddress].walletAddress == address(0)) {
-            donors[donorAddress].walletAddress = donorAddress;
-        }
         
         // Convert tokens if needed
         uint256 convertedAmount = amount;
@@ -276,18 +213,8 @@ contract CrossChainCrowdfund is UniversalContract {
             originChainName: tokenToChainName[zrc20In]
         });
         
-        // Update campaign
-        campaign.totalRaised += convertedAmount;
-        campaign.totalContributions++;
-        campaignTokenBalances[campaignId][campaign.preferredZRC20] += convertedAmount;
-        
-        // Update donor records
-        donors[donorAddress].totalDonated += convertedAmount;
-        donors[donorAddress].contributionIds.push(contributionId);
-        donors[donorAddress].campaignDonations[campaignId] += convertedAmount;
-        
-        // Update creator total
-        creators[campaign.creator].totalReceived += convertedAmount;
+        // Forward immediately to creator (no escrow)
+        IZRC20(campaign.preferredZRC20).transfer(campaign.creator, convertedAmount);
         
         emit ContributionReceived(
             campaignId,
@@ -339,12 +266,10 @@ contract CrossChainCrowdfund is UniversalContract {
         Campaign storage campaign = campaigns[campaignId];
         
         if (campaign.creator != msg.sender) revert NotCreator();
-        if (campaign.fundsWithdrawn) revert AlreadyWithdrawn();
         
         uint256 balance = campaignTokenBalances[campaignId][campaign.preferredZRC20];
         if (balance == 0) revert InsufficientBalance();
         
-        campaign.fundsWithdrawn = true;
         campaignTokenBalances[campaignId][campaign.preferredZRC20] = 0;
         
         // Transfer funds to creator
@@ -357,21 +282,9 @@ contract CrossChainCrowdfund is UniversalContract {
                           VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function getCreatorCampaigns(address creator) external view returns (uint256[] memory) {
-        return creators[creator].campaignIds;
-    }
-
-    function getDonorContributions(address donor) external view returns (uint256[] memory) {
-        return donors[donor].contributionIds;
-    }
-
     function getCampaignBalance(uint256 campaignId) external view returns (uint256) {
         Campaign memory campaign = campaigns[campaignId];
         return campaignTokenBalances[campaignId][campaign.preferredZRC20];
-    }
-
-    function getDonorCampaignContribution(address donor, uint256 campaignId) external view returns (uint256) {
-        return donors[donor].campaignDonations[campaignId];
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -393,7 +306,6 @@ contract CrossChainCrowdfund is UniversalContract {
     function resumeCampaign(uint256 campaignId) external {
         Campaign storage campaign = campaigns[campaignId];
         if (campaign.creator != msg.sender) revert NotCreator();
-        if (block.timestamp > campaign.deadline) revert CampaignExpired();
         campaign.active = true;
     }
 }

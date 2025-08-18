@@ -1,0 +1,22 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "OnlySystem",
+  "sourceName": "@zetachain/toolkit/contracts/OnlySystem.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "name": "OnlySystemContract",
+      "type": "error"
+    }
+  ],
+  "bytecode": "0x60808060405234601357603a908160198239f35b600080fdfe600080fdfea26469706673582212202ae310bcd972bb73c5629726821eef718085116afb7886b6169a47bd80ac065364736f6c634300081a0033",
+  "deployedBytecode": "0x600080fdfea26469706673582212202ae310bcd972bb73c5629726821eef718085116afb7886b6169a47bd80ac065364736f6c634300081a0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

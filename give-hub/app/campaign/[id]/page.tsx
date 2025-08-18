@@ -31,13 +31,12 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
     creator,
   }
 
-  const donationsData = await db.getDonationsByCampaign(campaignId)
-
   // Render the client component with the fetched data
   return (
     <CampaignPageContent
       initialCampaign={JSON.parse(JSON.stringify(campaign))}
-      initialDonations={JSON.parse(JSON.stringify(donationsData))}
+      // Donations are stored in browser localStorage; start empty and hydrate on client
+      initialDonations={[]}
     />
   )
 }

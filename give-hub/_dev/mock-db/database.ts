@@ -58,6 +58,8 @@ export interface Creator extends User {
 
 export interface Campaign {
   id: string;
+  /** Optional on-chain UUID (e.g., bytes32 hex) */
+  uuid?: string;
   title: string;
   goal: number;
   raised: number;
@@ -67,13 +69,28 @@ export interface Campaign {
   category?: string;
   /** Campaign creator ID - maps to User/Creator */
   creatorId: string;
+  /** Optional creator EVM address for on-chain linkage */
+  creatorAddress?: string;
   /** Campaign image - base64 encoded image or URL */
   image?: string;
+  /** Optional active flag controlled by contract events */
+  active?: boolean;
   /** Placeholder for smart contract ownership verification in production */
   contractOwnership?: {
     verified: boolean;
     contractAddress?: string;
     blockchainProof?: string;
+  };
+  /**
+   * On-chain mapping for this campaign when created on the blockchain.
+   * - chainId: numeric EVM chain ID (e.g., 7001 for ZetaChain testnet)
+   * - contract: deployed GiveHubCrowdfund contract address
+   * - campaignId: on-chain numeric campaign ID as string (to avoid bigint in JSON)
+   */
+  onChain?: {
+    chainId: number;
+    contract: string;
+    campaignId: string;
   };
 }
 

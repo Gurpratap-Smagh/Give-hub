@@ -6,7 +6,7 @@
  * to interact with a deployed smart contract on a network like Ethereum or Solana.
  */
 
-import type { Campaign } from '@/lib/utils/types';
+import type { Campaign } from '@/lib/db';
 
 // Mock function to simulate fetching campaign data from a smart contract
 export async function getCampaignFromContract(campaignId: string): Promise<Partial<Campaign> | null> {

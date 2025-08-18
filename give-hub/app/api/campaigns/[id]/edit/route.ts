@@ -37,39 +37,58 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { title, description, goal, category, image, chains } = body
+    const { title, description, goal, category, image, chains, onChain } = body || {}
 
-    // Validate required fields
-    if (!title || !description || !goal || !chains || chains.length === 0) {
-      return NextResponse.json({ 
-        error: 'Title, description, goal, and at least one blockchain are required' 
-      }, { status: 400 })
+    // Build partial update object, validating only provided fields
+    const updateData: Record<string, unknown> = {}
+
+    if (typeof title === 'string' && title.trim()) {
+      updateData.title = title.trim()
+    }
+    if (typeof description === 'string' && description.trim()) {
+      updateData.description = description.trim()
+    }
+    if (goal !== undefined) {
+      if (typeof goal !== 'number' || !(goal > 0)) {
+        return NextResponse.json({ error: 'Goal must be a positive number' }, { status: 400 })
+      }
+      updateData.goal = goal
+    }
+    if (typeof category === 'string') {
+      const c = category.trim()
+      if (c) updateData.category = c
+    }
+    if (image !== undefined) {
+      if (image && typeof image === 'string' && !image.startsWith('data:image/')) {
+        return NextResponse.json({ error: 'Invalid image format' }, { status: 400 })
+      }
+      updateData.image = image || undefined
+    }
+    if (Array.isArray(chains)) {
+      updateData.chains = chains
+    }
+    if (onChain !== undefined) {
+      // Validate onChain mapping when provided
+      const oc = onChain as { chainId?: unknown; contract?: unknown; campaignId?: unknown }
+      const chainId = Number(oc.chainId)
+      const contract = typeof oc.contract === 'string' ? oc.contract : ''
+      const campaignId = typeof oc.campaignId === 'string' ? oc.campaignId : ''
+
+      if (!Number.isFinite(chainId) || chainId <= 0) {
+        return NextResponse.json({ error: 'onChain.chainId must be a positive number' }, { status: 400 })
+      }
+      if (!contract || typeof contract !== 'string') {
+        return NextResponse.json({ error: 'onChain.contract is required' }, { status: 400 })
+      }
+      if (!campaignId || typeof campaignId !== 'string') {
+        return NextResponse.json({ error: 'onChain.campaignId is required' }, { status: 400 })
+      }
+
+      updateData.onChain = { chainId, contract, campaignId }
     }
 
-    // Validate goal
-    if (typeof goal !== 'number' || goal <= 0) {
-      return NextResponse.json({ error: 'Goal must be a positive number' }, { status: 400 })
-    }
-
-    // Validate chains
-    const validChains = ['Ethereum', 'Solana', 'Bitcoin']
-    if (!Array.isArray(chains) || !chains.every(chain => validChains.includes(chain))) {
-      return NextResponse.json({ error: 'Invalid blockchain selection' }, { status: 400 })
-    }
-
-    // Validate image if provided
-    if (image && !image.startsWith('data:image/')) {
-      return NextResponse.json({ error: 'Invalid image format' }, { status: 400 })
-    }
-
-    // Update campaign
-    const updateData = {
-      title: title.trim(),
-      description: description.trim(),
-      goal,
-      category: category?.trim() || undefined,
-      image: image || undefined,
-      chains
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
     const updatedCampaign = await db.updateCampaign(campaignId, updateData)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import type { Campaign, Donation, Creator } from '@/lib/db'
 import Spinner from '@/components/spinner'
 import Link from 'next/link'
@@ -12,6 +12,7 @@ import { notify } from '@/lib/utils/notify'
 import CampaignEditForm from '@/components/campaign-edit-form'
 type CampaignEditFormRef = HTMLFormElement & { requestSubmit: () => void; applyAI?: (partial: Partial<{ title: string; description: string; category: string }>) => void }
 import PaymentModal from '@/components/payment-modal'
+import { ensureWalletOnChain, getCampaignInfo, getCampaignDonations } from '@/lib/web3/client'
 
 /**
  * FILE: app/campaign/[id]/CampaignPageContent.tsx
@@ -41,7 +42,7 @@ type CampaignWithCreator = Campaign & { creator?: Creator | null };
 export default function CampaignPageContent({ initialCampaign, initialDonations }: { initialCampaign: CampaignWithCreator, initialDonations: Donation[] }) {
   const { user } = useAuth()
   const [campaign, setCampaign] = useState(initialCampaign)
-  const [donations, setDonations] = useState(initialDonations)
+  const [donations, setDonations] = useState<DonationWithAddr[]>(initialDonations as DonationWithAddr[])
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [editPreview, setEditPreview] = useState<CampaignWithCreator>(campaign)
@@ -52,6 +53,13 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   const [imageGenLoading, setImageGenLoading] = useState(false)
   // Maintain a safe image source with fallback to 2:1 SVG placeholder
   const [imgSrc, setImgSrc] = useState<string>(campaign.image || CARD_PLACEHOLDER_2x1)
+  // On-chain hydration state
+  const ONCHAIN_ENABLED = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || 'local').toLowerCase() === 'zetachain'
+  const [onChainActive, setOnChainActive] = useState<boolean | null>(null)
+  const [syncId, setSyncId] = useState('')
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [donationsLoading, setDonationsLoading] = useState(false)
+  const [donationsError, setDonationsError] = useState<string | null>(null)
 
   useEffect(() => {
     setEditPreview(campaign)
@@ -62,26 +70,197 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
 
   const isOwner = user?.id === campaign.creatorId
 
+  // Default supported methods to 'Local' if campaign has no chains
+  const supportedChains = (Array.isArray(campaign.chains) && campaign.chains.length > 0) ? campaign.chains : ['Local']
+
+  // Hydrate donations for this campaign from localStorage (client-only)
+  type LocalDonation = { campaignId: string; name: string; amount: number; chain: string; timestamp: string; address?: string }
+  // Locally-extended donation to optionally include on-chain donor address
+  type DonationWithAddr = Donation & { address?: string }
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem('gh_donations')
+      const list: unknown = raw ? JSON.parse(raw) : []
+      const arr = Array.isArray(list) ? (list as LocalDonation[]) : []
+      const filtered = arr.filter(d => d && d.campaignId === campaign.id)
+      setDonations(filtered as unknown as DonationWithAddr[])
+    } catch {
+      setDonations([])
+    }
+  }, [campaign.id])
+
+  // Hydrate on-chain status when mapping exists (no escrow: balance not tracked)
+  useEffect(() => {
+    const cid = campaign.onChain?.campaignId
+    if (!ONCHAIN_ENABLED || !cid) return
+    const run = async () => {
+      try {
+        const targetChainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
+        try { await ensureWalletOnChain(targetChainId) } catch {}
+        const info = await getCampaignInfo(BigInt(cid))
+        setOnChainActive(Boolean(info?.active))
+      } catch (e) {
+        console.error('Failed to hydrate on-chain data:', e)
+        setOnChainActive(null)
+      }
+    }
+    run()
+  }, [campaign.onChain?.campaignId, ONCHAIN_ENABLED])
+
+  // Fetch on-chain donation history and merge into donations list
+  useEffect(() => {
+    if (!ONCHAIN_ENABLED) return
+    const idStr = campaign.onChain?.campaignId
+    if (!idStr) return
+
+    let cancelled = false
+    ;(async () => {
+      setDonationsLoading(true)
+      setDonationsError(null)
+      try {
+        // Best-effort ensure we're on the correct chain for logs
+        try {
+          if (campaign.onChain?.chainId) {
+            await ensureWalletOnChain(Number(campaign.onChain.chainId))
+          }
+        } catch {}
+        const events = await getCampaignDonations(BigInt(idStr), 200_000)
+        const symbol = (process.env.NEXT_PUBLIC_ZETA_NATIVE_SYMBOL || 'ZETA')
+        const mapped = events.map(ev => ({
+          campaignId: campaign.id,
+          name: ev.donor ? `${ev.donor.slice(0, 6)}...${ev.donor.slice(-4)}` : 'Anonymous',
+          amount: Number(ev.originalAmount),
+          chain: symbol,
+          timestamp: new Date(ev.timestamp),
+          address: ev.donor,
+        })) as DonationWithAddr[]
+
+        if (cancelled) return
+        setDonations(prev => {
+          const all = [...prev, ...mapped]
+          const seen = new Set<string>()
+          const deduped = all.filter(d => {
+            const ts = (d.timestamp instanceof Date) ? d.timestamp.toISOString() : new Date(d.timestamp as unknown as string).toISOString()
+            const key = `${d.campaignId}|${d.name}|${d.amount}|${d.chain}|${ts}`
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
+          deduped.sort((a, b) => {
+            const ta = (a.timestamp instanceof Date) ? a.timestamp.getTime() : new Date(a.timestamp as unknown as string).getTime()
+            const tb = (b.timestamp instanceof Date) ? b.timestamp.getTime() : new Date(b.timestamp as unknown as string).getTime()
+            return tb - ta
+          })
+          return deduped
+        })
+      } catch (err: unknown) {
+        const msg = (err as Error)?.message || 'Failed to load on-chain donations'
+        if (!cancelled) setDonationsError(msg)
+      } finally {
+        if (!cancelled) setDonationsLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [ONCHAIN_ENABLED, campaign.onChain?.campaignId, campaign.onChain?.chainId, campaign.id])
+
+  // Allow creators to sync on-chain mapping when missing
+  const handleSyncOnChain = async () => {
+    if (!isOwner) return
+    if (!syncId.trim()) {
+      return notify('Enter the on-chain campaign ID to sync.', 'error')
+    }
+    const idStr = syncId.trim()
+    if (!/^\d+$/.test(idStr)) {
+      return notify('On-chain campaign ID must be a numeric string.', 'error')
+    }
+    const chainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
+    const contract = process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS || ''
+    if (!contract || contract.length !== 42) {
+      return notify('Missing or invalid contract address in env.', 'error')
+    }
+    setIsSyncing(true)
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/edit`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onChain: { chainId, contract, campaignId: idStr } }),
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error || j?.message || 'Failed to sync on-chain mapping')
+      }
+      const updated = await res.json()
+      // API returns { success, campaign }
+      const next = updated?.campaign || updated
+      setCampaign((prev) => ({ ...prev, onChain: next?.onChain }))
+      notify('On-chain mapping synced.', 'success')
+    } catch (e) {
+      console.error(e)
+      notify(e instanceof Error ? e.message : 'Failed to sync on-chain mapping', 'error')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   // Progress percentage is computed where displayed; ensure UI supports >100% when needed.
 
   const handlePaymentSuccess = async (amount: number, chain: string) => {
-    // Refresh campaign data to show updated progress
+    // Refresh donations from localStorage after a successful payment
     try {
-      const response = await fetch(`/api/campaigns/${campaign.id}`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.campaign) {
-          setCampaign(prev => ({ ...prev, raised: data.campaign.raised }))
-        }
-        if (data.success && data.donations) {
-          setDonations(data.donations)
+      // Re-hydrate from localStorage after a successful payment
+      if (typeof window !== 'undefined') {
+        const raw = window.localStorage.getItem('gh_donations')
+        const list: unknown = raw ? JSON.parse(raw) : []
+        const arr = Array.isArray(list) ? (list as LocalDonation[]) : []
+        const filtered = arr.filter(d => d && d.campaignId === campaign.id)
+        setDonations(filtered as unknown as DonationWithAddr[])
+      }
+      // If on-chain is enabled and this campaign is mapped, re-fetch on-chain donation events now
+      if (ONCHAIN_ENABLED && campaign.onChain?.campaignId) {
+        try {
+          // Best-effort ensure wallet is on the correct chain for log reads
+          try {
+            if (campaign.onChain?.chainId) {
+              await ensureWalletOnChain(Number(campaign.onChain.chainId))
+            }
+          } catch {}
+          const events = await getCampaignDonations(BigInt(campaign.onChain.campaignId), 200_000)
+          const symbol = (process.env.NEXT_PUBLIC_ZETA_NATIVE_SYMBOL || 'ZETA')
+          const mapped = events.map(ev => ({
+            campaignId: campaign.id,
+            name: ev.donor ? `${ev.donor.slice(0, 6)}...${ev.donor.slice(-4)}` : 'Anonymous',
+            amount: Number(ev.originalAmount),
+            chain: symbol,
+            timestamp: new Date(ev.timestamp),
+            address: ev.donor,
+          })) as DonationWithAddr[]
+          setDonations(prev => {
+            const all = [...prev, ...mapped]
+            const seen = new Set<string>()
+            const deduped = all.filter(d => {
+              const ts = (d.timestamp instanceof Date) ? d.timestamp.toISOString() : new Date(d.timestamp as unknown as string).toISOString()
+              const key = `${d.campaignId}|${d.name}|${d.amount}|${d.chain}|${ts}`
+              if (seen.has(key)) return false
+              seen.add(key)
+              return true
+            })
+            deduped.sort((a, b) => {
+              const ta = (a.timestamp instanceof Date) ? a.timestamp.getTime() : new Date(a.timestamp as unknown as string).getTime()
+              const tb = (b.timestamp instanceof Date) ? b.timestamp.getTime() : new Date(b.timestamp as unknown as string).getTime()
+              return tb - ta
+            })
+            return deduped
+          })
+        } catch (e) {
+          console.warn('Failed to refresh on-chain donations after payment:', e)
         }
       }
-      
       notify(`Successfully donated $${amount} via ${chain}!`, 'success')
     } catch (error) {
-      console.error('Error refreshing campaign data:', error)
-      // Still show success message even if refresh fails
+      console.error('Error refreshing donations:', error)
       notify(`Successfully donated $${amount} via ${chain}!`, 'success')
     }
   }
@@ -173,8 +352,21 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   }
 
 
-
-  const progressPercentage = Math.min(100, Math.round((campaign.raised / campaign.goal) * 100))
+  const raisedLocal = useMemo(() => donations.reduce((sum, d) => sum + (d.amount || 0), 0), [donations])
+  const uniqueDonorCount = useMemo(() => {
+    const addrSet = new Set<string>()
+    const nameSet = new Set<string>()
+    donations.forEach((d) => {
+      const maybeAddr = (d as DonationWithAddr).address
+      if (maybeAddr && /^0x[a-fA-F0-9]{40}$/.test(maybeAddr)) {
+        addrSet.add(maybeAddr.toLowerCase())
+      } else if (d.name) {
+        nameSet.add(String(d.name).trim().toLowerCase())
+      }
+    })
+    return addrSet.size + nameSet.size
+  }, [donations])
+  const progressPercentage = Math.min(100, Math.round((raisedLocal / campaign.goal) * 100))
 
   if (isEditing) {
     return (
@@ -202,7 +394,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
                     })
                     if (!res.ok) throw new Error(`AI request failed (${res.status})`)
                     const data = await res.json().catch(() => ({})) as { text?: string }
-                    let text = (data.text || '').trim()
+                    const text = (data.text || '').trim()
                     let update: Partial<{ title: string; description: string }> | null = null
                     // Sanitize: remove Markdown code fences and extract JSON object if present
                     const unfence = (s: string) => s.replace(/^```[a-zA-Z]*\n?|```$/g, '').replace(/```[\s\S]*?```/g, (m) => m.replace(/```[a-zA-Z]*\n?|```/g, ''))
@@ -407,13 +599,28 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
                 <div className="mb-4">
                   <p className="text-sm text-gray-600 mb-2">Supported payment methods:</p>
                   <div className="flex gap-2">
-                    {campaign.chains.map(chain => (
+                    {supportedChains.map(chain => (
                       <span key={chain} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
                         {chain}
                       </span>
                     ))}
                   </div>
                 </div>
+
+                {/* On-Chain Status */}
+                {ONCHAIN_ENABLED && (
+                  <div className="mb-4 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                    <p className="text-sm font-medium text-gray-900 mb-1">On-Chain</p>
+                    {campaign.onChain?.campaignId ? (
+                      <div className="text-sm text-gray-700 space-y-1">
+                        <p>ID: {campaign.onChain.campaignId}</p>
+                        <p>Status: {onChainActive === null ? '—' : onChainActive ? 'Active' : 'Paused'}</p>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-red-600">Not synced to blockchain</div>
+                    )}
+                  </div>
+                )}
 
                 <button 
                   onClick={() => setShowPaymentModal(true)} 
@@ -424,11 +631,35 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
 
                 {/* Campaign Stats */}
                 <div className="border-t border-gray-200 pt-6 space-y-4">
-                  <div className="flex justify-between items-center"><span className="text-gray-600">Total Raised</span><span className="font-bold text-gray-900">{formatCurrency(campaign.raised)}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-600">Total Raised</span><span className="font-bold text-gray-900">{formatCurrency(raisedLocal)}</span></div>
                   <div className="flex justify-between items-center"><span className="text-gray-600">Goal</span><span className="font-bold text-gray-900">{formatCurrency(campaign.goal)}</span></div>
                   <div className="flex justify-between items-center"><span className="text-gray-600">Progress</span><span className="font-bold text-green-600">{progressPercentage}%</span></div>
-                  <div className="flex justify-between items-center"><span className="text-gray-600">Donors</span><span className="font-bold text-gray-900">{donations.length}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-gray-600">Donors</span><span className="font-bold text-gray-900">{uniqueDonorCount}</span></div>
                 </div>
+
+                {/* Sync UI for creators when on-chain mapping is missing */}
+                {ONCHAIN_ENABLED && isOwner && !campaign.onChain?.campaignId && (
+                  <div className="mt-6 border-t border-gray-200 pt-6">
+                    <p className="text-sm font-medium text-gray-900 mb-2">Sync On-Chain Mapping</p>
+                    <p className="text-xs text-gray-600 mb-2">Enter the on-chain campaign ID to link this campaign.</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={syncId}
+                        onChange={(e) => setSyncId(e.target.value)}
+                        placeholder="On-chain campaign ID"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={handleSyncOnChain}
+                        disabled={isSyncing || !syncId.trim()}
+                        className="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium disabled:bg-gray-300"
+                      >
+                        {isSyncing ? 'Syncing...' : 'Sync'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -438,7 +669,11 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
         <div className="mt-12">
           <h2 className="text-2xl font-bold mb-4">Recent Donations</h2>
           <div className="bg-white p-6 rounded-lg shadow">
-            {donations.length > 0 ? (
+            {donationsLoading ? (
+              <div className="py-6 flex justify-center"><Spinner /></div>
+            ) : donationsError ? (
+              <p className="text-sm text-red-600">{donationsError}</p>
+            ) : donations.length > 0 ? (
               <ul className="divide-y divide-gray-200">
                 {donations.slice(0, 10).map((donation, index) => (
                   <li key={index} className="py-4 flex items-center justify-between">

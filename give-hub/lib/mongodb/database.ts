@@ -38,6 +38,7 @@ function toCampaign(doc: any | null): Campaign | null {
   if (!doc) return null;
   return {
     id: doc.id || String(doc._id),
+    uuid: doc.uuid,
     title: doc.title,
     goal: doc.goal,
     raised: doc.raised || 0,
@@ -45,8 +46,16 @@ function toCampaign(doc: any | null): Campaign | null {
     description: doc.description,
     category: doc.category,
     creatorId: doc.creatorId,
+    creatorAddress: doc.creatorAddress,
     image: doc.image,
     contractOwnership: doc.contractOwnership,
+    active: doc.active,
+    // Ensure on-chain mapping is surfaced in responses
+    onChain: doc.onChain ? {
+      chainId: Number(doc.onChain.chainId),
+      contract: String(doc.onChain.contract),
+      campaignId: String(doc.onChain.campaignId),
+    } : undefined,
     verified: !!doc.verified,
     contractAddress: doc.contractAddress,
     blockchainProof: doc.blockchainProof,
@@ -133,6 +142,13 @@ export const mongoDb = {
       const v = (query as any)[k];
       if (v !== undefined) mongoQuery[k] = v;
     }
+    // Support numeric range filters
+    if ((query as any).goal !== undefined) {
+      mongoQuery.goal = (query as any).goal;
+    }
+    if ((query as any).raised !== undefined) {
+      mongoQuery.raised = (query as any).raised;
+    }
     const docs = await CampaignModel.find(mongoQuery).lean();
     return docs.map(toCampaign) as Campaign[];
   },
@@ -147,6 +163,13 @@ export const mongoDb = {
     for (const k of keys) {
       const v = (query as any)[k];
       if (v !== undefined) mongoQuery[k] = v;
+    }
+    // Support numeric range filters
+    if ((query as any).goal !== undefined) {
+      mongoQuery.goal = (query as any).goal;
+    }
+    if ((query as any).raised !== undefined) {
+      mongoQuery.raised = (query as any).raised;
     }
     let q = CampaignModel.find(mongoQuery);
     if (options?.sort) q = q.sort(options.sort as any);
@@ -218,7 +241,17 @@ export const mongoDb = {
   // Helpers
   async getUserStats(userId: string) {
     await connectMongo();
-    const user = await UserModel.findOne({ id: userId }).lean();
+    const user = await UserModel
+      .findOne({ id: userId })
+      .lean<{
+        role: 'user' | 'creator' | string;
+        createdCampaigns?: string[];
+        totalRaised?: number;
+        verificationStatus?: string;
+        donatedCampaigns?: string[];
+        totalDonated?: number;
+        preferredChains?: string[];
+      }>();
     if (!user) return null;
     if (user.role === 'creator') {
       return {

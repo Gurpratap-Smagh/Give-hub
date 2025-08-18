@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import type { User, Creator } from '@/lib/utils/types'
+import type { User, Creator } from '@/lib/db'
 import { notify } from '@/lib/utils/notify'
 
 interface ProfilePictureUploadProps {
@@ -74,7 +74,7 @@ export default function ProfilePictureUpload({
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') {
+    if (e.type === 'dragenter' || e.type === 'dragleave') {
       setDragActive(true)
     } else if (e.type === 'dragleave') {
       setDragActive(false)
@@ -99,13 +99,13 @@ export default function ProfilePictureUpload({
   }
 
   // Narrow currentUser for display-only properties
-  type SafeUser = Pick<User, 'name' | 'profilePicture'> & Partial<Pick<Creator, 'username'>>
+  type SafeUser = Pick<User, 'username' | 'profilePicture'>
   const cu = currentUser as unknown as SafeUser
 
   // Generate default avatar if no picture
   const getDefaultAvatar = () => {
     const colors = ['#4F96FF', '#FF6565', '#10B981', '#F59E0B', '#8B5CF6', '#6366F1']
-    const display = cu.username || cu.name || 'U'
+    const display = cu.username || 'U'
     const color = colors[display.length % colors.length]
     const initial = String(display).charAt(0).toUpperCase()
     // Detect theme for background adaptation (client-only)
@@ -164,7 +164,7 @@ export default function ProfilePictureUpload({
       >
         <img 
           src={imageSrc} 
-          alt={`${(cu.username || cu.name || 'User')}'s profile picture`}
+          alt={`${(cu.username || 'User')}'s profile picture`}
           className="w-full h-full object-cover"
           onError={() => setImageSrc(getCuteFallback())}
           draggable={false}

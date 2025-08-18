@@ -21,6 +21,7 @@ import './globals.css' // ACCESS: Tailwind CSS base styles, custom utilities
 import { Nav } from '@/components/nav' // ACCESS: Global navigation component
 import GlobalLoading from '@/components/global-loading'
 import { AuthProvider } from '@/lib/auth/auth-context'
+import AILauncher from '@/components/ai-launcher'
 
 // SEO metadata for all pages (can be overridden in individual pages)
 export const metadata: Metadata = {
@@ -60,6 +61,8 @@ export default function RootLayout({
           <main className="pt-20">
             {children}
           </main>
+          {/* Global AI assistant launcher */}
+          <AILauncher />
         </AuthProvider>
       </body>
     </html>

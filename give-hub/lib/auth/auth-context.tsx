@@ -1,10 +1,10 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import type { User, Creator } from '@/lib/utils/types';
+import type { User, Creator } from '@/lib/db';
 
 // Define the shape of the authentication context
-interface AuthContextType {
+export interface AuthContextType {
   user: User | Creator | null;
   signin: (emailOrUsername: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (username: string, email: string, password: string, role: 'user' | 'creator') => Promise<{ success: boolean; error?: string }>;
@@ -14,7 +14,7 @@ interface AuthContextType {
 }
 
 // Create the context with a default value
-const AuthContext = createContext<AuthContextType>({
+export const AuthContext = createContext<AuthContextType>({
   user: null,
   signin: async () => ({ success: false }),
   signup: async () => ({ success: false }),
