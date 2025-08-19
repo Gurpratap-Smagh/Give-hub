@@ -32,6 +32,7 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
   const [amount, setAmount] = useState('')
   const [selectedChain, setSelectedChain] = useState<string>(initialChain || effectiveChains[0])
   const [donorName, setDonorName] = useState('')
+  const [note, setNote] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const { user } = useAuth()
   const onChainCampaignId = campaign.onChain?.campaignId
@@ -120,16 +121,37 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
         amount: parseFloat((amount || '').replace(/,/g, '.')),
         chain: selectedChain,
         donorName: (donorName || '').trim() || (user && hasUsername(user) ? user.username : 'Anonymous'),
+        note: (note || '').trim(),
         offchainCampaignId: campaign.id,
       })
 
       if (!result.ok) throw new Error(result.error || 'Payment failed')
+
+      // Show swap feedback if available
+      if (result.swapMessage) {
+        const isSwapSuccess = result.paymentStatus === 'preferred'
+        const message = isSwapSuccess 
+          ? `✅ ${result.swapMessage}` 
+          : `⚠️ ${result.swapMessage}`
+        
+        // Show a brief toast notification
+        if (typeof window !== 'undefined') {
+          const toast = document.createElement('div')
+          toast.className = `fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-white text-sm max-w-sm ${
+            isSwapSuccess ? 'bg-green-600' : 'bg-yellow-600'
+          }`
+          toast.textContent = message
+          document.body.appendChild(toast)
+          setTimeout(() => document.body.removeChild(toast), 4000)
+        }
+      }
 
       onPaymentSuccess(parseFloat((amount || '').replace(/,/g, '.')), selectedChain)
       onClose()
       // Reset form
       setAmount('')
       setDonorName('')
+      setNote('')
     } catch (error) {
       console.error('Payment error:', error)
       const anyErr = error as { code?: number; message?: string }
@@ -223,6 +245,20 @@ export default function PaymentModal({ campaign, isOpen, onClose, onPaymentSucce
             value={donorName}
             onChange={(e) => setDonorName(e.target.value)}
             placeholder={(user && hasUsername(user) ? user.username : undefined) || "Enter your name"}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        {/* Note (optional) */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Add a note (optional)
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Say something about your donation (optional)"
+            rows={3}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>

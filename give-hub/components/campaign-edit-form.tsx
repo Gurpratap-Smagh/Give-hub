@@ -3,6 +3,7 @@
 import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
 import type { Campaign } from '@/lib/db'
 import { notify } from '@/lib/utils/notify'
+import { getCampaignInfo } from '@/lib/web3/client'
 
 interface CampaignEditFormProps {
   campaign: Campaign
@@ -45,6 +46,9 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
       : ''
   )
   const formRef = useRef<HTMLFormElement>(null)
+  const ONCHAIN_ENABLED = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || 'local').toLowerCase() === 'zetachain'
+  const [onChainToken, setOnChainToken] = useState<string | null>(null)
+  const [onChainTokenStatus, setOnChainTokenStatus] = useState<'idle' | 'loading' | 'error' | 'done'>('idle')
   useImperativeHandle(ref, () => {
     const el = formRef.current as HTMLFormElement & { requestSubmit: () => void };
     return Object.assign((el || ({} as unknown)) as HTMLFormElement & { requestSubmit: () => void }, {
@@ -61,6 +65,29 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
     onChange?.(partial)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData, otherCategory])
+
+  // Load on-chain preferred token if campaign is mapped
+  useEffect(() => {
+    const idStr = campaign?.onChain?.campaignId
+    if (!ONCHAIN_ENABLED || !idStr) {
+      setOnChainToken(null)
+      setOnChainTokenStatus('idle')
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        setOnChainTokenStatus('loading')
+        const info = await getCampaignInfo(BigInt(idStr))
+        if (cancelled) return
+        setOnChainToken(info?.preferredZRC20 || '')
+        setOnChainTokenStatus('done')
+      } catch {
+        if (!cancelled) setOnChainTokenStatus('error')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [campaign.onChain?.campaignId, ONCHAIN_ENABLED])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -156,6 +183,35 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
           )}
         </div>
       </div>
+
+      {ONCHAIN_ENABLED && (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Preferred ZRC-20 Token</label>
+          {campaign.onChain?.campaignId ? (
+            <>
+              <input
+                type="text"
+                value={onChainToken || ''}
+                readOnly
+                className="w-full p-3 border-2 border-gray-200 rounded-lg bg-gray-50 cursor-not-allowed"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                This token is set on-chain at creation and cannot be changed in edits.
+              </p>
+              {onChainTokenStatus === 'loading' && (
+                <p className="mt-1 text-xs text-gray-400">Loading token…</p>
+              )}
+              {onChainTokenStatus === 'error' && (
+                <p className="mt-1 text-xs text-red-600">Failed to fetch on-chain token.</p>
+              )}
+            </>
+          ) : (
+            <div className="p-3 border rounded-lg bg-yellow-50 border-yellow-200 text-yellow-800 text-sm">
+              Preferred token is chosen when creating a campaign on-chain. Edit form cannot set it for existing campaigns.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Chains selection removed */}
     </form>

@@ -12,7 +12,7 @@ import { notify } from '@/lib/utils/notify'
 import CampaignEditForm from '@/components/campaign-edit-form'
 type CampaignEditFormRef = HTMLFormElement & { requestSubmit: () => void; applyAI?: (partial: Partial<{ title: string; description: string; category: string }>) => void }
 import PaymentModal from '@/components/payment-modal'
-import { ensureWalletOnChain, getCampaignInfo, getCampaignDonations } from '@/lib/web3/client'
+import { ensureWalletOnChain, getCampaignInfo, getCampaignDonations, getLatestBlockNumber, getCampaignDonationsBetween } from '@/lib/web3/client'
 
 /**
  * FILE: app/campaign/[id]/CampaignPageContent.tsx
@@ -38,6 +38,92 @@ const CARD_PLACEHOLDER_2x1 = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
 `)
 type CampaignWithCreator = Campaign & { creator?: Creator | null };
 
+// Donation list shows notes inline (no dropdown)
+function DonationList({
+  donations,
+}: {
+  donations: {
+    name?: string
+    amount?: number
+    chain?: string
+    timestamp: string | Date
+    note?: string
+  }[]
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  const sorted = useMemo(
+    () => [...donations].sort((a, b) => (b.amount || 0) - (a.amount || 0)),
+    [donations]
+  )
+  const renderList = expanded ? sorted : sorted.slice(0, 3)
+  // Notes are always shown inline; no toggle
+
+  return (
+    <>
+      <ul className="space-y-3 max-h-96 overflow-y-auto pr-1">
+        {renderList.map((d) => {
+          const itemKey = `${(d.name || "anon").trim()}|${d.amount || 0}|${new Date(d.timestamp).toISOString()}`
+          const noteText = (d.note || "").trim()
+          const hasNote = noteText.length > 0
+
+          return (
+            <li
+              key={itemKey}
+              className="relative isolate p-4 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition focus:outline-none focus:ring-2 focus:ring-blue-500/30 min-h-[64px]"
+            >
+              {/* Row: content left, button right (separate entity) */}
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold">
+                    {(d.name && d.name.trim()) || "Anonymous"} donated{" "}
+                    <span className="text-green-600">{formatCurrency(d.amount || 0)}</span>{" "}
+                    via {d.chain || "—"}
+                  </p>
+                  <p className="text-sm text-gray-500">{formatDate(d.timestamp)}</p>
+                </div>
+
+                {/* No dropdown button; notes are shown inline below */}
+              </div>
+
+              {/* Note box below (pushes content) */}
+              {hasNote && (
+                <div className="mt-3">
+                  <div className="px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-700 text-sm whitespace-pre-wrap max-h-32 overflow-y-auto">
+                    {noteText}
+                  </div>
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+
+      {sorted.length > 3 && (
+        <div className="pt-1">
+          {!expanded ? (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 text-gray-700 font-medium transition"
+            >
+              Show more
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 text-gray-700 font-medium transition"
+            >
+              Show less
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
 
 export default function CampaignPageContent({ initialCampaign, initialDonations }: { initialCampaign: CampaignWithCreator, initialDonations: Donation[] }) {
   const { user } = useAuth()
@@ -53,6 +139,8 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   const [imageGenLoading, setImageGenLoading] = useState(false)
   // Maintain a safe image source with fallback to 2:1 SVG placeholder
   const [imgSrc, setImgSrc] = useState<string>(campaign.image || CARD_PLACEHOLDER_2x1)
+  // Track the last Ethereum block we have polled up to (for incremental log queries)
+  const lastPolledBlockRef = useRef<number | null>(null)
   // On-chain hydration state
   const ONCHAIN_ENABLED = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || 'local').toLowerCase() === 'zetachain'
   const [onChainActive, setOnChainActive] = useState<boolean | null>(null)
@@ -75,8 +163,8 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
 
   // Hydrate donations for this campaign from localStorage (client-only)
   type LocalDonation = { campaignId: string; name: string; amount: number; chain: string; timestamp: string; address?: string }
-  // Locally-extended donation to optionally include on-chain donor address
-  type DonationWithAddr = Donation & { address?: string }
+  // Locally-extended donation to optionally include on-chain donor address and note
+  type DonationWithAddr = Donation & { address?: string; note?: string }
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -93,11 +181,17 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   // Hydrate on-chain status when mapping exists (no escrow: balance not tracked)
   useEffect(() => {
     const cid = campaign.onChain?.campaignId
-    if (!ONCHAIN_ENABLED || !cid) return
+    // Avoid invoking wallet extension when logged out
+    if (!ONCHAIN_ENABLED || !cid || !user) return
     const run = async () => {
       try {
         const targetChainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
-        try { await ensureWalletOnChain(targetChainId) } catch {}
+        // Only attempt to switch wallet when a wallet context exists
+        try {
+          if (typeof window !== 'undefined' && (window as any)?.ethereum) {
+            await ensureWalletOnChain(targetChainId)
+          }
+        } catch {}
         const info = await getCampaignInfo(BigInt(cid))
         setOnChainActive(Boolean(info?.active))
       } catch (e) {
@@ -106,9 +200,9 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
       }
     }
     run()
-  }, [campaign.onChain?.campaignId, ONCHAIN_ENABLED])
+  }, [campaign.onChain?.campaignId, ONCHAIN_ENABLED, user])
 
-  // Fetch on-chain donation history and merge into donations list
+  // Fetch on-chain donation history on page load for all visitors (read-only via RPC)
   useEffect(() => {
     if (!ONCHAIN_ENABLED) return
     const idStr = campaign.onChain?.campaignId
@@ -119,21 +213,17 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
       setDonationsLoading(true)
       setDonationsError(null)
       try {
-        // Best-effort ensure we're on the correct chain for logs
-        try {
-          if (campaign.onChain?.chainId) {
-            await ensureWalletOnChain(Number(campaign.onChain.chainId))
-          }
-        } catch {}
+        // Read logs via RPC provider; no wallet or user required
         const events = await getCampaignDonations(BigInt(idStr), 200_000)
         const symbol = (process.env.NEXT_PUBLIC_ZETA_NATIVE_SYMBOL || 'ZETA')
         const mapped = events.map(ev => ({
           campaignId: campaign.id,
-          name: ev.donor ? `${ev.donor.slice(0, 6)}...${ev.donor.slice(-4)}` : 'Anonymous',
+          name: (ev.donorName && ev.donorName.trim()) ? ev.donorName.trim() : (ev.donor ? `${ev.donor.slice(0, 6)}...${ev.donor.slice(-4)}` : 'Anonymous'),
           amount: Number(ev.originalAmount),
           chain: symbol,
           timestamp: new Date(ev.timestamp),
           address: ev.donor,
+          note: ev.note,
         })) as DonationWithAddr[]
 
         if (cancelled) return
@@ -164,6 +254,82 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
 
     return () => { cancelled = true }
   }, [ONCHAIN_ENABLED, campaign.onChain?.campaignId, campaign.onChain?.chainId, campaign.id])
+
+  // Lightweight live polling: query only new logs since last seen block with a small overlap
+  useEffect(() => {
+    if (!ONCHAIN_ENABLED) return
+    const idStr = campaign.onChain?.campaignId
+    if (!idStr) return
+
+    let mounted = true
+    let timer: number | undefined
+    const overlap = 6 // re-scan a few recent blocks to be safe across reorgs
+    const intervalMs = Number(process.env.NEXT_PUBLIC_DONATIONS_POLL_MS || 10000)
+
+    const start = async () => {
+      // Initialize last seen block to current tip so we only pick up new donations from now on
+      try {
+        const tip = await getLatestBlockNumber()
+        lastPolledBlockRef.current = tip
+      } catch {}
+
+      timer = window.setInterval(async () => {
+        if (!mounted) return
+        try {
+          const latest = await getLatestBlockNumber()
+          const last = lastPolledBlockRef.current
+          if (!Number.isFinite(latest)) return
+          if (last == null) {
+            lastPolledBlockRef.current = latest
+            return
+          }
+          if (latest <= last) return
+          const fromBlock = Math.max(0, last - overlap + 1)
+          const events = await getCampaignDonationsBetween(BigInt(idStr), fromBlock, latest)
+          if (!mounted || !events?.length) {
+            lastPolledBlockRef.current = latest
+            return
+          }
+          const symbol = (process.env.NEXT_PUBLIC_ZETA_NATIVE_SYMBOL || 'ZETA')
+          const mapped = events.map(ev => ({
+            campaignId: campaign.id,
+            name: (ev.donorName && ev.donorName.trim()) ? ev.donorName.trim() : (ev.donor ? `${ev.donor.slice(0, 6)}...${ev.donor.slice(-4)}` : 'Anonymous'),
+            amount: Number(ev.originalAmount),
+            chain: symbol,
+            timestamp: new Date(ev.timestamp),
+            address: ev.donor,
+            note: ev.note,
+          })) as DonationWithAddr[]
+          setDonations(prev => {
+            const all = [...prev, ...mapped]
+            const seen = new Set<string>()
+            const deduped = all.filter(d => {
+              const ts = (d.timestamp instanceof Date) ? d.timestamp.toISOString() : new Date(d.timestamp as unknown as string).toISOString()
+              const key = `${d.campaignId}|${d.name}|${d.amount}|${d.chain}|${ts}`
+              if (seen.has(key)) return false
+              seen.add(key)
+              return true
+            })
+            deduped.sort((a, b) => {
+              const ta = (a.timestamp instanceof Date) ? a.timestamp.getTime() : new Date(a.timestamp as unknown as string).getTime()
+              const tb = (b.timestamp instanceof Date) ? b.timestamp.getTime() : new Date(b.timestamp as unknown as string).getTime()
+              return tb - ta
+            })
+            return deduped
+          })
+          lastPolledBlockRef.current = latest
+        } catch {
+          // best-effort; ignore transient RPC issues
+        }
+      }, intervalMs)
+    }
+
+    start()
+    return () => {
+      mounted = false
+      if (timer) window.clearInterval(timer)
+    }
+  }, [ONCHAIN_ENABLED, campaign.onChain?.campaignId, campaign.id])
 
   // Allow creators to sync on-chain mapping when missing
   const handleSyncOnChain = async () => {
@@ -231,11 +397,12 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
           const symbol = (process.env.NEXT_PUBLIC_ZETA_NATIVE_SYMBOL || 'ZETA')
           const mapped = events.map(ev => ({
             campaignId: campaign.id,
-            name: ev.donor ? `${ev.donor.slice(0, 6)}...${ev.donor.slice(-4)}` : 'Anonymous',
+            name: (ev.donorName && ev.donorName.trim()) ? ev.donorName.trim() : (ev.donor ? `${ev.donor.slice(0, 6)}...${ev.donor.slice(-4)}` : 'Anonymous'),
             amount: Number(ev.originalAmount),
             chain: symbol,
             timestamp: new Date(ev.timestamp),
             address: ev.donor,
+            note: ev.note,
           })) as DonationWithAddr[]
           setDonations(prev => {
             const all = [...prev, ...mapped]
@@ -624,7 +791,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
 
                 <button 
                   onClick={() => setShowPaymentModal(true)} 
-                  className="mx-auto block md:inline-block bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-6 py-3 rounded-full font-semibold text-base transition-colors shadow mb-6"
+                  className="mx-auto block md:inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-6 h-12 rounded-full font-semibold text-base transition-colors shadow mb-6"
                 >
                   Donate Now
                 </button>
@@ -668,22 +835,13 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
         {/* Recent Donations */}
         <div className="mt-12">
           <h2 className="text-2xl font-bold mb-4">Recent Donations</h2>
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="bg-white p-6 rounded-lg shadow max-h-[28rem] overflow-y-auto">
             {donationsLoading ? (
               <div className="py-6 flex justify-center"><Spinner /></div>
             ) : donationsError ? (
               <p className="text-sm text-red-600">{donationsError}</p>
             ) : donations.length > 0 ? (
-              <ul className="divide-y divide-gray-200">
-                {donations.slice(0, 10).map((donation, index) => (
-                  <li key={index} className="py-4 flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold">{donation.name || 'Anonymous'} donated <span className="text-green-600">{formatCurrency(donation.amount)}</span> via {donation.chain}</p>
-                      <p className="text-sm text-gray-500">{formatDate(donation.timestamp)}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <DonationList donations={donations.slice(0, 10)} />
             ) : (
               <p className="text-gray-500">Be the first to donate!</p>
             )}

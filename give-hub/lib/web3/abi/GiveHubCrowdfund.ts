@@ -68,6 +68,7 @@ export const CrossChainCrowdfundABI = [
   {
     "inputs": [
       { "internalType": "uint256", "name": "campaignId", "type": "uint256" },
+      { "internalType": "string", "name": "donorName", "type": "string" },
       { "internalType": "string", "name": "note", "type": "string" }
     ],
     "name": "donateNative",
@@ -138,20 +139,37 @@ export const CrossChainCrowdfundABI = [
       { "indexed": false, "internalType": "address", "name": "originalToken", "type": "address" },
       { "indexed": false, "internalType": "uint256", "name": "originalAmount", "type": "uint256" },
       { "indexed": false, "internalType": "uint256", "name": "convertedAmount", "type": "uint256" },
-      { "indexed": false, "internalType": "string", "name": "originChain", "type": "string" }
+      { "indexed": false, "internalType": "string", "name": "originChain", "type": "string" },
+      { "indexed": false, "internalType": "string", "name": "donorName", "type": "string" },
+      { "indexed": false, "internalType": "string", "name": "note", "type": "string" }
     ],
     "name": "ContributionReceived",
     "type": "event"
   },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "campaignId", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "to", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
-      { "indexed": false, "internalType": "address", "name": "token", "type": "address" }
+  { "anonymous": false, "inputs": [
+      { "indexed": false, "internalType": "address", "name": "tokenIn", "type": "address" },
+      { "indexed": false, "internalType": "address", "name": "tokenOut", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "amountOut", "type": "uint256" }
     ],
-    "name": "FundsWithdrawn",
+    "name": "SwapExecuted",
+    "type": "event"
+  },
+  { "anonymous": false, "inputs": [
+      { "indexed": true, "internalType": "address", "name": "tokenIn", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "tokenOut", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+      { "indexed": false, "internalType": "string", "name": "reason", "type": "string" }
+    ],
+    "name": "SwapFailed",
+    "type": "event"
+  },
+  { "anonymous": false, "inputs": [
+      { "indexed": true, "internalType": "address", "name": "creator", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amountWZETA", "type": "uint256" },
+      { "indexed": false, "internalType": "address", "name": "requestedToken", "type": "address" }
+    ],
+    "name": "PaidInWZETA",
     "type": "event"
   },
 ] as const;

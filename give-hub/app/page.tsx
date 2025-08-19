@@ -17,6 +17,7 @@
  */
 import Link from 'next/link'
 import CampaignsGrid from '../components/campaigns-grid' // Client grid w/ loading and see-more UX
+import ScrollToTopOnMount from '@/components/scroll-to-top-on-mount'
 import { db } from '@/lib/db'
 import type { Campaign } from '@/lib/db'
 
@@ -67,6 +68,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
     <div className="min-h-screen bg-gray-50">
       {/* REGION: Main content area */}
       <main className="max-w-7xl mx-auto px-6 py-12">
+        {/* Ensure we start at the top when landing on homepage */}
+        <ScrollToTopOnMount behavior="auto" />
         {/* Header section - page introduction */}
         <div className="text-center mb-12">
           <h1 className={`${resolvedSearchParams.search ? 'text-3xl md:text-4xl' : 'text-4xl'} font-bold text-gray-900 mb-2`}>

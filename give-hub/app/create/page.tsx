@@ -18,7 +18,7 @@
 
 'use client'
 
-import { useRef, useState, useContext } from 'react'
+import { useRef, useState, useContext, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { AuthContext } from '../../lib/auth/auth-context' // Corrected path
@@ -30,6 +30,24 @@ import {
   createCampaignOnChain, 
   isCreator
 } from '@/lib/web3/client'
+import { isAddress } from '@/lib/address'
+
+// ZRC-20 options are fetched from the server via /api/zrc20-options
+
+function parseRpcError(e: unknown): string {
+  if (e && typeof e === 'object') {
+    const obj = e as Record<string, unknown>
+    const shortMsg = typeof obj.shortMessage === 'string' ? obj.shortMessage : undefined
+    const msg = typeof obj.message === 'string' ? obj.message : undefined
+    const out = shortMsg || msg
+    if (out) return String(out).slice(0, 280)
+  }
+  try {
+    return String(e ?? 'Transaction failed').slice(0, 280)
+  } catch {
+    return 'Transaction failed'
+  }
+}
 
 /**
  * Campaign creation page component
@@ -53,6 +71,28 @@ export default function CreateCampaignPage() {
   const [imageGenLoading, setImageGenLoading] = useState(false)
   const [isAiEditing, setIsAiEditing] = useState(false)
   const [error, setError] = useState('')
+  // Web3/payment prefs
+  const [zrc20Options, setZrc20Options] = useState<{ label: string; address: string }[]>([])
+  const [preferredToken, setPreferredToken] = useState('')
+  const requiresOnChain = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || '').toLowerCase() === 'zetachain'
+  const isTokenValid = preferredToken !== '' && isAddress(preferredToken)
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const res = await fetch('/api/zrc20-options', { credentials: 'include' })
+        const data = await res.json().catch(() => [])
+        if (active && Array.isArray(data)) setZrc20Options(data)
+      } catch {
+        if (active) setZrc20Options([])
+      }
+    }
+    load()
+    return () => { active = false }
+  }, [])
+  // Tx UI state
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const [txPhase, setTxPhase] = useState<'idle' | 'confirm' | 'sent' | 'mining' | 'done' | 'error'>('idle')
 
   if (!context) {
     throw new Error('AuthContext must be used within an AuthProvider')
@@ -127,7 +167,8 @@ export default function CreateCampaignPage() {
       notify('Generated image applied', 'success')
     } catch (e) {
       console.error(e)
-      const msg = e instanceof Error ? e.message : 'Image generation failed. Please try again.'
+      const msg = parseRpcError(e)
+      setTxPhase('error')
       notify(msg, 'error')
     } finally {
       setImageGenLoading(false)
@@ -152,9 +193,21 @@ export default function CreateCampaignPage() {
       notify('Please specify your category', 'error')
       return
     }
+    if (requiresOnChain) {
+      if (!preferredToken) {
+        notify('Select a preferred ZRC-20 token', 'error')
+        return
+      }
+      if (!isTokenValid) {
+        notify('Invalid token address', 'error')
+        return
+      }
+    }
 
     setIsSubmitting(true)
     setError('')
+    setTxHash(null)
+    setTxPhase('idle')
     
     let onChainCampaignId: bigint | null = null;
     
@@ -182,13 +235,25 @@ export default function CreateCampaignPage() {
         }
         
         // Step 4: Create campaign on-chain
-        notify('Creating campaign on blockchain...', 'info')
-        onChainCampaignId = await createCampaignOnChain({
-          preferredZRC20: process.env.NEXT_PUBLIC_WZETA_ADDRESS || "0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf"
+        setTxPhase('confirm')
+        notify('Confirm in MetaMask…', 'info')
+        const res = await createCampaignOnChain({
+          preferredZRC20: preferredToken,
+          onSent: (hash) => {
+            setTxHash(hash)
+            setTxPhase('sent')
+            const base = process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL
+            if (base) {
+              notify(`Transaction sent: ${base}/tx/${hash}`, 'success')
+            } else {
+              notify(`Transaction sent: ${hash}`, 'success')
+            }
+          }
         })
-        
-        notify('Campaign created on blockchain!', 'success')
-        console.debug('[create] On-chain campaign created. ID:', onChainCampaignId?.toString())
+        setTxPhase('mining')
+        onChainCampaignId = res.id
+        setTxPhase('done')
+        console.debug('[create] On-chain campaign created. ID:', onChainCampaignId?.toString(), 'tx:', res.txHash)
       }
 
       // Step 5: Save campaign to off-chain database
@@ -199,6 +264,7 @@ export default function CreateCampaignPage() {
         category: formData.category === 'other' ? otherCategory.trim() : formData.category,
         goal: parseFloat(formData.goal),
         creatorId: user.id,
+        preferredZRC20: preferredToken || undefined,
       }
       // Attach on-chain mapping if we created on-chain and have required envs
       if (onChainCampaignId) {
@@ -341,13 +407,29 @@ export default function CreateCampaignPage() {
           <button
             type="button"
             onClick={() => formRef.current?.requestSubmit()}
-            disabled={isSubmitting}
+            disabled={isSubmitting || (requiresOnChain && !isTokenValid)}
             className="px-4 py-2 rounded-full bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-70"
           >
-            {isSubmitting ? 'Creating...' : 'Create Campaign'}
+            {isSubmitting
+              ? (txPhase === 'confirm' ? 'Confirm in MetaMask…' : txPhase === 'sent' ? 'Transaction sent…' : 'Creating...')
+              : 'Create Campaign'}
           </button>
         </div>
       </div>
+
+      {/* Tx status area */}
+      {txHash && (
+        <div className="mb-4 p-3 rounded-lg border border-green-200 bg-green-50 text-sm text-green-800">
+          <span className="font-medium">Transaction:</span>{' '}
+          {process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL ? (
+            <a className="underline" href={`${process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL}/tx/${txHash}`} target="_blank" rel="noreferrer">
+              View on explorer
+            </a>
+          ) : (
+            <span className="break-all">{txHash}</span>
+          )}
+        </div>
+      )}
 
       {/* Two-column layout: Form left, Live preview right */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -440,6 +522,44 @@ export default function CreateCampaignPage() {
               )}
             </div>
 
+            {/* Preferred Token (ZRC-20) */}
+            <div>
+              <label className="block text-lg font-semibold text-gray-900 mb-3">
+                Preferred Token (ZRC-20) {requiresOnChain ? '*' : ''}
+              </label>
+              <select
+                value={preferredToken}
+                onChange={(e) => setPreferredToken(e.target.value)}
+                className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-lg"
+              >
+                <option value="">Select a token</option>
+                {zrc20Options.map((opt) => (
+                  <option key={opt.address} value={opt.address}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              {preferredToken && !isTokenValid && (
+                <p className="text-sm text-red-600 mt-1">Invalid token address</p>
+              )}
+              {!preferredToken && requiresOnChain && (
+                <p className="text-sm text-gray-500 mt-1">Choose the token donors will send. Options come from NEXT_PUBLIC_ZRC20_* envs.</p>
+              )}
+              {preferredToken && isTokenValid && preferredToken !== process.env.NEXT_PUBLIC_WZETA_ADDRESS && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start">
+                    <div className="text-blue-600 mr-2 mt-0.5">💱</div>
+                    <div>
+                      <p className="text-sm text-blue-800 font-medium">Beta Swap Feature</p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        We&apos;ll attempt an on-chain swap to your preferred token. If unavailable, you&apos;ll receive WZETA as fallback (no transaction failure).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Submit moved to header */}
           </form>
         </div>
@@ -468,9 +588,18 @@ export default function CreateCampaignPage() {
                   onClick={generateImageFromDescription}
                   disabled={imageGenLoading}
                   className={`inline-flex items-center justify-center w-10 h-10 rounded-full ${imageGenLoading ? 'bg-blue-600/40 cursor-not-allowed' : 'bg-blue-600/50 hover:bg-blue-600/60'} text-white shadow-md backdrop-blur-sm focus:outline-none`}
-                  title="Generate image"
+                  title={imageGenLoading ? 'Generating…' : 'Generate image'}
+                  aria-busy={imageGenLoading}
                 >
-                  <span className="text-lg leading-none">✦</span>
+                  {imageGenLoading ? (
+                    // Spinner
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="status" aria-label="Loading">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                  ) : (
+                    <span className="text-lg leading-none">✦</span>
+                  )}
                 </button>
               )}
               {/* Pencil overlay trigger */}

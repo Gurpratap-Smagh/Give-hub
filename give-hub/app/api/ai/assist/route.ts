@@ -361,6 +361,72 @@ export async function POST(req: NextRequest) {
   console.log("📋 PLANNER_PROMPT loaded:", PLANNER_PROMPT.substring(0, 100) + "...");
   console.log("📋 EXECUTOR_PROMPT loaded:", EXECUTOR_PROMPT.substring(0, 100) + "...");
 
+  // Fast-path: explicit rewrite/edit mode
+  // The Create page sends a structured prompt and expects a strict JSON object
+  // with keys {"title","description"}. We bypass the normal planner schema
+  // here and ask the LLM to return ONLY that JSON.
+  if (mode === 'rewrite') {
+    try {
+      const REWRITE_SYSTEM = `You are a precise rewriting assistant for GiveHub creators.\n\nReturn ONLY a single application/json object with EXACT keys:\n{\n  "title": string,\n  "description": string\n}\n\nRules:\n- Title: concise, clear, compelling.\n- Description: 2–5 sentences, specific and inspiring.\n- Do NOT invent facts.\n- No markdown, no code fences, no extra text.`;
+      const ctxParts: string[] = [ensureJsonHint(), 'mode=rewrite'];
+      const raw = await llmJSON(userMessage, REWRITE_SYSTEM, ctxParts);
+      let outText = typeof raw === 'string' ? raw : JSON.stringify(raw);
+      // Robustly extract the first JSON object if any wrappers slipped in
+      if (typeof outText === 'string') {
+        try {
+          // Try direct parse first
+          const parsed = JSON.parse(outText) as unknown;
+          // If it doesn't look like desired shape, try to improve below
+          if (!parsed || typeof parsed !== 'object' || !('title' in (parsed as Record<string,unknown>)) || !('description' in (parsed as Record<string,unknown>))) {
+            throw new Error('missing keys');
+          }
+        } catch {
+          const candidate = extractFirstJSONObject(outText);
+          if (candidate) {
+            try {
+              const parsed = JSON.parse(candidate) as Record<string, unknown>;
+              if ('title' in parsed && 'description' in parsed) {
+                outText = candidate;
+              } else {
+                throw new Error('candidate missing keys');
+              }
+            } catch {
+              // Fall through to attempt extracting the input JSON from the original prompt as a last resort
+              const inputCandidate = extractFirstJSONObject(userMessage);
+              if (inputCandidate) {
+                try {
+                  const inputParsed = JSON.parse(inputCandidate) as Record<string, unknown>;
+                  const t = typeof inputParsed.title === 'string' ? inputParsed.title : '';
+                  const d = typeof inputParsed.description === 'string' ? inputParsed.description : '';
+                  if (t || d) {
+                    outText = JSON.stringify({ title: t, description: d });
+                  }
+                } catch {}
+              }
+            }
+          } else {
+            // No candidate; try to salvage from the original prompt input JSON
+            const inputCandidate = extractFirstJSONObject(userMessage);
+            if (inputCandidate) {
+              try {
+                const inputParsed = JSON.parse(inputCandidate) as Record<string, unknown>;
+                const t = typeof inputParsed.title === 'string' ? inputParsed.title : '';
+                const d = typeof inputParsed.description === 'string' ? inputParsed.description : '';
+                if (t || d) {
+                  outText = JSON.stringify({ title: t, description: d });
+                }
+              } catch {}
+            }
+          }
+        }
+      }
+      return NextResponse.json({ text: outText, reply: outText });
+    } catch (e) {
+      console.error('✏️ rewrite mode failed:', e);
+      // Fall through to generic flow only if rewrite fails hard
+    }
+  }
+
   // 1) PLAN
   let plan: Plan;
   try {

@@ -13,6 +13,17 @@ const nextConfig: NextConfig = {
     'http://127.0.0.1:3000',
     'http://172.20.160.1:3000',
   ],
+  // Mitigate occasional Windows ENOENT rename errors from webpack's filesystem cache
+  // by switching to in-memory cache during development on Windows.
+  webpack: (config, { dev }) => {
+    if (dev && process.platform === 'win32') {
+      // Use in-memory cache to avoid file locking/rename issues on NTFS
+      const wcfg = config as unknown as { cache?: { type: 'memory' } | false }
+      wcfg.cache = { type: 'memory' }
+      return wcfg as unknown as typeof config
+    }
+    return config
+  },
   async headers() {
     return [
       {

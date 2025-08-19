@@ -25,11 +25,28 @@ export async function fetchDeployment(): Promise<DeploymentInfo> {
   return json;
 }
 
+// Lightweight latest block helper for polling clients
+export async function getLatestBlockNumber(): Promise<number> {
+  const provider = await getReadOnlyProvider();
+  return provider.getBlockNumber();
+}
+
 export async function getProvider(): Promise<ethers.BrowserProvider> {
   if (typeof window === "undefined") throw new Error("No window");
   const eth = (window as unknown as { ethereum?: unknown }).ethereum;
   if (!eth) throw new Error("No injected wallet. Please install MetaMask or Zeta wallet.");
   return new ethers.BrowserProvider(eth as ethers.Eip1193Provider);
+}
+
+// Read-only provider that falls back to public RPC when no injected wallet exists
+export async function getReadOnlyProvider(): Promise<ethers.AbstractProvider> {
+  if (typeof window !== 'undefined') {
+    const eth = (window as unknown as { ethereum?: unknown }).ethereum;
+    if (eth) return new ethers.BrowserProvider(eth as ethers.Eip1193Provider);
+  }
+  const rpcUrl = process.env.NEXT_PUBLIC_ZETA_RPC_URL || '';
+  if (!rpcUrl) throw new Error('Missing NEXT_PUBLIC_ZETA_RPC_URL for read-only provider');
+  return new ethers.JsonRpcProvider(rpcUrl);
 }
 
 export async function connectWallet(): Promise<{ signer: ethers.Signer; address: string; chainId: number }>{
@@ -145,6 +162,8 @@ export async function getCreatorInfo(address: string): Promise<{exists: boolean,
 
 export type CreateCampaignInput = {
   preferredZRC20?: string; // ZRC20 token address for receiving donations
+  // Optional callback invoked immediately after the transaction is sent (before mining)
+  onSent?: (txHash: string) => void;
 };
 
 // Default ZRC20 token addresses - adjust based on deployment
@@ -169,7 +188,7 @@ export async function checkWalletConnection(): Promise<{connected: boolean, addr
   }
 }
 
-export async function createCampaignOnChain(input: CreateCampaignInput = {}): Promise<bigint> {
+export async function createCampaignOnChain(input: CreateCampaignInput = {}): Promise<{ id: bigint; txHash: string }> {
   const { signer } = await connectWallet();
   const dep = await fetchDeployment();
   // Best-effort ensure correct network based on deployment info
@@ -192,6 +211,7 @@ export async function createCampaignOnChain(input: CreateCampaignInput = {}): Pr
   const contract = await getContract(signer);
   const tx = await contract.createCampaign(preferredZRC20);
   console.debug("[web3] createCampaign tx:", tx?.hash);
+  try { input.onSent?.(tx.hash); } catch {}
   
   const receipt = await tx.wait();
   if (!receipt) throw new Error("No transaction receipt for createCampaign");
@@ -204,7 +224,7 @@ export async function createCampaignOnChain(input: CreateCampaignInput = {}): Pr
       const parsed = iface.parseLog(log);
       if (parsed?.name === "CampaignCreated") {
         const id = parsed.args?.campaignId as bigint;
-        if (id !== undefined) return id;
+        if (id !== undefined) return { id, txHash: tx.hash };
       }
     } catch {}
   }
@@ -259,7 +279,7 @@ export async function getCampaignsByCreator(
   creatorAddress: string,
   lookbackBlocks = 100000,
 ): Promise<{ campaignId: bigint; creator: string; preferredZRC20: string }[]> {
-  const provider = await getProvider();
+  const provider = await getReadOnlyProvider();
   const dep = await fetchDeployment();
   const latest = await provider.getBlockNumber();
   const fromBlock = latest > lookbackBlocks ? latest - lookbackBlocks : 0;
@@ -307,6 +327,8 @@ export async function getCampaignDonations(
   originalAmount: string;
   convertedAmount: string;
   originChain: string;
+  donorName?: string;
+  note?: string;
   timestamp: string;
 }[]> {
   const provider = await getProvider();
@@ -316,7 +338,7 @@ export async function getCampaignDonations(
   const iface = new ethers.Interface(CrossChainCrowdfundABI);
   
   // Filter by ContributionReceived events for this campaign
-  const topic0 = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string)");
+  const topic0 = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)");
   const topic1 = ethers.zeroPadValue(ethers.toBeHex(campaignId), 32); // campaignId is indexed
   
   const logs = await provider.getLogs({ 
@@ -333,6 +355,8 @@ export async function getCampaignDonations(
     originalAmount: string;
     convertedAmount: string;
     originChain: string;
+    donorName?: string;
+    note?: string;
     timestamp: string;
   }[] = [];
   
@@ -351,13 +375,25 @@ export async function getCampaignDonations(
         } catch {
           // fallback to now
         }
+        const args = parsed.args as unknown as {
+          contributionId: bigint;
+          donor: string;
+          originalToken: string;
+          originalAmount: bigint;
+          convertedAmount: bigint;
+          originChain: string;
+          donorName?: string;
+          note?: string;
+        };
         donations.push({
-          contributionId: parsed.args?.contributionId as bigint,
-          donor: parsed.args?.donor as string,
-          originalToken: parsed.args?.originalToken as string,
-          originalAmount: ethers.formatEther(parsed.args?.originalAmount as bigint),
-          convertedAmount: ethers.formatEther(parsed.args?.convertedAmount as bigint),
-          originChain: parsed.args?.originChain as string,
+          contributionId: args.contributionId,
+          donor: args.donor,
+          originalToken: args.originalToken,
+          originalAmount: ethers.formatEther(args.originalAmount),
+          convertedAmount: ethers.formatEther(args.convertedAmount),
+          originChain: args.originChain,
+          donorName: args.donorName,
+          note: args.note,
           timestamp: iso,
         });
       }
@@ -366,6 +402,94 @@ export async function getCampaignDonations(
     }
   }
   
+  return donations;
+}
+
+// Get donation events for a campaign between specific blocks (inclusive)
+export async function getCampaignDonationsBetween(
+  campaignId: bigint,
+  fromBlock: number,
+  toBlock?: number,
+): Promise<{
+  contributionId: bigint;
+  donor: string;
+  originalToken: string;
+  originalAmount: string;
+  convertedAmount: string;
+  originChain: string;
+  donorName?: string;
+  note?: string;
+  timestamp: string;
+}[]> {
+  const provider = await getProvider();
+  const dep = await fetchDeployment();
+  const latest = toBlock ?? (await provider.getBlockNumber());
+  const iface = new ethers.Interface(CrossChainCrowdfundABI);
+
+  // Filter by ContributionReceived events for this campaign
+  const topic0 = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)");
+  const topic1 = ethers.zeroPadValue(ethers.toBeHex(campaignId), 32); // campaignId is indexed
+
+  const logs = await provider.getLogs({
+    address: dep.address,
+    fromBlock: Math.max(0, fromBlock),
+    toBlock: latest,
+    topics: [topic0, topic1],
+  });
+
+  const donations: {
+    contributionId: bigint;
+    donor: string;
+    originalToken: string;
+    originalAmount: string;
+    convertedAmount: string;
+    originChain: string;
+    donorName?: string;
+    note?: string;
+    timestamp: string;
+  }[] = [];
+
+  for (const log of logs) {
+    try {
+      const parsed = iface.parseLog(log);
+      if (parsed?.name === "ContributionReceived") {
+        let iso = new Date().toISOString();
+        try {
+          const blk = await provider.getBlock(log.blockNumber);
+          if (blk?.timestamp != null) {
+            const ts = Number(blk.timestamp);
+            if (Number.isFinite(ts)) iso = new Date(ts * 1000).toISOString();
+          }
+        } catch {
+          // fallback to now
+        }
+        const args = parsed.args as unknown as {
+          contributionId: bigint;
+          donor: string;
+          originalToken: string;
+          originalAmount: bigint;
+          convertedAmount: bigint;
+          originChain: string;
+          donorName?: string;
+          note?: string;
+        };
+        donations.push({
+          contributionId: args.contributionId,
+          donor: args.donor,
+          originalToken: args.originalToken,
+          originalAmount: ethers.formatEther(args.originalAmount),
+          convertedAmount: ethers.formatEther(args.convertedAmount),
+          originChain: args.originChain,
+          donorName: args.donorName,
+          note: args.note,
+          timestamp: iso,
+        });
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+
   return donations;
 }
 
@@ -395,7 +519,7 @@ export async function donateToCampaign(
   });
 
   // No-escrow path: send native ZETA (value) and let contract wrap+forward
-  const tx = await contract.donateNative(campaignId, note, { value: amount });
+  const tx = await contract.donateNative(campaignId, donorName || '', note, { value: amount });
   console.debug("[web3] donation tx:", tx?.hash);
   await tx.wait();
   return tx.hash;

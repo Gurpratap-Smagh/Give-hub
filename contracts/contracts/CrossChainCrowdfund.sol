@@ -12,6 +12,24 @@ import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IWZETA.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
 
+// Interfaces for token swapping
+interface IERC20 {
+    function balanceOf(address) external view returns (uint256);
+    function approve(address spender, uint256 value) external returns (bool);
+    function transfer(address to, uint256 value) external returns (bool);
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+}
+
+interface IUniswapV2Router {
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+}
+
 contract CrossChainCrowdfund is UniversalContract {
     /*//////////////////////////////////////////////////////////////
                                TYPES
@@ -60,10 +78,15 @@ contract CrossChainCrowdfund is UniversalContract {
         address originalToken,
         uint256 originalAmount,
         uint256 convertedAmount,
-        string originChain
+        string originChain,
+        string donorName,
+        string note
     );
     
     event TokenSwapped(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut);
+    event SwapExecuted(address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut);
+    event SwapFailed(address indexed tokenIn, address indexed tokenOut, uint256 amountIn, string reason);
+    event PaidInWZETA(address indexed creator, uint256 amountWZETA, address requestedToken);
     
 
     /*//////////////////////////////////////////////////////////////
@@ -75,7 +98,7 @@ contract CrossChainCrowdfund is UniversalContract {
     error InvalidToken();
     error InvalidCampaign();
     error ZeroAmount();
-    error SwapFailed();
+    
 
     /*//////////////////////////////////////////////////////////////
                              STORAGE
@@ -103,6 +126,9 @@ contract CrossChainCrowdfund is UniversalContract {
     address public immutable btcZRC20;    // ZRC-20 for BTC
     address public immutable usdcZRC20;   // ZRC-20 for USDC
     
+    // Uniswap router for token swaps
+    address public UNISWAP_ROUTER;
+    
     /*//////////////////////////////////////////////////////////////
                            CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -126,6 +152,17 @@ contract CrossChainCrowdfund is UniversalContract {
     }
 
     /*//////////////////////////////////////////////////////////////
+                          ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Set the Uniswap router address for token swaps
+    /// @param router The router contract address
+    function setUniswapRouter(address router) external {
+        // In production, add onlyOwner modifier
+        UNISWAP_ROUTER = router;
+    }
+
+    /*//////////////////////////////////////////////////////////////
                           UNIVERSAL ENTRYPOINT
     //////////////////////////////////////////////////////////////*/
 
@@ -139,8 +176,8 @@ contract CrossChainCrowdfund is UniversalContract {
         (string memory action, bytes memory data) = abi.decode(message, (string, bytes));
         
         if (keccak256(bytes(action)) == keccak256("donate")) {
-            (uint256 campaignId, string memory note) = abi.decode(data, (uint256, string));
-            _handleDonation(ctx, zrc20, amount, campaignId, note);
+            (uint256 campaignId, string memory donorName, string memory note) = abi.decode(data, (uint256, string, string));
+            _handleDonation(ctx, zrc20, amount, campaignId, donorName, note);
         }
         // Add more actions as needed
     }
@@ -186,6 +223,7 @@ contract CrossChainCrowdfund is UniversalContract {
         address zrc20In,
         uint256 amount,
         uint256 campaignId,
+        string memory donorName,
         string memory note
     ) internal {
         if (amount == 0) revert ZeroAmount();
@@ -200,10 +238,22 @@ contract CrossChainCrowdfund is UniversalContract {
         // NO-ESCROW: swap if needed, then forward to creator immediately
         address tokenOut = campaign.preferredZRC20;
         uint256 amountOut = amount;
+        bool swapped = false;
+        
         if (zrc20In != tokenOut) {
-            amountOut = _swapTokens(zrc20In, tokenOut, amount);
+            (amountOut, swapped) = _swapTokens(zrc20In, tokenOut, amount);
+            if (swapped) {
+                IZRC20(tokenOut).transfer(campaign.creator, amountOut);
+            } else {
+                // graceful fallback: pay creator in original token (WZETA), but tell the UI
+                IZRC20(zrc20In).transfer(campaign.creator, amount);
+                emit PaidInWZETA(campaign.creator, amount, tokenOut);
+                tokenOut = zrc20In; // update for contribution record
+                amountOut = amount;
+            }
+        } else {
+            IZRC20(tokenOut).transfer(campaign.creator, amountOut);
         }
-        IZRC20(tokenOut).transfer(campaign.creator, amountOut);
         
         // Record contribution
         uint256 contributionId = ++nextContributionId;
@@ -226,12 +276,14 @@ contract CrossChainCrowdfund is UniversalContract {
             zrc20In,
             amount,
             amountOut,
-            tokenToChainName[zrc20In]
+            tokenToChainName[zrc20In],
+            donorName,
+            note
         );
     }
 
     /// @notice Accept native ZETA, wrap to WZETA, and forward immediately to the campaign creator (no-escrow)
-    function donateNative(uint256 campaignId, string memory note) external payable {
+    function donateNative(uint256 campaignId, string memory donorName, string memory note) external payable {
         if (msg.value == 0) revert ZeroAmount();
         Campaign storage campaign = campaigns[campaignId];
         if (campaign.creator == address(0)) revert InvalidCampaign();
@@ -243,10 +295,22 @@ contract CrossChainCrowdfund is UniversalContract {
         // NO-ESCROW: swap WZETA to creator's preferred token if needed, then forward
         address tokenOut = campaign.preferredZRC20;
         uint256 amountOut = msg.value;
+        bool swapped = false;
+        
         if (tokenOut != ZETA_TOKEN) {
-            amountOut = _swapTokens(ZETA_TOKEN, tokenOut, msg.value);
+            (amountOut, swapped) = _swapTokens(ZETA_TOKEN, tokenOut, msg.value);
+            if (swapped) {
+                IZRC20(tokenOut).transfer(campaign.creator, amountOut);
+            } else {
+                // graceful fallback: pay creator in WZETA, but tell the UI
+                IZRC20(ZETA_TOKEN).transfer(campaign.creator, msg.value);
+                emit PaidInWZETA(campaign.creator, msg.value, tokenOut);
+                tokenOut = ZETA_TOKEN; // update for contribution record
+                amountOut = msg.value;
+            }
+        } else {
+            IZRC20(tokenOut).transfer(campaign.creator, amountOut);
         }
-        IZRC20(tokenOut).transfer(campaign.creator, amountOut);
 
         // Record contribution with local context
         uint256 contributionId = ++nextContributionId;
@@ -269,41 +333,55 @@ contract CrossChainCrowdfund is UniversalContract {
             ZETA_TOKEN,
             msg.value,
             msg.value,
-            tokenToChainName[ZETA_TOKEN]
+            tokenToChainName[ZETA_TOKEN],
+            donorName,
+            note
         );
-        // 'note' currently unused but kept for analytics parity
-        note; // silence unused var warning
     }
 
     /*//////////////////////////////////////////////////////////////
                          TOKEN SWAPPING
     //////////////////////////////////////////////////////////////*/
 
-    function _swapTokens(
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn
-    ) internal returns (uint256 amountOut) {
-        // TODO: Integrate with ZetaChain's DEX/Router
-        // For now, return same amount (1:1 placeholder)
-        // In production, use UniswapV2Router or ZetaChain's native swap
-        
-        // Example integration point:
-        // IUniswapV2Router router = IUniswapV2Router(ROUTER_ADDRESS);
-        // address[] memory path = new address[](2);
-        // path[0] = tokenIn;
-        // path[1] = tokenOut;
-        // uint256[] memory amounts = router.swapExactTokensForTokens(
-        //     amountIn,
-        //     0, // accept any amount of tokens out
-        //     path,
-        //     address(this),
-        //     block.timestamp
-        // );
-        // amountOut = amounts[amounts.length - 1];
-        
-        amountOut = amountIn; // Placeholder
-        emit TokenSwapped(tokenIn, tokenOut, amountIn, amountOut);
+    function _swapTokens(address tokenIn, address tokenOut, uint256 amountIn)
+        internal
+        returns (uint256 amountOut, bool swapped)
+    {
+        if (tokenIn == tokenOut) {
+            return (amountIn, false); // no swap needed
+        }
+
+        // require WZETA -> tokenOut path for local demo
+        if (UNISWAP_ROUTER == address(0)) {
+            emit SwapFailed(tokenIn, tokenOut, amountIn, "ROUTER_NOT_SET");
+            return (amountIn, false); // fallback to WZETA path at call site
+        }
+
+        // approve router
+        IERC20(tokenIn).approve(UNISWAP_ROUTER, amountIn);
+
+        address[] memory path = new address[](2);
+        path[0] = tokenIn;   // WZETA
+        path[1] = tokenOut;  // e.g., ETH-ZRC20 on local
+
+        try IUniswapV2Router(UNISWAP_ROUTER).swapExactTokensForTokens(
+            amountIn,
+            0, // NOTE: 0 for local; set slippage in prod
+            path,
+            address(this),
+            block.timestamp + 600
+        ) returns (uint[] memory amounts) {
+            amountOut = amounts[amounts.length - 1];
+            swapped = true;
+            emit SwapExecuted(tokenIn, tokenOut, amountIn, amountOut);
+            return (amountOut, true);
+        } catch Error(string memory reason) {
+            emit SwapFailed(tokenIn, tokenOut, amountIn, reason);
+            return (amountIn, false); // caller will pay in WZETA
+        } catch {
+            emit SwapFailed(tokenIn, tokenOut, amountIn, "SWAP_CALL_FAILED");
+            return (amountIn, false);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -1,0 +1,25 @@
+})
+  return { index: i, address: w.address, privateKey: w.privateKey };
+  const w = ethers.HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(m), `m/44'/60'/0'/0/${i}`);
+[0,1,2,3].map(i => {
+const m = "test test test test test test test test test test test junk";
+npx hardhatArguments
+npx hardhat console --network localhost
+(await (await ethers.getContractAt("UniswapV2Factory","0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512")).getPair("0x5FbDB2315678afecb367f032d93F642f64180aa3","0xTOKEN"))
+await (await (await ethers.getContractAt("CrossChainCrowdfund","0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82")).donateZRC20(1,"0xTOKEN", ethers.parseEther("5"))).wait()
+await (await (await ethers.getContractAt("TestERC20","0xTOKEN",(await ethers.getSigners())[0])).approve("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0", ethers.parseEther("1000000000"))).wait()
+  type: 2,
+  blobGasPrice: undefined,
+  gasPrice: 9999997350n,
+(await (await ethers.getContractAt("CrossChainCrowdfund","0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82")).campaigns(1)).preferredZRC20
+(await (await ethers.getContractAt("CrossChainCrowdfund","0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82")).owner())
+((await (await ethers.getContractAt("CrossChainCrowdfund","0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82",(await ethers.getSigners())[0])).setUniswapRouter("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"))).hash
+(await (await ethers.getContractAt("CrossChainCrowdfund","0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82")).uniswapRouter())
+await (await (await ethers.getContractAt("CrossChainCrowdfund","0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82",(await ethers.getSigners())[0])).setUniswapRouter("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0")).wait()
+  "CrossChainCrowdfund",  "0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82",  deployer );
+const cc = await ethers.getContractAt(
+const [deployer] = await ethers.getSigners();
+);
+  "0x1f10F3Ba7ACB61b2F50B9d6DdCf91a6f787C0E82"
+  "CrossChainCrowdfund",
+const cc = await ethers.getContractAt(

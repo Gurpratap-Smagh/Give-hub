@@ -21,6 +21,7 @@ export type ProcessDonationInput = {
   amount: number
   chain: string
   donorName: string
+  note?: string
   /** Off-chain campaign id for recording donations after on-chain tx (required for zetachain) */
   offchainCampaignId?: string
 }
@@ -30,6 +31,8 @@ export type ProcessDonationResult = {
   txId?: string
   receiptUrl?: string
   error?: string
+  paymentStatus?: 'preferred' | 'WZETA'
+  swapMessage?: string
 }
 
 // Best-effort extraction of Ethers v6 custom error name without using `any`
@@ -92,7 +95,7 @@ async function processWithLocal(input: ProcessDonationInput): Promise<ProcessDon
     }
     const key = 'gh_donations'
     const raw = window.localStorage.getItem(key)
-    let list: Array<{ campaignId: string; name: string; amount: number; chain: string; timestamp: string; address?: string }>
+    let list: Array<{ campaignId: string; name: string; amount: number; chain: string; timestamp: string; address?: string; note?: string }>
     try {
       list = raw ? JSON.parse(raw) : []
       if (!Array.isArray(list)) list = []
@@ -112,6 +115,7 @@ async function processWithLocal(input: ProcessDonationInput): Promise<ProcessDon
       chain: input.chain,
       timestamp: new Date().toISOString(),
       address: addr,
+      note: input.note,
     }
     list.push(entry)
     window.localStorage.setItem(key, JSON.stringify(list))
@@ -182,8 +186,10 @@ async function processWithZetaChain(input: ProcessDonationInput): Promise<Proces
         const provider = await getProvider()
         const depRec = dep as Record<string, unknown>
         const sysContracts = (depRec.systemContracts as Record<string, unknown> | undefined) || undefined
-        const wzeta = (depRec.wzeta as string | undefined) || (sysContracts?.wzeta as string | undefined)
-        const sys = (depRec.systemContract as string | undefined) || (sysContracts?.systemContract as string | undefined)
+        const envWzeta = process.env.NEXT_PUBLIC_WZETA_ADDRESS
+        const envSys = process.env.NEXT_PUBLIC_SYSTEM_CONTRACT_ADDRESS
+        const wzeta = (depRec.wzeta as string | undefined) || (sysContracts?.wzeta as string | undefined) || envWzeta
+        const sys = (depRec.systemContract as string | undefined) || (sysContracts?.systemContract as string | undefined) || envSys
         console.debug('[donation] deployment preflight', { chainId: dep?.chainId, contract: dep?.address, wzeta, systemContract: sys })
         // Verify the actual ZETA token the contract uses exists on-chain
         try {
@@ -231,7 +237,7 @@ async function processWithZetaChain(input: ProcessDonationInput): Promise<Proces
         campaignOnChainId,
         input.amount.toString(),
         input.donorName,
-        `Donation from ${input.donorName} via GiveHub`
+        input.note || `Donation from ${input.donorName} via GiveHub`
       )
     } catch (err: unknown) {
       const anyErr = err as { code?: number; message?: string; shortMessage?: string }
@@ -264,8 +270,39 @@ async function processWithZetaChain(input: ProcessDonationInput): Promise<Proces
       return { ok: false, error: anyErr.shortMessage || anyErr.message || 'On-chain donation failed' }
     }
     
-    // Step 4: Generate receipt URL if explorer is configured
+    // Step 4: Wait for transaction receipt and decode events
     let receiptUrl: string | undefined
+    let paymentStatus: 'preferred' | 'WZETA' = 'WZETA' // default fallback
+    let swapMessage = ''
+    
+    try {
+      const provider = await getProvider()
+      const receipt = await provider.waitForTransaction(txHash)
+      
+      // Decode swap events to determine payment outcome
+      const iface = new ethers.Interface(CrossChainCrowdfundABI)
+      for (const log of receipt?.logs ?? []) {
+        try {
+          const decoded = iface.parseLog({ topics: log.topics, data: log.data })
+          if (decoded?.name === 'SwapExecuted') {
+            paymentStatus = 'preferred'
+            swapMessage = 'Paid in preferred token'
+            break
+          }
+          if (decoded?.name === 'PaidInWZETA') {
+            paymentStatus = 'WZETA'
+            swapMessage = 'Swap unavailable, paid in WZETA (fallback used)'
+            break
+          }
+        } catch {
+          // Skip logs that don't match our ABI
+        }
+      }
+    } catch (receiptErr) {
+      console.warn('Could not decode transaction receipt:', receiptErr)
+      // Continue with default values
+    }
+    
     const explorerUrl = process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL
     if (explorerUrl) {
       receiptUrl = `${explorerUrl}/tx/${txHash}`
@@ -282,6 +319,7 @@ async function processWithZetaChain(input: ProcessDonationInput): Promise<Proces
         amount: input.amount,
         chain: input.chain,
         donorName: input.donorName,
+        note: input.note,
         txId: txHash,
       }),
     })
@@ -298,6 +336,8 @@ async function processWithZetaChain(input: ProcessDonationInput): Promise<Proces
       ok: true,
       txId: txHash,
       receiptUrl,
+      paymentStatus,
+      swapMessage,
     }
     
   } catch (error: unknown) {
