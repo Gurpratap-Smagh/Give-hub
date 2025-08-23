@@ -1,50 +1,10 @@
 import { ethers } from 'ethers'
 import path from 'path'
 import fs from 'fs'
+import { CrossChainCrowdfundABI } from '@/lib/web3/abi/GiveHubCrowdfund'
 
-// Minimal ABI with events we index; avoids requiring build artifacts at runtime
-export const GIVEHUB_ABI = [
-  {
-    type: 'event',
-    name: 'CampaignCreated',
-    inputs: [
-      { name: 'campaignId', type: 'uint256', indexed: true },
-      { name: 'creator', type: 'address', indexed: true },
-      { name: 'title', type: 'string', indexed: false },
-      { name: 'category', type: 'string', indexed: false },
-      { name: 'preferredZRC20', type: 'address', indexed: false },
-      { name: 'goal', type: 'uint256', indexed: false },
-      { name: 'deadline', type: 'uint64', indexed: false },
-    ],
-    anonymous: false,
-  },
-  {
-    type: 'event',
-    name: 'DonationReceived',
-    inputs: [
-      { name: 'donationId', type: 'uint256', indexed: true },
-      { name: 'campaignId', type: 'uint256', indexed: true },
-      { name: 'donor', type: 'address', indexed: true },
-      { name: 'originalToken', type: 'address', indexed: false },
-      { name: 'originalAmount', type: 'uint256', indexed: false },
-      { name: 'convertedAmount', type: 'uint256', indexed: false },
-      { name: 'originChain', type: 'string', indexed: false },
-      { name: 'donorName', type: 'string', indexed: false },
-    ],
-    anonymous: false,
-  },
-  {
-    type: 'event',
-    name: 'CampaignUpdated',
-    inputs: [
-      { name: 'campaignId', type: 'uint256', indexed: true },
-      { name: 'title', type: 'string', indexed: false },
-      { name: 'description', type: 'string', indexed: false },
-      { name: 'active', type: 'bool', indexed: false },
-    ],
-    anonymous: false,
-  },
-]
+// Use the exact deployed CrossChainCrowdfund ABI to ensure event topics/signatures match
+export const GIVEHUB_ABI: ethers.InterfaceAbi = CrossChainCrowdfundABI as unknown as ethers.InterfaceAbi
 
 export function getContractAddress(): string | null {
   // Prefer env

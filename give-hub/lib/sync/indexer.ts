@@ -39,16 +39,16 @@ export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
     return { fromBlock: start, toBlock: start, processed: { CampaignCreated: 0, CampaignUpdated: 0, DonationReceived: 0 } }
   }
 
-  const topics = [
-    iface.getEventTopic(iface.getEvent('CampaignCreated')),
-    iface.getEventTopic(iface.getEvent('DonationReceived')),
-    iface.getEventTopic(iface.getEvent('CampaignUpdated')),
-  ]
+  // Build topic0 filters using ethers v6 helpers (no getEventTopic)
+  const topicCreated = ethers.id("CampaignCreated(uint256,address,address)")
+  // Note: actual contract emits ContributionReceived (not DonationReceived)
+  const topicContribution = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)")
 
-  const logs = await provider.getLogs({ address, fromBlock: start, toBlock, topics: [topics] })
+  // Match either CampaignCreated OR ContributionReceived as topic0
+  const logs = await provider.getLogs({ address, fromBlock: start, toBlock, topics: [[topicCreated, topicContribution]] })
 
   let created = 0
-  let updated = 0
+  const updated = 0
   let donated = 0
   let lastProcessedBlock = state?.lastBlock ?? 0
 
@@ -99,7 +99,10 @@ export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
     }
 
     if (parsed.name === 'CampaignCreated') {
-      const [campaignIdBn, creator, title, category, _preferredZRC20, goalBn, _deadlineBn] = parsed.args as unknown as [bigint, string, string, string, string, bigint, bigint]
+      // CrossChainCrowdfund CampaignCreated(campaignId, creator, preferredZRC20)
+      const argsArr = parsed.args as unknown as unknown[]
+      const campaignIdBn = argsArr[0] as bigint
+      const creator = String(argsArr[1])
       await CampaignModel.updateOne(
         { onchainId: Number(campaignIdBn) },
         {
@@ -107,10 +110,10 @@ export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
             id: String(Number(campaignIdBn)),
             onchainId: Number(campaignIdBn),
             creatorAddress: creator.toLowerCase(),
-            title,
+            title: `On-chain #${Number(campaignIdBn)}`,
             description: '',
-            category,
-            goal: asNum18(goalBn),
+            category: 'On-chain',
+            goal: 0,
             raised: 0,
             active: true,
             image: '',
@@ -118,31 +121,19 @@ export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
             contractAddress: address,
             verified: true,
           },
-          $set: {
-            // Keep mutable fields up-to-date if reorgs
-            title,
-            category,
-            active: true,
-          },
+          // No additional mutable fields in event; keep minimal record
         },
         { upsert: true }
       )
       created++
-    } else if (parsed.name === 'CampaignUpdated') {
-      const [campaignIdBn, title, description, active] = parsed.args as unknown as [bigint, string, string, boolean]
-      await CampaignModel.updateOne(
-        { onchainId: Number(campaignIdBn) },
-        {
-          $set: {
-            title: title || undefined,
-            description: description || undefined,
-            active,
-          },
-        }
-      )
-      updated++
-    } else if (parsed.name === 'DonationReceived') {
-      const [_donationIdBn, campaignIdBn, donor, _originalToken, _originalAmountBn, convertedAmountBn, originChain, donorName] = parsed.args as unknown as [bigint, bigint, string, string, bigint, bigint, string, string]
+    } else if (parsed.name === 'ContributionReceived') {
+      // ContributionReceived(campaignId, donor, contributionId, originalToken, originalAmount, convertedAmount, originChain, donorName, note)
+      const argsArr = parsed.args as unknown as unknown[]
+      const campaignIdBn = argsArr[0] as bigint
+      const donor = String(argsArr[1])
+      const convertedAmountBn = argsArr[5] as bigint
+      const originChain = String(argsArr[6] ?? 'ZetaChain')
+      const donorName = (argsArr[7] as string) || ''
       const amount = asNum18(convertedAmountBn)
       await CampaignModel.updateOne(
         { onchainId: Number(campaignIdBn) },

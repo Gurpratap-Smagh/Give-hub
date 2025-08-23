@@ -225,12 +225,29 @@ body {
 }
 
 @layer utilities {
+  /* Select surface: white in light, true black in dark (overrides bg-white mapping) */
+  .select-surface { background-color: #ffffff !important; }
+  :root[data-theme="dark"] .select-surface { background-color: var(--panel-2) !important; }
+  
   .text-gradient {
     background: linear-gradient(135deg, var(--primary), var(--accent));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+  /* Subtle glow to pair with gradient borders */
+  .text-glow {
+    text-shadow: 0 0 6px rgba(36, 65, 255, 0.35), 0 0 12px rgba(16, 185, 129, 0.25);
+    /* Use drop-shadow as it works with background-clip:text in Chromium */
+    filter: drop-shadow(0 0 6px rgba(36, 65, 255, 0.35)) drop-shadow(0 0 10px rgba(16, 185, 129, 0.25));
+  }
+  :root[data-theme="dark"] .text-glow {
+    text-shadow: 0 0 8px rgba(36, 65, 255, 0.6), 0 0 14px rgba(16, 185, 129, 0.4);
+    filter: drop-shadow(0 0 8px rgba(36, 65, 255, 0.6)) drop-shadow(0 0 12px rgba(16, 185, 129, 0.4));
+  }
+  /* Force header color utility: black in light, white in dark */
+  .force-header { color: #000000 !important; }
+  :root[data-theme="dark"] .force-header { color: #ffffff !important; }
   /* Gradient underline utility (use where needed) */
   .underline-gradient {
     position: relative;
@@ -245,6 +262,71 @@ body {
     background: linear-gradient(90deg, var(--primary), var(--secondary));
     border-radius: 2px;
   }
+  /* Gradient border utility to match dollar gradient */
+  .gradient-border {
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+  }
+  /* Softer gradient border for lower visual hierarchy (used on donation cards) */
+  .gradient-border-soft {
+    background: linear-gradient(135deg, rgba(36, 65, 255, 0.45), rgba(16, 185, 129, 0.45));
+  }
+  /* Stronger variant for outer containers (more vivid/opaque appearance) */
+  .gradient-border-strong {
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    filter: saturate(1.35) brightness(1.08);
+  }
+  /* Border-only ring utilities (transparent interior) */
+  .gradient-border-only {
+    position: relative;
+    border-radius: 1rem; /* will be overridden by element's own radius via inherit in ::before */
+    isolation: isolate;
+  }
+  .gradient-border-only::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 2px; /* ring thickness */
+    border-radius: inherit;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1; /* keep ring above interior content patches */
+  }
+  .gradient-border-soft-only {
+    position: relative;
+    border-radius: .5rem;
+    isolation: isolate;
+  }
+  .gradient-border-soft-only::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px; /* thinner ring */
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(36, 65, 255, 0.45), rgba(16, 185, 129, 0.45));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1; /* ring overlays corner patches */
+  }
+  /* Soft glow animation helper */
+  .glow-pulse {
+    animation: glowPulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(36, 65, 255, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(36, 65, 255, 0.55);
+  }
 }
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
@@ -255,6 +337,7 @@ input::-webkit-inner-spin-button {
 /* Hide arrows in Firefox */
 input[type=number] {
   -moz-appearance: textfield;
+  appearance: textfield; /* Standard property for cross-browser compatibility */
 }
 
 /* Limitscroll utility: prevent "scrolling into void"/rubber-band overscroll and hide x-overflow */
@@ -267,4 +350,38 @@ input[type=number] {
 /* Ensure fixed bottom elements respect safe area on iOS */
 .safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+/* Custom scrollbar for donation feed */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.3);
+  border-radius: 20px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.5);
+}
+
+/* Firefox scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+}
+
+@layer components {
+  /* GiveHub unified input styles */
+  .gh-input {
+    @apply w-full px-3 py-2 rounded-lg border border-blue-600 text-blue-600 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 select-surface;
+  }
+  .gh-textarea {
+    @apply w-full px-3 py-2 rounded-xl border border-blue-600 text-blue-600 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 select-surface;
+  }
 }

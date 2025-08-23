@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         // This endpoint should verify the token and return the user
-        const res = await fetch('/api/auth/me');
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
         if (res.ok) {
           const data = await res.json();
           setUser(data.user);
@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password, role }),
       });
@@ -86,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch('/api/auth/signin', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emailOrUsername, password }),
       });
@@ -111,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signout = async () => {
     setIsLoading(true);
     try {
-      await fetch('/api/auth/signout', { method: 'POST' });
+      await fetch('/api/auth/signout', { method: 'POST', credentials: 'include' });
       setUser(null);
     } catch (err) {
         console.error(err);

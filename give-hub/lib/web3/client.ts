@@ -7,6 +7,7 @@ export type DeploymentInfo = {
   address: string;
   chainId: number;
   wzeta?: string;
+  systemContract?: string;
 };
 
 type AddEthereumChainParameter = {
@@ -17,12 +18,59 @@ type AddEthereumChainParameter = {
   blockExplorerUrls?: string[];
 };
 
+// Minimal ERC20 ABI for approvals and decimals
+const ERC20_ABI = [
+  "function decimals() view returns (uint8)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+];
+
+// Module-level cache to avoid repeated /api calls and dedupe concurrent requests
+let __deploymentCache: DeploymentInfo | null = null;
+let __deploymentPending: Promise<DeploymentInfo> | null = null;
+
 export async function fetchDeployment(): Promise<DeploymentInfo> {
-  const res = await fetch("/api/web3/deployment", { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to fetch deployment info");
-  const json = await res.json();
-  console.debug("[web3] deployment:", json);
-  return json;
+  // Serve from cache if available
+  if (__deploymentCache) {
+    console.log('[web3] Deployment cache hit');
+    return __deploymentCache;
+  }
+  if (__deploymentPending) return __deploymentPending;
+
+  // Try to resolve from public env (avoids hitting API on every call)
+  const addrFromEnv =
+    process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT ||
+    process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS ||
+    process.env.NEXT_PUBLIC_CROWDFUND_ADDRESS;
+  const chainFromEnv = process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID;
+  const wzetaFromEnv = process.env.NEXT_PUBLIC_WZETA_ADDRESS || process.env.NEXT_PUBLIC_WZETA;
+  const sysFromEnv = process.env.NEXT_PUBLIC_SYSTEM_CONTRACT_ADDRESS;
+
+  if (addrFromEnv && chainFromEnv) {
+    const dep: DeploymentInfo = {
+      address: addrFromEnv,
+      chainId: Number(chainFromEnv),
+      wzeta: wzetaFromEnv,
+      systemContract: sysFromEnv,
+    };
+    __deploymentCache = dep;
+    console.debug("[web3] deployment (env):", dep);
+    return dep;
+  }
+
+  // Fallback to server API once, then cache
+  __deploymentPending = (async () => {
+    console.log('[web3] Fetching deployment from API');
+    const res = await fetch("/api/web3/deployment", { cache: "no-store" });
+    if (!res.ok) throw new Error("Failed to fetch deployment info");
+    const json = (await res.json()) as DeploymentInfo;
+    __deploymentCache = json;
+    console.debug("[web3] deployment (api):", json);
+    return json;
+  })().finally(() => {
+    __deploymentPending = null;
+  });
+
+  return __deploymentPending;
 }
 
 // Lightweight latest block helper for polling clients
@@ -40,13 +88,75 @@ export async function getProvider(): Promise<ethers.BrowserProvider> {
 
 // Read-only provider that falls back to public RPC when no injected wallet exists
 export async function getReadOnlyProvider(): Promise<ethers.AbstractProvider> {
-  if (typeof window !== 'undefined') {
-    const eth = (window as unknown as { ethereum?: unknown }).ethereum;
-    if (eth) return new ethers.BrowserProvider(eth as ethers.Eip1193Provider);
+  // Always use a dedicated HTTP RPC for read-only access to avoid
+  // injected wallet middlewares (which may create ephemeral filters).
+  const rpcUrl =
+    process.env.NEXT_PUBLIC_ZETA_RPC_URL ||
+    process.env.NEXT_PUBLIC_ZETA_RPC_HTTP ||
+    '';
+  if (!rpcUrl) {
+    throw new Error(
+      'Missing NEXT_PUBLIC_ZETA_RPC_URL (or NEXT_PUBLIC_ZETA_RPC_HTTP) for read-only provider'
+    );
   }
-  const rpcUrl = process.env.NEXT_PUBLIC_ZETA_RPC_URL || '';
-  if (!rpcUrl) throw new Error('Missing NEXT_PUBLIC_ZETA_RPC_URL for read-only provider');
   return new ethers.JsonRpcProvider(rpcUrl);
+}
+
+// ZetaChain public RPCs can briefly return -32000 "tx not found" right after broadcast.
+// Detect that error shape so we can retry instead of failing fast.
+
+// Extract numeric code and the most specific message (including nested error.data.message)
+function extractRpcErrorFields(err: unknown): { code?: number; message: string } {
+  try {
+    const e = (err ?? {}) as unknown as Record<string, unknown> & {
+      code?: number;
+      message?: string;
+      error?: { code?: number; message?: string; data?: { code?: number; message?: string } };
+      data?: { code?: number; message?: string };
+    };
+    const codes = [e.code, e.error?.code, e.data?.code, e.error?.data?.code];
+    const code = codes.find((c) => typeof c === 'number') as number | undefined;
+    const msgs = [e.message, e.error?.message, e.data?.message, e.error?.data?.message];
+    const msg = String(msgs.find((m) => typeof m === 'string') || '').toLowerCase();
+    return { code, message: msg };
+  } catch {
+    return { message: '' };
+  }
+}
+
+function isTxNotFoundError(err: unknown): boolean {
+  const { code, message } = extractRpcErrorFields(err);
+  // Zeta RPCs often return -32603 with nested -32000 and message containing "ethereum tx not found"
+  const codeMatches = code === -32000 || code === -32603;
+  const msgMatches = message.includes('tx not found') || message.includes('ethereum tx not found');
+  return Boolean(codeMatches && msgMatches);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Poll for a receipt with backoff, tolerating transient "tx not found" errors
+async function waitForReceiptWithRetries(
+  provider: ethers.AbstractProvider,
+  txHash: string,
+  intervalMs = 1500,
+  timeoutMs = 120_000,
+): Promise<ethers.TransactionReceipt> {
+  const start = Date.now();
+  while (true) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`Timed out waiting for receipt for ${txHash}`);
+    }
+    try {
+      const r = await provider.getTransactionReceipt(txHash);
+      if (r) return r;
+    } catch (e) {
+      if (!isTxNotFoundError(e)) throw e;
+      // else fall through and retry
+    }
+    await sleep(intervalMs);
+  }
 }
 
 export async function connectWallet(): Promise<{ signer: ethers.Signer; address: string; chainId: number }>{
@@ -117,6 +227,14 @@ export async function getContract(signer?: ethers.Signer) {
     const chainNum = Number(dep.chainId as unknown as number);
     if (Number.isFinite(chainNum)) {
       await ensureWalletOnChain(chainNum);
+      // Rebind signer to current network to avoid ethers NETWORK_ERROR on event="changed"
+      try {
+        const prov = await getProvider();
+        // Preserve the same account if possible
+        let addr: string | undefined;
+        try { addr = await (s as ethers.Signer).getAddress(); } catch {}
+        s = addr ? await prov.getSigner(addr) : await prov.getSigner();
+      } catch {}
     }
   } catch {
     // non-fatal; we validate code presence below
@@ -189,12 +307,13 @@ export async function checkWalletConnection(): Promise<{connected: boolean, addr
 }
 
 export async function createCampaignOnChain(input: CreateCampaignInput = {}): Promise<{ id: bigint; txHash: string }> {
-  const { signer } = await connectWallet();
   const dep = await fetchDeployment();
-  // Best-effort ensure correct network based on deployment info
+  // Ensure correct network before obtaining signer
   try {
     await ensureWalletOnChain(Number(dep.chainId));
   } catch {}
+  const prov = await getProvider();
+  const signer = await prov.getSigner();
 
   // Use provided ZRC20 or deployment's wzeta, otherwise fallback constant
   const preferredZRC20 = input.preferredZRC20 || dep.wzeta || DEFAULT_ZETA_TOKEN;
@@ -213,7 +332,20 @@ export async function createCampaignOnChain(input: CreateCampaignInput = {}): Pr
   console.debug("[web3] createCampaign tx:", tx?.hash);
   try { input.onSent?.(tx.hash); } catch {}
   
-  const receipt = await tx.wait();
+  // Await the receipt; if the RPC says "tx not found", fallback to manual polling
+  let receipt: ethers.TransactionReceipt | null = null;
+  try {
+    receipt = await tx.wait(1);
+  } catch (e) {
+    if (isTxNotFoundError(e)) {
+      const prov = ("provider" in signer ? (signer as ethers.Signer & { provider?: ethers.AbstractProvider | null }).provider : null) || null;
+      const useProv = prov ?? (await getProvider());
+      console.warn('[web3] tx.wait reported tx not found; retrying via manual polling…', { hash: tx.hash, err: e });
+      receipt = await waitForReceiptWithRetries(useProv, tx.hash);
+    } else {
+      throw e as Error;
+    }
+  }
   if (!receipt) throw new Error("No transaction receipt for createCampaign");
   console.debug("[web3] createCampaign receipt status:", receipt?.status);
   
@@ -230,6 +362,19 @@ export async function createCampaignOnChain(input: CreateCampaignInput = {}): Pr
   }
   
   // If we couldn't parse the created ID, fail fast so UI doesn't persist an invalid onChainId
+  try {
+    const addr = receipt.to || (await getContract().then(c => c.target as string).catch(() => undefined));
+    const count = receipt.logs?.length ?? 0;
+    console.error("[web3] CampaignCreated not found in receipt logs", {
+      txHash: tx.hash,
+      contractAddress: addr,
+      logCount: count,
+      topicsSample: (receipt.logs || []).slice(0, 3).map(l => ({
+        address: l.address,
+        topics: l.topics,
+      })),
+    });
+  } catch {}
   throw new Error("Could not parse CampaignCreated event; creation may have failed");
 }
 
@@ -238,7 +383,7 @@ export async function pauseCampaignOnChain(campaignId: bigint): Promise<void> {
   const { signer } = await connectWallet();
   const contract = await getContract(signer);
   const tx = await contract.pauseCampaign(campaignId);
-  await tx.wait();
+  await tx.wait(1);
   console.debug("[web3] paused campaign:", campaignId.toString());
 }
 
@@ -246,7 +391,7 @@ export async function resumeCampaignOnChain(campaignId: bigint): Promise<void> {
   const { signer } = await connectWallet();
   const contract = await getContract(signer);
   const tx = await contract.resumeCampaign(campaignId);
-  await tx.wait();
+  await tx.wait(1);
   console.debug("[web3] resumed campaign:", campaignId.toString());
 }
 
@@ -259,9 +404,10 @@ export async function withdrawCampaignFunds(campaignId: bigint): Promise<void> {
 }
 
 export async function getCampaignBalance(campaignId: bigint): Promise<string> {
-  const contract = await getContract();
-  const balance = await contract.getCampaignBalance(campaignId);
-  return ethers.formatEther(balance);
+  // No-escrow mode: funds are forwarded immediately to the creator.
+  // Contract does not maintain campaign balances; return 0 for display.
+  try { console.debug("[web3] getCampaignBalance: no-escrow mode, returning 0 for", campaignId.toString()); } catch {}
+  return "0";
 }
 
 export async function getCampaignInfo(campaignId: bigint): Promise<{creator: string, preferredZRC20: string, active: boolean}> {
@@ -287,13 +433,14 @@ export async function getCampaignsByCreator(
   
   // Filter by CampaignCreated events for this creator
   const topic0 = ethers.id("CampaignCreated(uint256,address,address)");
-  const topic1 = ethers.zeroPadValue(creatorAddress, 32); // creator is indexed
+  const topicCreator = ethers.zeroPadValue(creatorAddress, 32); // creator is the 2nd indexed arg (topic2)
   
   const logs = await provider.getLogs({ 
     address: dep.address, 
     fromBlock, 
     toBlock: latest, 
-    topics: [topic0, topic1] 
+    // topic1 corresponds to campaignId (indexed), which we don't filter by here
+    topics: [topic0, null, topicCreator] 
   });
   
   const campaigns: { campaignId: bigint; creator: string; preferredZRC20: string }[] = [];
@@ -331,7 +478,7 @@ export async function getCampaignDonations(
   note?: string;
   timestamp: string;
 }[]> {
-  const provider = await getProvider();
+  const provider = await getReadOnlyProvider();
   const dep = await fetchDeployment();
   const latest = await provider.getBlockNumber();
   const fromBlock = latest > lookbackBlocks ? latest - lookbackBlocks : 0;
@@ -421,9 +568,15 @@ export async function getCampaignDonationsBetween(
   note?: string;
   timestamp: string;
 }[]> {
-  const provider = await getProvider();
+  // Use read-only provider to avoid wallet dependency
+  const provider = await getReadOnlyProvider();
   const dep = await fetchDeployment();
-  const latest = toBlock ?? (await provider.getBlockNumber());
+  // Validate and clamp block range to avoid RPC 400 errors
+  const chainLatest = await provider.getBlockNumber();
+  const end = Math.min(toBlock ?? chainLatest, chainLatest);
+  const MAX_RANGE = 5000; // conservative window to limit log scans
+  let start = Math.max(0, Math.min(fromBlock, end));
+  if (end - start > MAX_RANGE) start = end - MAX_RANGE;
   const iface = new ethers.Interface(CrossChainCrowdfundABI);
 
   // Filter by ContributionReceived events for this campaign
@@ -432,8 +585,8 @@ export async function getCampaignDonationsBetween(
 
   const logs = await provider.getLogs({
     address: dep.address,
-    fromBlock: Math.max(0, fromBlock),
-    toBlock: latest,
+    fromBlock: start,
+    toBlock: end,
     topics: [topic0, topic1],
   });
 
@@ -500,14 +653,13 @@ export async function donateToCampaign(
   donorName?: string,
   memo?: string
 ): Promise<string> {
-  const { signer } = await connectWallet();
   const dep = await fetchDeployment();
-
-  // Ensure wallet is on the deployment chain
+  // Ensure correct network before obtaining signer
   try {
     await ensureWalletOnChain(Number(dep.chainId));
   } catch {}
-
+  const prov = await getProvider();
+  const signer = await prov.getSigner();
   const contract = await getContract(signer);
   const amount = ethers.parseEther(amountInEther);
   const note = memo || `Donation from ${donorName || 'anonymous'} via GiveHub`;
@@ -521,6 +673,107 @@ export async function donateToCampaign(
   // No-escrow path: send native ZETA (value) and let contract wrap+forward
   const tx = await contract.donateNative(campaignId, donorName || '', note, { value: amount });
   console.debug("[web3] donation tx:", tx?.hash);
-  await tx.wait();
+  try {
+    await tx.wait(1);
+  } catch (e) {
+    if (isTxNotFoundError(e)) {
+      const prov = ("provider" in signer ? (signer as ethers.Signer & { provider?: ethers.AbstractProvider | null }).provider : null) || null;
+      const useProv = prov ?? (await getProvider());
+      console.warn('[web3] tx.wait (donation) reported tx not found; retrying via manual polling…', { hash: tx.hash, err: e });
+      await waitForReceiptWithRetries(useProv, tx.hash);
+    } else {
+      throw e as Error;
+    }
+  }
   return tx.hash;
+}
+
+// Donation function using ZRC-20 (local ERC20 on Zeta)
+export async function donateZRC20ToCampaign(
+  campaignId: bigint,
+  tokenAddress: string,
+  amount: string,
+  tokenDecimals?: number,
+  donorName?: string,
+  memo?: string,
+): Promise<string> {
+  const dep = await fetchDeployment();
+  // Ensure correct network before obtaining signer
+  try {
+    await ensureWalletOnChain(Number(dep.chainId));
+  } catch {}
+  const prov = await getProvider();
+  const signer = await prov.getSigner();
+
+  if (!/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) {
+    throw new Error("Invalid token address for ZRC-20 donation");
+  }
+
+  const contract = await getContract(signer);
+  const provider = (
+    ("provider" in signer ? (signer as ethers.Signer & { provider?: ethers.AbstractProvider | null }).provider : null)
+  ) || null;
+  const erc20 = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+
+  // Determine decimals (prefer provided from UI; otherwise read from chain)
+  let decimals = typeof tokenDecimals === 'number' && Number.isFinite(tokenDecimals) ? tokenDecimals : 18;
+  if (tokenDecimals == null) {
+    try {
+      const d: bigint | number = await erc20.decimals();
+      const n = Number(d);
+      if (Number.isFinite(n) && n > 0 && n <= 36) decimals = n;
+    } catch {}
+  }
+
+  const amountUnits = ethers.parseUnits(amount, decimals);
+  const note = memo || `Donation from ${donorName || 'anonymous'} via GiveHub`;
+
+  // Approve contract to transfer tokens
+  const contractAddress = (contract as unknown as { target?: string }).target || dep.address;
+  let approveTx: ethers.TransactionResponse;
+  try {
+    approveTx = await erc20.approve(contractAddress, amountUnits);
+  } catch (e) {
+    const msg = (e as Error)?.message || '';
+    if (/user rejected|denied|rejected the request/i.test(msg)) {
+      throw new Error('User cancelled token approval');
+    }
+    throw e as Error;
+  }
+
+  // Wait for approval (tolerate transient tx-not-found like native path)
+  try {
+    await approveTx.wait(1);
+  } catch (e) {
+    if (isTxNotFoundError(e)) {
+      const useProv = provider ?? (await getProvider());
+      await waitForReceiptWithRetries(useProv, approveTx.hash);
+    } else {
+      throw e as Error;
+    }
+  }
+
+  // Donate using token
+  const donateTx = await (contract as unknown as {
+    donateZRC20: (
+      zrc20In: string,
+      amount: bigint,
+      campaignId: bigint,
+      donorName: string,
+      note: string,
+    ) => Promise<ethers.TransactionResponse>
+  }).donateZRC20(tokenAddress, amountUnits, campaignId, donorName || '', note);
+
+  try {
+    await donateTx.wait(1);
+  } catch (e) {
+    if (isTxNotFoundError(e)) {
+      const useProv = provider ?? (await getProvider());
+      await waitForReceiptWithRetries(useProv, donateTx.hash);
+    } else {
+      throw e as Error;
+    }
+  }
+
+  return donateTx.hash;
 }

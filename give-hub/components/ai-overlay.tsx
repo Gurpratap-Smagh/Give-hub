@@ -8,6 +8,7 @@ interface AIOverlayProps {
   open: boolean
   onClose: () => void
   onAction?: (action: { type: "open_payment"; campaignId: string; amount?: number; chain?: string; confirm?: boolean }) => void
+  theme?: 'light' | 'dark'
 }
 
 type ChatMsg = { id: string; role: "system" | "user" | "assistant"; text: string }
@@ -15,7 +16,7 @@ type ChatMsg = { id: string; role: "system" | "user" | "assistant"; text: string
 // Approx. double a card width on desktop; full width on mobile
 const POPUP_WIDTH = "w-full sm:w-[520px] md:w-[560px] lg:w-[600px]"
 
-export default function AIOverlay({ open, onClose, onAction }: AIOverlayProps) {
+export default function AIOverlay({ open, onClose, onAction, theme: themeProp }: AIOverlayProps) {
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -99,6 +100,20 @@ export default function AIOverlay({ open, onClose, onAction }: AIOverlayProps) {
     open ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
   }`, [open])
 
+  // Resolve current theme from prop or document
+  const resolvedTheme = useMemo<'light' | 'dark'>(() => {
+    if (themeProp === 'light' || themeProp === 'dark') return themeProp
+    if (typeof document !== 'undefined') {
+      const d = document.documentElement?.dataset?.theme
+      if (d === 'dark' || d === 'light') return d
+    }
+    // Fallback to system preference
+    try {
+      const prefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+      return prefersDark ? 'dark' : 'light'
+    } catch { return 'light' }
+  }, [themeProp])
+
   return (
     <div className={containerClasses}>
       {/* Right-aligned floating container above launcher */}
@@ -113,7 +128,7 @@ export default function AIOverlay({ open, onClose, onAction }: AIOverlayProps) {
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black text-blue-500 ring-1 ring-blue-500 shadow-sm">
+                <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${resolvedTheme === 'dark' ? 'bg-black' : 'bg-white'} text-blue-500 ring-1 ring-blue-500 shadow-sm`}>
                   ✦
                 </span>
                 <span className="font-semibold text-gray-900">GiveHub AI</span>

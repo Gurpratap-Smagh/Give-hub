@@ -37,7 +37,13 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { title, description, goal, category, image, chains, onChain } = body || {}
+    const { title, description, goal, category, image, chains, onChain, preferredToken } = body || {}
+    
+    // Ensure preferredToken is WZETA
+    const WZETA_ADDRESS = process.env.NEXT_PUBLIC_WZETA_ADDRESS
+    if (preferredToken && WZETA_ADDRESS && preferredToken.address !== WZETA_ADDRESS) {
+      return NextResponse.json({ error: 'Only WZETA token is supported as preferred token' }, { status: 400 })
+    }
 
     // Build partial update object, validating only provided fields
     const updateData: Record<string, unknown> = {}

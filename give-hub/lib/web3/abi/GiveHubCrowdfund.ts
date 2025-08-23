@@ -3,14 +3,17 @@
 export const CrossChainCrowdfundABI = [
   // Custom errors (for better revert decoding)
   { "inputs": [], "name": "ZeroAmount", "type": "error" },
+  { "inputs": [], "name": "AmountZero", "type": "error" },
   { "inputs": [], "name": "InvalidCampaign", "type": "error" },
   { "inputs": [], "name": "CampaignInactive", "type": "error" },
   { "inputs": [], "name": "InvalidToken", "type": "error" },
   { "inputs": [], "name": "SwapFailed", "type": "error" },
+  { "inputs": [], "name": "NotCreator", "type": "error" },
+  { "inputs": [], "name": "RouterNotSet", "type": "error" },
   // Read functions
   {
     "inputs": [],
-    "name": "ZETA_TOKEN",
+    "name": "WZETA",
     "outputs": [ { "internalType": "address", "name": "", "type": "address" } ],
     "stateMutability": "view",
     "type": "function"
@@ -57,6 +60,13 @@ export const CrossChainCrowdfundABI = [
     "stateMutability": "view",
     "type": "function"
   },
+  {
+    "inputs": [],
+    "name": "router",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
   // Write functions
   {
     "inputs": [{ "internalType": "address", "name": "preferredZRC20", "type": "address" }],
@@ -77,6 +87,19 @@ export const CrossChainCrowdfundABI = [
     "type": "function"
   },
   {
+    "inputs": [
+      { "internalType": "address", "name": "zrc20In", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "internalType": "uint256", "name": "campaignId", "type": "uint256" },
+      { "internalType": "string", "name": "donorName", "type": "string" },
+      { "internalType": "string", "name": "note", "type": "string" }
+    ],
+    "name": "donateZRC20",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [{ "internalType": "uint256", "name": "campaignId", "type": "uint256" }],
     "name": "pauseCampaign",
     "outputs": [],
@@ -93,6 +116,13 @@ export const CrossChainCrowdfundABI = [
   {
     "inputs": [{ "internalType": "uint256", "name": "campaignId", "type": "uint256" }],
     "name": "withdrawCampaignFunds",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_router", "type": "address" }],
+    "name": "setUniswapRouter",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

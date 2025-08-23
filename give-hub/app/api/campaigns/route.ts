@@ -25,13 +25,27 @@ export async function GET() {
 export const POST = authMiddleware(async (req: AuthedRequest) => {
   try {
     const body = await req.json()
-    const { title, imgSrc, description, category, goal, onChain } = body || {}
+    const { title, imgSrc, description, category, goal, onChain, preferredToken } = body || {}
     if (!title || !category || goal === undefined || goal === null) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
     }
+    
+    // Ensure preferredToken is WZETA
+    const WZETA_ADDRESS = process.env.NEXT_PUBLIC_WZETA_ADDRESS
+    if (!WZETA_ADDRESS) {
+      return NextResponse.json({ success: false, error: 'WZETA token address not configured' }, { status: 500 })
+    }
+    
+    // Validate that preferredToken is WZETA
+    if (preferredToken && preferredToken.address !== WZETA_ADDRESS) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Only WZETA token is supported as preferred token' 
+      }, { status: 400 })
+    }
 
     // Build data to satisfy DB adapter type Omit<Campaign, 'id'>
-    const campaignData: Omit<Campaign, 'id'> & { onChain?: Campaign['onChain'] } = {
+    const campaignData: Omit<Campaign, 'id'> & { onChain?: Campaign['onChain']; onchainId?: number } = {
       // Required
       title: String(title),
       goal: Number(goal),
@@ -65,6 +79,8 @@ export const POST = authMiddleware(async (req: AuthedRequest) => {
       }
 
       campaignData.onChain = { chainId, contract, campaignId }
+      // Also persist numeric onchainId so the indexer can upsert to this document
+      campaignData.onchainId = Number(campaignId)
     }
 
     const newCampaign = await db.createCampaign(campaignData)

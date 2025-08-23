@@ -6,11 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "donate:eth": "tsx ../scripts/donate-from-eth-sepolia.ts"
   },
   "dependencies": {
     "@google/genai": "^1.13.0",
     "@google/generative-ai": "^0.24.1",
+    "axios": "^1.11.0",
     "bcrypt": "^6.0.0",
     "clsx": "^2.1.1",
     "ethers": "^6.15.0",
@@ -24,6 +26,7 @@
     "react-dom": "19.1.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "zod": "^4.0.17"
   },

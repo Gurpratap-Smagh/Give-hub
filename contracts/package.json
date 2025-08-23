@@ -6,7 +6,11 @@
     "compile": "hardhat compile",
     "test": "hardhat test",
     "deploy:local": "hardhat run scripts/deploy.js --network localhost",
-    "deploy:dex": "hardhat run scripts/deploy-dex.js --network localhost"
+    "deploy:dex": "hardhat run scripts/deploy-dex.js --network localhost",
+    "deploy:crosschain:local": "hardhat run scripts/deploy-crosschain.ts --network zetachain_localnet",
+    "deploy:crosschain:athens": "hardhat run scripts/deploy-crosschain.ts --network zetachain_testnet",
+    "deploy:crosschain:mainnet": "hardhat run scripts/deploy-crosschain.ts --network zetachain_mainnet",
+    "set-router": "ts-node scripts/set-router.ts"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^3.0.0",

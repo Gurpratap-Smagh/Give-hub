@@ -11,10 +11,13 @@ import CampaignPageContent from './CampaignPageContent'
 
 // Re-enabling on-demand caching for this page.
 export const revalidate = 0
+export const dynamic = 'force-dynamic'
 
-export default async function CampaignPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await params
-  const campaignId = resolvedParams.id
+export default async function CampaignPage({
+  params,
+}: { params: Promise<{ id: string }> }) {
+  const { id: campaignId } = await params;
+
 
   // Fetch data on the server
   const campaignData = await db.findCampaignById(campaignId)

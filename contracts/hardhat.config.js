@@ -23,6 +23,14 @@ module.exports = {
       gas: 5000000,
       gasPrice: 20000000000,
     },
+    // ZetaChain Athens (with private Alchemy RPC)
+    zeta_athens: {
+      url: process.env.ZETA_HTTP || "https://zetachain-testnet.g.alchemy.com/v2/your-key",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 7001,
+      gas: 5000000,
+      gasPrice: 20000000000,
+    },
     // ZetaChain Mainnet
     zetachain_mainnet: {
       url: "https://zetachain-evm.blockpi.network/v1/rpc/public",
