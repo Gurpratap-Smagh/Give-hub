@@ -16,6 +16,7 @@
  */
 
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import Script from 'next/script'
 import './globals.css' // ACCESS: Tailwind CSS base styles, custom utilities
 import { Nav } from '@/components/nav' // ACCESS: Global navigation component
@@ -66,7 +67,9 @@ export default function RootLayout({
         {/* Providers */}
         <AuthProvider>
           {/* Global navigation - handles auth state, wallet connection */}
-          <Nav />
+          <Suspense fallback={null}>
+            <Nav />
+          </Suspense>
           <GlobalLoading />
           {/* Main content area - pt-20 accounts for fixed nav height */}
           <main className="pt-20">
