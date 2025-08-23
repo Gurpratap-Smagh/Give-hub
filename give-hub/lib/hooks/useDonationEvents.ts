@@ -89,7 +89,10 @@ export function useDonationEvents(
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const iface = useMemo(() => new ethers.Interface(CROWDFUND_ABI), []);
-  const topic0 = useMemo(() => iface.getEvent("ContributionReceived").topicHash, [iface]);
+  const topic0 = useMemo(
+    () => ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)"),
+    []
+  );
   const topic1 = useMemo(() => toTopic1IfNumeric(targetCampaignId), [targetCampaignId]);
 
   // Only apply in-memory filtering by campaignId when the prop is numeric
