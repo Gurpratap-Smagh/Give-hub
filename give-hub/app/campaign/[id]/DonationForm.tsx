@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import TokenPicker from '@/components/TokenPicker';
 import { ensureChain, payFromSepolia, waitForContribution, CHAIN_HEX } from '@/lib/payments/crosschain';
 import { ethers } from 'ethers';
-import type { Eip1193Provider, InterfaceAbi } from 'ethers';
+import type { Eip1193Provider } from 'ethers';
 // If you have a generated ABI file for your contract, import it:
 import CrowdfundAbi from '@/abis/CrossChainCrowdfund.json';
 
@@ -86,7 +86,7 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
     // e.g., contract.donateZRC20(tokenIn, campaignId, amt, name, note)
     const tx = await contract.donateZRC20(
       selectedToken!.address,
-      BigInt(campaign.id as any),
+      BigInt(campaign.id),
       amt,
       name,
       note
@@ -130,7 +130,7 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
         const message = ethers.AbiCoder.defaultAbiCoder().encode(
           ['uint256', 'address', 'string', 'string', 'address'],
           [campaign.id, selectedToken.address, name, note, donorAddress]
-        );
+        ) as `0x${string}`;
 
         const isNative = isZeth(selectedToken.symbol);
         setStatus(isNative ? 'Paying on Sepolia (ETH)…' : `Approving ${selectedToken.symbol}…`);
@@ -147,10 +147,8 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
         setStatus('Bridging… waiting for credit on Zeta…');
 
         await waitForContribution({
-          providerUrl: process.env.NEXT_PUBLIC_ZETA_RPC_HTTP!,
           contract: process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT!,
-          abi: CrowdfundAbi as unknown as InterfaceAbi,
-          campaignId: campaign.id,
+          campaignId: Number(campaign.id),
           donor: donorAddress,
           timeoutMs: 180000,
         });
@@ -198,7 +196,7 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
     <form onSubmit={onSubmit} className="flex flex-col gap-4 max-w-full">
       <div className="flex flex-col gap-2">
         <label className="text-sm font-semibold">Token</label>
-        <TokenPicker value={selectedToken} onChange={setSelectedToken} className="w-full" />
+        <TokenPicker value={selectedToken ?? undefined} onChange={setSelectedToken} className="w-full" />
         {selectedToken && (
           <div className="text-xs text-white/60 break-words">
             Selected: <span className="font-mono">{tokenLabel}</span> @ <span className="font-mono">{selectedToken.address}</span>
@@ -240,17 +238,17 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
       {/* UX hints */}
       {selectedToken?.chain === 'SEPOLIA' && (
         <div className="text-xs text-white/60 break-words">
-          You'll pay on <b>Ethereum Sepolia</b>. We'll route it cross-chain and confirm on Zeta automatically.
+          You&apos;ll pay on <b>Ethereum Sepolia</b>. We&apos;ll route it cross-chain and confirm on Zeta automatically.
         </div>
       )}
       {selectedToken?.chain === 'BTC' && (
         <div className="text-xs text-white/60 break-words">
-          You'll send to a <b>Bitcoin testnet</b> address. We'll credit the donation after confirmation.
+          You&apos;ll send to a <b>Bitcoin testnet</b> address. We&apos;ll credit the donation after confirmation.
         </div>
       )}
       {selectedToken?.chain === 'ZETA' && (
         <div className="text-xs text-white/60 break-words">
-          You'll donate directly on <b>Zeta Athens (7001)</b>.
+          You&apos;ll donate directly on <b>Zeta Athens (7001)</b>.
         </div>
       )}
 
