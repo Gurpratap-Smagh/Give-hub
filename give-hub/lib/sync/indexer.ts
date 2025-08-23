@@ -76,14 +76,14 @@ export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
     }
 
     const evUp = await EventModel.updateOne(
-      { contract: address.toLowerCase(), txHash: log.transactionHash, logIndex: log.logIndex },
+      { contract: address.toLowerCase(), txHash: log.transactionHash, logIndex: log.index },
       {
         $setOnInsert: {
           contract: address.toLowerCase(),
           event: parsed.name,
           blockNumber: log.blockNumber,
           txHash: log.transactionHash,
-          logIndex: log.logIndex,
+          logIndex: log.index,
           args: safeArgs(parsed.args),
           createdAt: new Date(),
         },
