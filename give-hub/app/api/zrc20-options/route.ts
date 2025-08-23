@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { authMiddleware } from '@/lib/auth'
+
 type Token = { symbol: string; address: string }
 type ByChain = Record<string, Token[]>
 type JsonToken = { symbol?: string; address?: string }
@@ -73,7 +75,8 @@ function parseZrc20(raw: string | undefined): ByChain {
   return byChain
 }
 
-export async function GET() {
+// Secure token options endpoint - contains contract addresses
+export const GET = authMiddleware(async () => {
   const raw = process.env.ZRC20_TOKENS || process.env.NEXT_PUBLIC_ZRC20_TOKENS;
   const byChain = parseZrc20(raw);
 
@@ -84,4 +87,4 @@ export async function GET() {
   }
 
   return NextResponse.json({ byChain });
-}
+})

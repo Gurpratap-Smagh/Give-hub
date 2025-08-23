@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "donate:eth": "tsx ../scripts/donate-from-eth-sepolia.ts"
+    "donate:eth": "tsx ../scripts/donate-from-eth-sepolia.ts",
+    "generate-favicons": "node scripts/generate-favicons.js",
+    "postinstall": "npm run generate-favicons"
   },
   "dependencies": {
     "@google/genai": "^1.13.0",
@@ -26,6 +28,7 @@
     "react-dom": "19.1.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "sharp": "^1.0.0",
     "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "zod": "^4.0.17"

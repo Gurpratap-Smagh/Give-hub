@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { syncOnce } from '@/lib/sync/indexer'
+import { authMiddleware, type AuthedRequest } from '@/lib/auth'
 
-export async function GET(req: NextRequest) {
+// This is a sensitive endpoint that can trigger blockchain syncing - require auth
+export const GET = authMiddleware(async (req: AuthedRequest) => {
   try {
     const url = new URL(req.url)
     const maxRangeParam = url.searchParams.get('range')
@@ -10,8 +12,7 @@ export async function GET(req: NextRequest) {
     const res = await syncOnce(range)
     return NextResponse.json({ success: true, ...res })
   } catch (err: unknown) {
-    console.error('Sync error:', err)
     const message = err instanceof Error ? err.message : 'sync failed'
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
-}
+})

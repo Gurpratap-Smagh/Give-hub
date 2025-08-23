@@ -17,6 +17,8 @@ type CampaignEditFormRef = HTMLFormElement & { requestSubmit: () => void; applyA
 import PaymentModal from '@/components/payment-modal'
 import DonationsLivePane from './DonationsLivePane'
 import { ensureWalletOnChain, getCampaignInfo } from '@/lib/web3/client'
+import { useDonationEvents } from '@/lib/hooks/useDonationEvents'
+import { formatDonationEvents } from '@/lib/donations/formatter'
 
 /**
  * FILE: app/campaign/[id]/CampaignPageContent.tsx
@@ -66,6 +68,18 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   const [syncId, setSyncId] = useState('')
   const [isSyncing, setIsSyncing] = useState(false)
   // Removed on-chain donations loading/error state
+  // Live donation events for this campaign (on-chain). Only subscribe when ID is numeric.
+  const numericCampaignId = useMemo(() => {
+    const cid = campaign.onChain?.campaignId
+    if (cid == null) return undefined
+    const s = String(cid).trim()
+    return /^\d+$/.test(s) ? s : undefined
+  }, [campaign.onChain?.campaignId])
+  const { events: liveEvents } = useDonationEvents(numericCampaignId)
+  const liveUSD = useMemo(() => {
+    const arr = formatDonationEvents(liveEvents)
+    return arr.reduce((sum, d) => sum + (d.usd || 0), 0)
+  }, [liveEvents])
 
   useEffect(() => {
     setEditPreview(campaign)
@@ -294,6 +308,8 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
       return sum + toUSD(normalizedAmount, symbol);
     }, 0);
   }, [donations, getTokenByAddress])
+  // Prefer live on-chain USD total when available; fallback to local donations
+  const totalRaisedUSD = useMemo(() => (liveUSD > 0 ? liveUSD : raisedUSD), [liveUSD, raisedUSD])
   const uniqueDonorCount = useMemo(() => {
     const addrSet = new Set<string>()
     const nameSet = new Set<string>()
@@ -307,7 +323,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
     })
     return addrSet.size + nameSet.size
   }, [donations])
-  const progressPercentage = Math.min(100, Math.round((raisedUSD / campaign.goal) * 100))
+  const progressPercentage = Math.min(100, Math.round(((totalRaisedUSD || 0) / campaign.goal) * 100))
 
   if (isEditing) {
     return (
@@ -568,7 +584,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
 
                  {/* Campaign Stats */}
                  <div className="border-t border-gray-200 pt-6 space-y-4">
-                   <div className="flex justify-between items-center"><span className="text-gray-600">Total Raised</span><span className="font-bold text-gray-900">{formatCurrency(raisedUSD)}</span></div>
+                   <div className="flex justify-between items-center"><span className="text-gray-600">Total Raised</span><span className="font-bold text-gray-900">{formatCurrency(totalRaisedUSD)}</span></div>
                    <div className="flex justify-between items-center"><span className="text-gray-600">Goal</span><span className="font-bold text-gray-900">{formatCurrency(campaign.goal)}</span></div>
                    <div className="flex justify-between items-center"><span className="text-gray-600">Progress</span><span className="font-bold text-green-600">{progressPercentage}%</span></div>
                    <div className="flex justify-between items-center"><span className="text-gray-600">Donors</span><span className="font-bold text-gray-900">{uniqueDonorCount}</span></div>

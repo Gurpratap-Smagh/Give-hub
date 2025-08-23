@@ -27,8 +27,7 @@ export async function GET(request: NextRequest) {
     const { password: _omit, ...sanitized } = user as User
     return NextResponse.json(sanitized)
     
-  } catch (error) {
-    console.error('Profile GET error:', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
@@ -89,8 +88,7 @@ export async function PUT(request: NextRequest) {
     const { password: _omit2, ...sanitizedUpdated } = updatedUser as User
     return NextResponse.json(sanitizedUpdated)
     
-  } catch (error) {
-    console.error('Profile PUT error:', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

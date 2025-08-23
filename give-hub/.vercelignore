@@ -1,0 +1,24 @@
+# Ignore development files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Ignore build artifacts
+.next/
+node_modules/
+
+# Ignore test files
+**/*.test.*
+**/*.spec.*
+**/__tests__/**
+
+# Ignore local development files
+.vercel/
+.idea/
+.vscode/
+*.log
+
+# Ignore generated favicons (will be generated during build)
+public/icon-*.png
+public/favicon.ico

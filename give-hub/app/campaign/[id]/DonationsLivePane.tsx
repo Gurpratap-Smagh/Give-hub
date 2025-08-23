@@ -10,7 +10,13 @@ interface DonationsLivePaneProps {
 }
 
 export default function DonationsLivePane({ campaignId, isActive = true }: DonationsLivePaneProps) {
-  const { events } = useDonationEvents(campaignId);
+  // Only subscribe when campaignId is numeric to avoid aggregating all campaigns
+  const numericCampaignId = useMemo(() => {
+    if (campaignId == null) return undefined;
+    const s = String(campaignId).trim();
+    return /^\d+$/.test(s) ? s : undefined;
+  }, [campaignId]);
+  const { events } = useDonationEvents(numericCampaignId);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [fullyExpanded, setFullyExpanded] = useState<Record<string, boolean>>({});
   const noteRefs = useRef<Record<string, HTMLDivElement | null>>({});

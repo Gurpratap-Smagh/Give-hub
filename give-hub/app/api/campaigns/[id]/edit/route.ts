@@ -105,8 +105,7 @@ export async function PUT(
 
     return NextResponse.json(updatedCampaign)
     
-  } catch (error) {
-    console.error('Campaign edit error:', error)
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

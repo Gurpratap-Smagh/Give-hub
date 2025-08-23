@@ -1,0 +1,50 @@
+<!-- GiveHub Alien — Color favicon (animated) -->
+<svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="ghAlienTitle"
+     xmlns="http://www.w3.org/2000/svg">
+  <title id="ghAlienTitle">GiveHub Alien</title>
+  <defs>
+    <!-- Cosmic gradient -->
+    <linearGradient id="ghg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+    <!-- Head glow -->
+    <radialGradient id="head" cx="40%" cy="35%" r="70%">
+      <stop offset="0%"  stop-color="#a7f3d0"/>
+      <stop offset="60%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Orbit ring (subtle animated stroke) -->
+  <circle cx="32" cy="32" r="28" fill="none" stroke="url(#ghg)" stroke-width="3"
+          stroke-linecap="round" stroke-dasharray="10 8">
+    <animateTransform attributeName="transform" type="rotate"
+      from="0 32 32" to="360 32 32" dur="12s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Alien head -->
+  <ellipse cx="32" cy="32" rx="16" ry="18" fill="url(#head)"/>
+
+  <!-- Antenna -->
+  <rect x="30.6" y="10" width="2.8" height="6" rx="1.4" fill="#7c3aed"/>
+  <circle cx="32" cy="8" r="3.5" fill="#7c3aed"/>
+
+  <!-- Eyes -->
+  <ellipse cx="26.5" cy="33" rx="3.2" ry="4.1" fill="#0f172a"/>
+  <ellipse cx="37.5" cy="33" rx="3.2" ry="4.1" fill="#0f172a"/>
+  <!-- tiny eye highlights -->
+  <circle cx="25.6" cy="31.8" r="0.8" fill="#ffffff" opacity="0.9"/>
+  <circle cx="36.6" cy="31.8" r="0.8" fill="#ffffff" opacity="0.9"/>
+
+  <!-- Friendly smile -->
+  <path d="M25,39 C28,42 36,42 39,39" fill="none" stroke="#0f172a" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- Give-heart on chest -->
+  <path d="M32 45
+           c 2 -2 6 -1.6 6 2
+           c 0 3.5 -3.6 4.8 -6 7
+           c -2.4 -2.2 -6 -3.5 -6 -7
+           c 0 -3.6 4 -4 6 -2z"
+        fill="#f43f5e"/>
+</svg>

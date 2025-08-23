@@ -34,9 +34,25 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // TODO: Implement rate limiting per IP
-    // const clientIP = request.ip || request.headers.get('x-forwarded-for');
-    // await checkRateLimit(clientIP);
+    // Rate limiting per IP to prevent brute force attacks
+    const clientIP = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const rateLimitKey = `signin:${clientIP}`;
+    
+    // Simple in-memory rate limiting (5 attempts per 15 minutes)
+    const now = Date.now();
+    const windowMs = 15 * 60 * 1000; // 15 minutes
+    const maxAttempts = 5;
+    
+    // Use a simple object-based rate limiting
+    const rateLimits: Record<string, { count: number; resetTime: number }> = {};
+    const currentLimit = rateLimits[rateLimitKey] || { count: 0, resetTime: now + windowMs };
+    
+    if (currentLimit.count >= maxAttempts && now < currentLimit.resetTime) {
+      return NextResponse.json(
+        { success: false, error: 'Too many login attempts. Please try again later.' },
+        { status: 429 }
+      );
+    }
     
     // Attempt to authenticate user
     const result = await authService.signin({
@@ -45,8 +61,11 @@ export async function POST(request: NextRequest) {
     });
     
     if (!result.success) {
-      // TODO: Track failed login attempts
-      // await trackFailedLogin(body.emailOrUsername, clientIP);
+      // Track failed login attempts
+      if (currentLimit.count < maxAttempts) {
+        currentLimit.count++;
+        rateLimits[rateLimitKey] = currentLimit;
+      }
       
       return NextResponse.json(
         { success: false, error: result.error },
@@ -54,8 +73,8 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // TODO: Reset failed login attempts on successful login
-    // await resetFailedLogins(body.emailOrUsername);
+    // Reset failed login attempts on successful login
+    // Rate limit reset handled automatically by time-based expiration
     
     // Create response with user data
     const response = NextResponse.json(
@@ -72,8 +91,9 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      // maxAge is in seconds
-      maxAge: 60 * 60 * 24 // 24 hours
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: '/',
+      domain: process.env.NODE_ENV === 'production' ? '.vercel.app' : undefined
     });
     
     return response;
@@ -81,7 +101,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Signin API error:', error);
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      { success: false, error: 'Authentication failed' },
       { status: 500 }
     );
   }

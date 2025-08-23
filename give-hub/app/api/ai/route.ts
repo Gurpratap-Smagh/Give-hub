@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { authMiddleware, type AuthedRequest } from '@/lib/auth'
+
 // Minimal, local intent parser to avoid external dependency during build
 type AiIntent = { action: 'search' | 'donate' | 'suggest' | 'clarify' | 'info' | 'chat' | 'reject'; params?: Record<string, unknown> };
 function parseIntent(prompt: string): AiIntent {
@@ -10,7 +12,8 @@ function parseIntent(prompt: string): AiIntent {
   return { action: 'chat', params: { prompt } };
 }
 
-export async function POST(request: NextRequest) {
+// Secured AI intent parsing endpoint
+export const POST = authMiddleware(async (request: AuthedRequest) => {
   try {
     const { prompt } = await request.json()
 
@@ -24,11 +27,10 @@ export async function POST(request: NextRequest) {
     const intent = parseIntent(prompt)
     
     return NextResponse.json(intent)
-  } catch (error) {
-    console.error('AI API error:', error)
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     )
   }
-}
+})

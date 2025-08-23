@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
+import { authMiddleware } from '@/lib/auth'
 
-export async function GET() {
+// Secure deployment info endpoint - contains sensitive contract addresses
+export const GET = authMiddleware(async () => {
   try {
     // Support both legacy and current env var names
     const addrFromEnv =
@@ -36,8 +38,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Invalid deployment file contents.' }, { status: 500 })
     }
     return NextResponse.json({ address, chainId, wzeta, systemContract })
-  } catch (e) {
-    console.error('[api/web3/deployment] error', e)
+  } catch {
     return NextResponse.json({ error: 'Failed to read deployment info' }, { status: 500 })
   }
-}
+})

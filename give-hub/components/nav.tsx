@@ -8,9 +8,6 @@ import type { User, Creator, Campaign } from '@/lib/db'
 import ProfilePictureUpload from '@/components/profile-picture-upload'
 import AIOverlay from '@/components/ai-overlay'
 import PaymentModal from '@/components/payment-modal'
-import { Contract, JsonRpcProvider } from 'ethers'
-import type { InterfaceAbi, EventLog } from 'ethers'
-import CrossChainCrowdfundABI from '@/abis/CrossChainCrowdfund.json'
 
 /**
  * Main Navigation Component
@@ -51,11 +48,6 @@ export function Nav() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const profileDropdownRef = useRef<HTMLDivElement>(null)
   
-  // Debug controls
-  const [debugOn, setDebugOn] = useState(false)
-  const [debugStatus, setDebugStatus] = useState<string>('idle')
-  const [routerOnZevm, setRouterOnZevm] = useState<string | null>(null)
-  const debugRef = useRef<{ contract?: Contract; provider?: JsonRpcProvider } | null>(null)
 
   // Hide search UX on studio pages
   const isStudio = pathname?.startsWith('/studio')
@@ -105,83 +97,6 @@ export function Nav() {
     } catch {}
   }, [])
 
-  // Temporary debug: connect to ZEVM, read router(), and subscribe to events
-  useEffect(() => {
-    if (!debugOn) {
-      try { debugRef.current?.contract?.removeAllListeners?.() } catch {}
-      debugRef.current = null
-      setDebugStatus('idle')
-      return
-    }
-    let cancelled = false
-    ;(async () => {
-      try {
-        const rpc = process.env.NEXT_PUBLIC_ZETA_RPC_HTTP
-        const addr = process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT
-        if (!rpc || !addr) {
-          setDebugStatus('missing_env')
-          console.warn('[Debug] Missing NEXT_PUBLIC_ZETA_RPC_HTTP or NEXT_PUBLIC_CROSSCHAIN_CONTRACT')
-          return
-        }
-        setDebugStatus('connecting')
-        const provider = new JsonRpcProvider(rpc)
-        const contract = new Contract(addr, CrossChainCrowdfundABI as unknown as InterfaceAbi, provider)
-        debugRef.current = { contract, provider }
-        const router = await contract.router()
-        if (cancelled) return
-        setRouterOnZevm(router)
-        console.log('[GiveHub Debug] router():', router)
-        setDebugStatus('listening')
-        contract.on('ContributionReceived', (
-          campaignId: bigint,
-          donor: string,
-          contributionId: bigint,
-          originalToken: string,
-          originalAmount: bigint,
-          convertedAmount: bigint,
-          originChain: string,
-          donorName: string,
-          note: string,
-          event: EventLog,
-        ) => {
-          console.log('[GiveHub Debug][ContributionReceived]', {
-            campaignId: campaignId?.toString?.(),
-            donor,
-            contributionId: contributionId?.toString?.(),
-            originalToken,
-            originalAmount: originalAmount?.toString?.(),
-            convertedAmount: convertedAmount?.toString?.(),
-            originChain,
-            donorName,
-            note,
-            tx: event?.transactionHash,
-            blockNumber: event?.blockNumber,
-          })
-        })
-        contract.on('CampaignCreated', (
-          campaignId: bigint,
-          creator: string,
-          preferredZRC20: string,
-          event: EventLog,
-        ) => {
-          console.log('[GiveHub Debug][CampaignCreated]', {
-            campaignId: campaignId?.toString?.(),
-            creator,
-            preferredZRC20,
-            tx: event?.transactionHash,
-          })
-        })
-        console.log('[GiveHub Debug] Subscribed to ZEVM events', { contract: addr, router })
-      } catch (e) {
-        console.error('[GiveHub Debug] setup failed', e)
-        setDebugStatus('error')
-      }
-    })()
-    return () => {
-      cancelled = true
-      try { debugRef.current?.contract?.removeAllListeners?.() } catch {}
-    }
-  }, [debugOn])
 
   const toggleTheme = () => {
     const next = theme === 'light' ? 'dark' : 'light'
@@ -345,14 +260,6 @@ export function Nav() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
                 </svg>
               )}
-            </button>
-            {/* Temporary debug button */}
-            <button
-              onClick={() => setDebugOn(v => !v)}
-              className={`inline-flex items-center h-9 px-3 rounded-full border text-xs shadow-sm transition-colors ${debugOn ? 'border-green-400 text-green-600 bg-green-50' : 'border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-              title={`ZEVM debug ${debugOn ? 'ON' : 'OFF'}${routerOnZevm ? ' • router: ' + routerOnZevm : ''}${debugOn ? ' • ' + debugStatus : ''}`}
-            >
-              {debugOn ? 'Debug On' : 'Debug'}
             </button>
             {/* Creator action inline on md+; moved into profile dropdown for <md */}
             {user?.role === 'creator' && (

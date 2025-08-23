@@ -1,0 +1,7 @@
+# Ignore build scripts
+/scripts/**
+
+# Ignore generated files
+/public/**
+/.next/**
+/node_modules/**

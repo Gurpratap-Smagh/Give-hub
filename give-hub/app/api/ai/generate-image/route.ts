@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server'
 import { getGenAI } from '@/lib/gemini'
 import { Modality } from '@google/genai'
 import type { GenerateContentResponse } from '@google/genai'
+import { authMiddleware, type AuthedRequest } from '@/lib/auth'
 
-// POST /api/ai/generate-image
+// POST /api/ai/generate-image - Secured AI endpoint
 // Body: { prompt: string }
-export async function POST(req: Request) {
+export const POST = authMiddleware(async (req: AuthedRequest) => {
   try {
     const { prompt } = await req.json().catch(() => ({})) as { prompt?: string }
     if (!prompt || !prompt.trim()) {
@@ -174,4 +175,4 @@ export async function POST(req: Request) {
     const message = e instanceof Error ? e.message : 'Unexpected error'
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
+})
