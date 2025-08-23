@@ -118,7 +118,7 @@ export const useDonationEvents = (options: UseDonationEventsOptions = {}) => {
       if (!provider) return;
 
       const iface = new ethers.Interface(DONATION_ABI);
-      const topic0 = iface.getEvent("ContributionReceived").topicHash;
+      const topic0 = iface.getEventTopic("ContributionReceived");
       
       // Build topic1 only if campaignId is numeric
       const topic1 = expectedCidStr
