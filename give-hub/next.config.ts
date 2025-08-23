@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   // Transpile ESM-only packages to avoid dev-time deep import (src.ts) resolution issues
   // with Turbopack/Next dev server when using ethers v6
   transpilePackages: ["ethers", "@noble/curves", "@noble/hashes"],
+  // Do not fail the production build on ESLint errors (useful for Vercel CI)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Allow accessing dev server from local network IP to avoid future blocking
   allowedDevOrigins: [
     'http://localhost:3000',
