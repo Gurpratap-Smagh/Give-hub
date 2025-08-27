@@ -4,7 +4,7 @@ import { authService } from '@/lib/auth'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     // Check authentication
@@ -18,7 +18,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await context.params
     const body = await request.json()
     const { amount } = body
 
