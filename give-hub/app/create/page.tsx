@@ -100,8 +100,8 @@ export default function CreateCampaignPage() {
           .find((t: Token) => t.symbol === 'WZETA')
         if (wzeta) {
           setPreferredToken(wzeta.address)
-        } else if (Object.values(allTokens).flat().length > 0) {
-          setPreferredToken(Object.values(allTokens).flat()[0].address)
+        } else if ((Object.values(allTokens) as Token[][]).flat().length > 0) {
+          setPreferredToken((Object.values(allTokens) as Token[][])[0][0].address)
         }
       } catch (e) {
         console.error('Failed to fetch ZRC-20 options:', e)
