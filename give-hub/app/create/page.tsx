@@ -633,12 +633,12 @@ export default function CreateCampaignPage() {
                   <div key={chain} className="space-y-1">
                     <div className="text-sm text-gray-500">{chain}</div>
                     <div className="flex flex-wrap gap-2">
-                      {tokens.map((token) => (
+                      {tokens && Array.isArray(tokens) && tokens.map((token) => (
                         <button
                           key={token.address}
                           type="button"
+                          className={`px-3 py-1 text-sm rounded-full ${preferredToken === token.address ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 hover:bg-gray-200'}`}
                           onClick={() => setPreferredToken(token.address)}
-                          className={`px-3 py-1.5 rounded-full border text-sm flex items-center gap-1 ${preferredToken === token.address ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-gray-300'}`}
                         >
                           {token.symbol}
                         </button>
