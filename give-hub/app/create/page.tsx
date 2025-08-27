@@ -311,11 +311,10 @@ export default function CreateCampaignPage() {
           console.debug('[create] On-chain campaign created. ID:', onChainCampaignId?.toString(), 'tx:', res.txHash)
         } catch (e) {
           console.error('On-chain operation failed:', e)
-          const msg = e?.message?.includes('missing revert data') 
-            ? 'Token not supported by contract. Try WZETA or zETH.' 
+          const msg = e instanceof Error && e.message.includes('missing revert data') 
+            ? 'Token not supported by contract. Try WZETA or zETH.'
             : parseRpcError(e)
           notify(msg, 'error')
-          throw e
         }
       }
 
