@@ -34,6 +34,13 @@ import { isAddress } from '@/lib/address'
 
 // ZRC-20 options are fetched from the server via /api/zrc20-options
 
+interface Token {
+  address: string;
+  symbol: string;
+  decimals: number;
+  chain: string;
+}
+
 function parseRpcError(e: unknown): string {
   if (e && typeof e === 'object') {
     const obj = e as Record<string, unknown>
@@ -88,7 +95,9 @@ export default function CreateCampaignPage() {
         const allTokens = data?.byChain || {}
         setZrc20Options(allTokens)
         // Default to WZETA if available, otherwise first token in first chain
-        const wzeta = Object.values(allTokens).flat().find((t) => t.symbol === 'WZETA')
+        const wzeta = (Object.values(allTokens) as Token[][])
+          .flat()
+          .find((t: Token) => t.symbol === 'WZETA')
         if (wzeta) {
           setPreferredToken(wzeta.address)
         } else if (Object.values(allTokens).flat().length > 0) {
