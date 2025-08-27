@@ -266,7 +266,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   }
 
   // Add missing payment success handler: persist + update state + close modal
-  const handlePaymentSuccess = (amount: number, chain: string) => {
+  const handlePaymentSuccess = async (amount: number, chain: string) => {
     const getUsername = () => {
       const u = user as unknown as { username?: string } | null | undefined
       return (u && typeof u.username === 'string' && u.username.trim()) ? u.username.trim() : 'Anonymous'
@@ -293,6 +293,43 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
         window.localStorage.setItem('gh_donations', JSON.stringify(arr))
       }
     } catch {}
+
+    // Update campaign raised amount in database
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/update-raised`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ amount })
+      })
+      
+      if (res.ok) {
+        const data = await res.json()
+        // Update local campaign state with new raised amount
+        setCampaign(prev => ({ ...prev, raised: data.newTotal }))
+      }
+    } catch (error) {
+      console.error('Failed to update campaign raised amount:', error)
+    }
+
+    // Trigger AI thank you message
+    try {
+      await fetch('/api/ai/assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          prompt: `A user just donated $${amount} via ${chain} to campaign "${campaign.title}". Send them a personalized thank you message.`,
+          mode: 'default',
+          context: { 
+            donation: { amount, chain, campaign: campaign.title },
+            action: 'thank_donor'
+          }
+        })
+      })
+    } catch (error) {
+      console.error('Failed to trigger AI thank you:', error)
+    }
 
     notify('Donation successful. Thank you for your support!', 'success')
     setShowPaymentModal(false)

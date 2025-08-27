@@ -7,6 +7,7 @@ import { processDonation } from "@/lib/payments"; // ZEVM direct path
 import { connectWallet, ensureWalletOnChain } from "@/lib/web3/client";
 import { useAvailableTokens, type Token } from "@/lib/hooks/useAvailableTokens";
 import TokenPicker from "@/components/TokenPicker";
+import { formatCurrency } from "@/lib/utils/format";
 
 // Cross-chain helpers (Sepolia → ZEVM)
 import { ethers } from "ethers";
@@ -27,9 +28,11 @@ interface PaymentModalProps {
   onPaymentSuccess: (amount: number, chain: string) => void;
   initialAmount?: number;
   initialChain?: string;
+  initialToken?: string;
   onPaymentError?: (error: Error) => void;
   onCancel?: () => void;
   autoSubmit?: boolean;
+  onStatusUpdate?: (status: string) => void;
 }
 
 // Encode the payload your ZEVM contract expects in onCall(...)
@@ -73,7 +76,9 @@ export default function PaymentModal({
   initialChain,
   onPaymentError,
   onCancel,
+  initialToken,
   autoSubmit,
+  onStatusUpdate,
 }: PaymentModalProps) {
   const hasUsername = (u: unknown): u is { username: string } =>
     typeof u === "object" &&
@@ -103,10 +108,13 @@ export default function PaymentModal({
   const missingOnChainMapping = onZeta && !onChainCampaignId;
 
   // Tokens (for Zeta + cross-chain)
-  const { getNativeToken, getTokenByAddress } = useAvailableTokens();
+  const { byChain, getNativeToken, getTokenByAddress } = useAvailableTokens();
   const [picked, setPicked] = useState<
     { chain: string; symbol: string; address: string } | undefined
   >(undefined);
+  // Enforce wallet network to match UI-selected chain
+  const [networkSwitching, setNetworkSwitching] = useState(false);
+  const [networkError, setNetworkError] = useState<string | null>(null);
   const selectedToken: Token | undefined = picked?.address
     ? getTokenByAddress(picked.address)
     : undefined;
@@ -120,6 +128,7 @@ export default function PaymentModal({
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletConnecting, setWalletConnecting] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -129,6 +138,7 @@ export default function PaymentModal({
       setAmount(String(initialAmount));
     }
     setSelectedChain(initialChain || effectiveChains[0]);
+    setPaymentError(null);
     
     // Validate environment variables when modal opens (only in zetachain mode)
     if (PAYMENT_PROVIDER === "zetachain") {
@@ -169,19 +179,82 @@ export default function PaymentModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // Preselect token from initialToken and initialChain when available
+  useEffect(() => {
+    if (!isOpen) return;
+    const sym = (initialToken || '').trim();
+    const ch = (initialChain || '').trim();
+    if (!sym || !ch) return;
+    const key = ch.toUpperCase();
+    const list = (byChain && (byChain as Record<string, Array<{ symbol: string; address: string }>>)[key]) || [];
+    const match = list.find(t => (t.symbol || '').toLowerCase() === sym.toLowerCase());
+    if (match) {
+      setPicked({ chain: key, symbol: match.symbol, address: match.address });
+    }
+  }, [isOpen, initialToken, initialChain, byChain]);
+
+  // If only initialChain is provided, preselect the chain in TokenPicker without choosing a token
+  useEffect(() => {
+    if (!isOpen) return;
+    if (picked?.chain) return; // don't override if already set
+    const ch = (initialChain || '').trim();
+    if (!ch) return;
+    const key = ch.toUpperCase();
+    setPicked({ chain: key, symbol: '', address: '' });
+  }, [isOpen, initialChain, picked?.chain]);
+
   // Auto-submit for AI flows
   useEffect(() => {
     if (!isOpen || !autoSubmit || isProcessing) return;
     const amt = parseFloat((amount || "").replace(/,/g, "."));
     if (!amt || !(amt > 0)) return;
     if (!selectedChain) return;
+    // In zetachain mode, require a picked token before auto-submitting
+    if (onZeta && !picked?.address) return;
     if (onZeta && missingOnChainMapping) return;
     const t = setTimeout(() => {
       void handlePayment();
     }, 50);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, autoSubmit, amount, selectedChain, isProcessing, missingOnChainMapping]);
+  }, [isOpen, autoSubmit, amount, selectedChain, picked?.address, isProcessing, missingOnChainMapping]);
+
+  // Force wallet to selected chain as soon as the user picks a chain
+  useEffect(() => {
+    if (!isOpen || !onZeta) return;
+    const target = (picked?.chain || '').toUpperCase();
+    if (!target) return;
+    const toHex = target.includes('SEPOLIA') ? CHAIN_HEX.SEPOLIA : CHAIN_HEX.ZETA;
+    let mounted = true;
+    (async () => {
+      setNetworkSwitching(true);
+      setNetworkError(null);
+      try {
+        await ensureChain(toHex);
+        // Verify wallet actually switched
+        if (typeof window !== 'undefined') {
+          const eth = (window as unknown as { ethereum?: ethers.Eip1193Provider }).ethereum;
+          if (eth) {
+            const provider = new ethers.BrowserProvider(eth);
+            const net = await provider.getNetwork();
+            const expected = parseInt(toHex, 16);
+            if (mounted && Number(net.chainId) !== expected) {
+              setNetworkError(
+                `Wallet is on chainId ${net.chainId.toString()} but expected ${expected}. Please approve the network switch in your wallet.`,
+              );
+            }
+          }
+        }
+      } catch (e) {
+        if (!mounted) return;
+        const msg = extractRpcError(e);
+        setNetworkError(msg || 'Failed to switch network');
+      } finally {
+        if (mounted) setNetworkSwitching(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [isOpen, onZeta, picked?.chain]);
 
   // Close on outside click or Escape
   useEffect(() => {
@@ -196,7 +269,17 @@ export default function PaymentModal({
       const el = modalRef.current;
       if (!el) return;
       const target = e.target as Node;
-      if (!el.contains(target)) {
+      
+      // Check if click is on a dropdown or select element
+      const clickedElement = e.target as Element;
+      const isDropdownClick = clickedElement.closest('select') || 
+                             clickedElement.closest('[role="listbox"]') || 
+                             clickedElement.closest('[role="option"]') ||
+                             clickedElement.closest('.token-picker') ||
+                             clickedElement.classList?.contains('gh-input') ||
+                             clickedElement.classList?.contains('gh-textarea');
+      
+      if (!el.contains(target) && !isDropdownClick) {
         if (onCancel) onCancel();
         onClose();
       }
@@ -272,6 +355,18 @@ export default function PaymentModal({
       if (isSepolia) {
         // Switch wallet to Sepolia
         await ensureChain(CHAIN_HEX.SEPOLIA);
+        // Assert wallet is on Sepolia
+        if (typeof window !== 'undefined') {
+          const eth = (window as unknown as { ethereum?: ethers.Eip1193Provider }).ethereum;
+          if (eth) {
+            const provider = new ethers.BrowserProvider(eth);
+            const net = await provider.getNetwork();
+            const expected = parseInt(CHAIN_HEX.SEPOLIA, 16);
+            if (Number(net.chainId) !== expected) {
+              throw new Error('Wallet did not switch to Ethereum Sepolia. Please approve the network switch in your wallet.');
+            }
+          }
+        }
 
         const gateway  = process.env.NEXT_PUBLIC_GATEWAY_SEPOLIA!;
         const receiver = process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT!;
@@ -301,6 +396,7 @@ export default function PaymentModal({
           erc20Decimals: erc20 ? tokenDecimals : undefined,
           setStatus: (s) => {
             if (!s) return;
+            if (onStatusUpdate) try { onStatusUpdate(s); } catch {}
             if (typeof window !== "undefined") {
               const el = document.createElement("div");
               el.className =
@@ -317,6 +413,7 @@ export default function PaymentModal({
         const updateStatus = (status: string) => {
           if (!status) return;
           console.log('Cross-chain status:', status);
+          if (onStatusUpdate) try { onStatusUpdate(status); } catch {}
           if (typeof window !== "undefined") {
             const el = document.createElement("div");
             el.className = 
@@ -351,25 +448,35 @@ export default function PaymentModal({
           onClose();
           setAmount(""); setDonorName(""); setNote("");
         } else {
-          // ZetaChain confirmation timed out, but Sepolia transaction was successful
-          updateStatus("Transaction sent but ZetaChain confirmation timed out. You can close this window.");
-          // Still consider it a success since the Sepolia tx went through
-          onPaymentSuccess(parseFloat(raw), chainLabel);
-          onClose();
-          setAmount(""); setDonorName(""); setNote("");
+          // ZetaChain confirmation timed out; DO NOT mark as success yet
+          // Keep the modal open and surface a non-terminal message
+          updateStatus("Transaction sent on Sepolia; awaiting ZetaChain credit… We'll keep checking.");
+          setPaymentError(
+            "Your deposit was sent, but ZetaChain confirmation timed out. We will only confirm once it is credited on ZetaChain. You can wait and try again, or check the explorer."
+          );
         }
         return;
       }
 
       // ZEVM direct (WZETA or any ZRC-20): pass raw string too
       await ensureChain(CHAIN_HEX.ZETA);
-      let tokenAddr: string;
-      if (selectedToken?.address) {
-        tokenAddr = selectedToken.address;
-      } else if (nativeToken?.address) {
-        tokenAddr = nativeToken.address;
-      } else {
-        throw new Error("No token configured. Please select a token.");
+      // Assert wallet is on ZetaChain
+      if (typeof window !== 'undefined') {
+        const eth = (window as unknown as { ethereum?: ethers.Eip1193Provider }).ethereum;
+        if (eth) {
+          const provider = new ethers.BrowserProvider(eth);
+          const net = await provider.getNetwork();
+          const expected = parseInt(CHAIN_HEX.ZETA, 16);
+          if (Number(net.chainId) !== expected) {
+            throw new Error('Wallet did not switch to ZetaChain. Please approve the network switch in your wallet.');
+          }
+        }
+      }
+
+      // Use the exact token picked in the UI to avoid any fallback/mismatch
+      const tokenAddr = picked?.address;
+      if (!tokenAddr) {
+        throw new Error('Please select a token to use for donation');
       }
       
       // Prepare common params
@@ -380,7 +487,6 @@ export default function PaymentModal({
         campaignId: Number(onChainCampaignId),
         amount: raw, // <- exact string, user's raw input
         tokenAddress: tokenAddr,
-        tokenDecimals: selectedToken?.decimals ?? nativeToken?.decimals ?? 18,
         donorName: donorDisplayName,
         note: donorNote,
       });
@@ -397,7 +503,7 @@ export default function PaymentModal({
         if (onCancel) onCancel();
       } else {
         if (onPaymentError) onPaymentError(error as Error);
-        alert(msg || "Payment failed. Please try again.");
+        setPaymentError(msg || "Payment failed. Please try again.");
       }
     } finally {
       setIsProcessing(false);
@@ -406,7 +512,7 @@ export default function PaymentModal({
 
   const chainBadge =
     PAYMENT_PROVIDER === "zetachain"
-      ? picked?.chain || "ZetaChain"
+      ? (((picked?.chain || 'ZETA').toUpperCase().includes('SEPOLIA')) ? 'Ethereum Sepolia' : 'ZetaChain')
       : selectedChain || "Local";
 
   return (
@@ -424,6 +530,17 @@ export default function PaymentModal({
           >
             ✕
           </button>
+
+        {paymentError && (
+          <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md p-2">
+            {paymentError}
+          </div>
+        )}
+        {networkError && (
+          <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
+            Network issue: {networkError}
+          </div>
+        )}
         </div>
 
         {/* Wallet status (Local mode only) */}
@@ -470,8 +587,8 @@ export default function PaymentModal({
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
           <h3 className="font-medium text-gray-900 mb-2">{campaign.title}</h3>
           <div className="flex justify-between text-sm text-gray-600">
-            <span>Raised: ${campaign.raised.toLocaleString()}</span>
-            <span>Goal: ${campaign.goal.toLocaleString()}</span>
+            <span>Raised: {formatCurrency(campaign.raised, 'USD', true)}</span>
+            <span>Goal: {formatCurrency(campaign.goal, 'USD', true)}</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2 mt-2 overflow-visible">
             <div
@@ -518,7 +635,7 @@ export default function PaymentModal({
 
         {/* Token Picker (Zeta / Cross-chain mode) */}
         {onZeta && (
-          <div>
+          <div onClick={(e) => e.stopPropagation()}>
             {/* Token selection */}
             <label className="block text-sm font-semibold mb-2">Select token</label>
             <TokenPicker
@@ -526,16 +643,7 @@ export default function PaymentModal({
               onChange={setPicked}
               className="w-full"
             />
-            <div className="mt-2 text-sm text-blue-600">
-              <p>💡 Donations will be received as WZETA on ZetaChain regardless of the token you choose to pay with.</p>
-            </div>
-            {picked && (
-              <div className="mt-1 text-xs text-gray-600 break-words">
-                Selected:{" "}
-                <span className="font-mono">{`${picked.symbol}.${picked.chain}`}</span> @{" "}
-                <span className="font-mono">{picked.address}</span>
-              </div>
-            )}
+            <br />
           </div>
         )}
 
@@ -573,8 +681,9 @@ export default function PaymentModal({
           disabled={
             !amount ||
             isProcessing ||
+            networkSwitching ||
             parseFloat((amount || "").replace(/,/g, ".")) <= 0 ||
-            (PAYMENT_PROVIDER === "zetachain" && !!missingOnChainMapping)
+            (PAYMENT_PROVIDER === "zetachain" && (!!missingOnChainMapping || !picked?.address))
           }
           className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
@@ -584,7 +693,7 @@ export default function PaymentModal({
               Processing...
             </div>
           ) : PAYMENT_PROVIDER === "zetachain" ? (
-            `Donate ${amount || "0"} ${displaySymbol} via ${chainBadge}`
+            networkSwitching ? 'Switching network…' : `Donate ${amount || "0"} ${displaySymbol} via ${chainBadge}`
           ) : (
             `Donate $${amount || "0"} via ${chainBadge}`
           )}

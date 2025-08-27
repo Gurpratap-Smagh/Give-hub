@@ -98,7 +98,7 @@ export default function FancySelect({
   const triggerIcon = selected?.icon;
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div ref={rootRef} className={`relative token-picker ${className}`}>
       <div className="relative rounded-full">
         <button
           type="button"

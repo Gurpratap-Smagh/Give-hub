@@ -157,7 +157,47 @@ body {
 :root[data-theme="dark"] .bg-black\/70 { background-color: rgba(0,0,0,0.7) !important; }
 
 /* Profile pictures: ensure black bg behind transparent PNGs */
-:root[data-theme="dark"] .pfp-bg { background-color: #000000 !important; }
+.pfp-bg {
+  background-color: black;
+}
+
+/* Custom scrollbar for AI assistant panel */
+.ai-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.ai-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.ai-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.ai-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Dark mode scrollbar */
+:root[data-theme="dark"] .ai-scrollbar {
+  scrollbar-color: #475569 transparent;
+}
+
+:root[data-theme="dark"] .ai-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+:root[data-theme="dark"] .ai-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
 
 /* Dropdowns, cards, popovers that default to white */
 :root[data-theme="dark"] .shadow-lg, 

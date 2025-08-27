@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+// import { useRouter } from 'next/navigation' // Unused for now
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth/auth-context'
 import Spinner from '@/components/spinner'
@@ -10,7 +10,7 @@ import { notify } from '@/lib/utils/notify'
 
 export default function ProfilePage() {
   const { user, isLoading } = useAuth()
-  const router = useRouter()
+  // const router = useRouter() // Unused for now
   const [isEditing, setIsEditing] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   const [newSignup, setNewSignup] = useState(false)
@@ -20,23 +20,35 @@ export default function ProfilePage() {
     bio: 'Passionate about making a difference through blockchain technology and charitable giving.',
     location: 'San Francisco, CA',
     website: 'https://johndoe.com',
-    profilePicture: (user as any)?.profilePicture || '',
+    profilePicture: (user as { profilePicture?: string })?.profilePicture || '',
     walletAddresses: {
       ethereum: '0x1234...5678',
       solana: 'ABC123...XYZ789',
       bitcoin: 'bc1q...example'
     }
   })
+  
+  // Keep original data for cancel functionality
+  const [originalData, setOriginalData] = useState(profileData)
 
   // Update local state when user loads/changes
   useEffect(() => {
     if (user) {
-      setProfileData((prev) => ({
-        ...prev,
+      const newData = {
         name: user.username,
         email: user.email,
-        profilePicture: (user as any).profilePicture || '',
-      }))
+        bio: 'Passionate about making a difference through blockchain technology and charitable giving.',
+        location: 'San Francisco, CA',
+        website: 'https://johndoe.com',
+        profilePicture: (user as { profilePicture?: string }).profilePicture || '',
+        walletAddresses: {
+          ethereum: '0x1234...5678',
+          solana: 'ABC123...XYZ789',
+          bitcoin: 'bc1q...example'
+        }
+      }
+      setProfileData(newData)
+      setOriginalData(newData)
     }
   }, [user])
 
@@ -118,9 +130,8 @@ export default function ProfilePage() {
       if (response.ok) {
         notify('Profile updated successfully!', 'success')
         setIsEditing(false)
-        // Refresh the page data to reflect latest profile and exit edit mode
-        router.replace('/profile')
-        router.refresh()
+        // Update original data to reflect saved changes
+        setOriginalData(profileData)
       } else {
         notify('Failed to update profile. Please try again.', 'error')
       }
@@ -131,31 +142,51 @@ export default function ProfilePage() {
   }
 
   const handleCancel = () => {
-    // Reset to original data (in real app, would fetch from server)
+    // Reset to original data
+    setProfileData(originalData)
     setIsEditing(false)
   }
 
-  // Use AI to improve the bio based on current context
+  // Use AI to improve the profile fields
   const handleFixWithAI = async () => {
     try {
       setIsEditing(true)
       setAiLoading(true)
-      const prompt = `TASK: Rewrite this GiveHub user bio.\n\nRules:\n- Keep it authentic, friendly, and specific.\n- 1–2 short paragraphs, concise.\n- No links, no emojis, no headings, no lists.\n- Do not add unrelated suggestions or campaign recommendations.\n\nCurrent bio:\n"${profileData.bio}"\n\nContext:\nname=${profileData.name || (user as any)?.username || ''}; location=${profileData.location || ''}; interests=web3, impact, transparent giving.\n\nOutput: Return ONLY the rewritten bio text, nothing else.`
+      const prompt = `TASK: Improve this GiveHub user profile.\n\nCurrent data:\n- Name: ${profileData.name}\n- Bio: ${profileData.bio}\n- Location: ${profileData.location}\n- Website: ${profileData.website}\n\nRules:\n- Keep it authentic, friendly, and specific\n- Bio should be 1-2 short paragraphs, concise\n- No links in bio, no emojis, no headings, no lists\n- Location should be city, state/country format\n- Website should be valid URL or empty\n\nReturn a JSON object with improved fields: {"bio": "...", "location": "...", "website": "..."}\nOutput ONLY valid JSON, nothing else.`
+      
       const res = await fetch('/api/ai/assist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ prompt, mode: 'rewrite' }),
+        body: JSON.stringify({ prompt, mode: 'profile' }),
       })
+      
       if (!res.ok) throw new Error(`AI request failed (${res.status})`)
       const data = (await res.json()) as { text?: string }
-      const improved = (data.text || '').trim()
-      if (!improved) {
+      const responseText = (data.text || '').trim()
+      
+      if (!responseText) {
         notify('AI did not return suggestions. Try again.', 'error')
         return
       }
-      setProfileData((prev) => ({ ...prev, bio: improved }))
-      notify('Bio improved with AI suggestions', 'success')
+      
+      try {
+        // Try to parse as JSON first
+        const parsed = JSON.parse(responseText) as { bio?: string; location?: string; website?: string }
+        
+        setProfileData((prev) => ({
+          ...prev,
+          bio: parsed.bio || prev.bio,
+          location: parsed.location || prev.location,
+          website: parsed.website || prev.website
+        }))
+        
+        notify('Profile improved with AI suggestions', 'success')
+      } catch {
+        // If not JSON, treat as bio improvement only
+        setProfileData((prev) => ({ ...prev, bio: responseText }))
+        notify('Bio improved with AI suggestions', 'success')
+      }
     } catch (e) {
       console.error(e)
       notify('Failed to get AI suggestions. Please try again.', 'error')
@@ -427,20 +458,6 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Placeholder Notice */}
-              <div className="mt-8 p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center">
-                  <div className="text-green-600 mr-3">🤖</div>
-                  <div>
-                    <p className="text-sm text-green-800 font-medium">
-                      AI-Enhanced Profile
-                    </p>
-                    <p className="text-xs text-green-700 mt-1">
-                      Profile editing will be enhanced with Gemini AI for content suggestions and validation.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>

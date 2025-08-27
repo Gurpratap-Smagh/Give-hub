@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  AbiCoder,
   BrowserProvider,
   Contract,
   JsonRpcProvider,
@@ -28,7 +27,10 @@ const ERC20_ABI = [
   'function decimals() view returns (uint8)',
 ] as const;
 
-const coder = AbiCoder.defaultAbiCoder;
+// Narrow EIP-1193 provider typing to avoid `any` usage
+type EthereumProvider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
 
 function buildRevertOptions(addr: string): RevertOptions {
   // (revertAddress, callOnRevert, onRevertGasPayer, revertMessage, onRevertGasLimit)
@@ -37,26 +39,34 @@ function buildRevertOptions(addr: string): RevertOptions {
 
 /** Wallet network switcher (+ add Zeta Athens if needed). */
 export async function ensureChain(chainHex: string) {
-  if (typeof window === 'undefined' || !(window as any).ethereum) {
+  if (typeof window === 'undefined') {
     throw new Error('Wallet not found');
   }
-  const eth = (window as any).ethereum;
+  const w = window as unknown as { ethereum?: EthereumProvider };
+  const eth = w.ethereum;
+  if (!eth) throw new Error('Wallet not found');
   try {
     await eth.request?.({
       method: 'wallet_switchEthereumChain',
       params: [{ chainId: chainHex }],
     });
-  } catch (e: any) {
-    if (e?.code === 4902) {
+  } catch (e: unknown) {
+    const err = e as { code?: number };
+    if (err?.code === 4902) {
       if (chainHex === CHAIN_HEX.ZETA) {
+        const rpcUrl = process.env.NEXT_PUBLIC_ZETA_RPC_URL || process.env.NEXT_PUBLIC_ZETA_RPC_HTTP || '';
+        const chainName = process.env.NEXT_PUBLIC_ZETA_CHAIN_NAME || 'ZetaChain Athens Testnet';
+        const symbol = process.env.NEXT_PUBLIC_ZETA_NATIVE_SYMBOL || 'ZETA';
+        const explorer = process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL || 'https://athens.explorer.zetachain.com/';
+        if (!rpcUrl) throw new Error('Missing NEXT_PUBLIC_ZETA_RPC_URL to add ZetaChain');
         await eth.request?.({
           method: 'wallet_addEthereumChain',
           params: [{
             chainId: CHAIN_HEX.ZETA,
-            chainName: 'ZetaChain Athens Testnet',
-            nativeCurrency: { name: 'ZETA', symbol: 'ZETA', decimals: 18 },
-            rpcUrls: [process.env.NEXT_PUBLIC_ZETA_RPC_HTTP!].filter(Boolean),
-            blockExplorerUrls: ['https://athens.explorer.zetachain.com/'],
+            chainName,
+            nativeCurrency: { name: symbol, symbol, decimals: 18 },
+            rpcUrls: [rpcUrl],
+            blockExplorerUrls: [explorer].filter(Boolean),
           }],
         });
       } else if (chainHex === CHAIN_HEX.SEPOLIA) {
@@ -76,8 +86,19 @@ export async function ensureChain(chainHex: string) {
         params: [{ chainId: chainHex }],
       });
     } else {
-      throw e;
+      throw e as Error;
     }
+  }
+  // Post-switch verification
+  try {
+    const provider = new BrowserProvider(eth);
+    const net = await provider.getNetwork();
+    const expected = parseInt(chainHex, 16);
+    if (Number(net.chainId) !== expected) {
+      throw new Error(`Wallet is on chainId ${net.chainId.toString()} but expected ${expected}. Please approve the network switch in your wallet.`);
+    }
+  } catch (err) {
+    throw err;
   }
 }
 
@@ -95,14 +116,28 @@ export async function payFromSepolia(params: {
   erc20Decimals?: number;      // optional (auto-read if missing)
   setStatus?: (s: string) => void;
 }) {
-  if (typeof window === 'undefined' || !(window as any).ethereum) {
+  if (typeof window === 'undefined') {
     throw new Error('Wallet not found');
   }
+  const w = window as unknown as { ethereum?: EthereumProvider };
+  const eth = w.ethereum;
+  if (!eth) throw new Error('Wallet not found');
 
   params.setStatus?.('Switching to Sepolia…');
   await ensureChain(CHAIN_HEX.SEPOLIA);
+  // Verify wallet actually switched to Sepolia
+  try {
+    const providerCheck = new BrowserProvider(eth);
+    const net = await providerCheck.getNetwork();
+    const expected = parseInt(CHAIN_HEX.SEPOLIA, 16);
+    if (Number(net.chainId) !== expected) {
+      throw new Error('Wallet did not switch to Ethereum Sepolia. Please approve the network switch in your wallet.');
+    }
+  } catch (e) {
+    throw e as Error;
+  }
 
-  const provider = new BrowserProvider((window as any).ethereum);
+  const provider = new BrowserProvider(eth);
   const signer = await provider.getSigner();
   const sender = await signer.getAddress();
   const gateway = new Contract(params.gateway, GATEWAY_ABI, signer);

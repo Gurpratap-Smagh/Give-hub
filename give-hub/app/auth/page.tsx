@@ -96,7 +96,18 @@ function AuthInner() {
     <div className="min-h-screen bg-gray-50">
       {/* Main Content Section */}
       <div className="flex items-center justify-center py-16 px-6">
-        <div className="bg-white rounded-2xl card-shadow border border-gray-100 p-8 w-full max-w-md">
+        <div className="bg-white rounded-2xl card-shadow border border-gray-100 p-8 w-full max-w-md relative">
+          {/* Loading Overlay */}
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/80 rounded-2xl flex items-center justify-center z-10">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm text-gray-600 font-medium">
+                  {isSignUp ? 'Creating your account...' : 'Signing you in...'}
+                </p>
+              </div>
+            </div>
+          )}
           {/* Header Section */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -138,6 +149,7 @@ function AuthInner() {
                   placeholder="Choose a username"
                   required
                   minLength={3}
+                  disabled={isLoading}
                 />
               </div>
             )}
@@ -154,6 +166,7 @@ function AuthInner() {
                 className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
                 placeholder={isSignUp ? "Enter your email" : "Enter email or username"}
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -170,6 +183,7 @@ function AuthInner() {
                 placeholder="Enter your password"
                 required
                 minLength={8}
+                disabled={isLoading}
               />
             </div>
 
@@ -188,6 +202,7 @@ function AuthInner() {
                     placeholder="Confirm your password"
                     required
                     minLength={8}
+                    disabled={isLoading}
                   />
                 </div>
 
@@ -201,6 +216,7 @@ function AuthInner() {
                     onChange={handleInputChange}
                     className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
                     required
+                    disabled={isLoading}
                   >
                     <option value="user">Donor - Support campaigns</option>
                     <option value="creator">Creator - Create campaigns</option>

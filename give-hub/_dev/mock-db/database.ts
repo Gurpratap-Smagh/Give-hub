@@ -283,11 +283,16 @@ class MockDatabase {
     if (q && q.trim()) {
       const searchTerm = q.toLowerCase().trim();
       const searchRegex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      // Build a quick lookup for creator usernames to support creator-based search
+      const usersDb = this.readFile<UsersDB>(USERS_FILE);
+      const idToUsername = new Map(usersDb.users.map(u => [u.id, (u.username || '').toLowerCase()]));
       
       result = result.filter(campaign => {
+        const creatorUsername = idToUsername.get(campaign.creatorId) || '';
         return searchRegex.test(campaign.title) || 
                searchRegex.test(campaign.description) || 
-               (campaign.category && searchRegex.test(campaign.category));
+               (campaign.category && searchRegex.test(campaign.category)) ||
+               searchRegex.test(creatorUsername);
       });
     }
 
@@ -330,40 +335,101 @@ class MockDatabase {
       sort?: { [key: string]: 1 | -1 };
     }
   ): { campaigns: Campaign[]; total: number } {
-    const campaigns = this.searchCampaigns(query);
-    const total = campaigns.length;
-    
-    if (options) {
-      let result = campaigns;
-      
-      // Apply sorting
-      if (options.sort) {
-        result = [...result].sort((a, b) => {
-          for (const [field, direction] of Object.entries(options.sort!)) {
-            const aVal = a[field as keyof Campaign];
-            const bVal = b[field as keyof Campaign];
-            
-            if (aVal === undefined || bVal === undefined) continue;
-            
-            if (aVal < bVal) return -direction;
-            if (aVal > bVal) return direction;
-          }
-          return 0;
+    // Start with all campaigns to allow advanced filtering including regex and nested creator username
+    let campaigns = this.getAllCampaigns();
+    const usersDb = this.readFile<UsersDB>(USERS_FILE);
+    const idToUsername = new Map(usersDb.users.map(u => [u.id, (u.username || '').toLowerCase()]));
+
+    // Helper to get string field value, including nested creator.username
+    const getFieldString = (c: Campaign, key: string): string | undefined => {
+      if (key === 'creator.username') {
+        return idToUsername.get(c.creatorId) || '';
+      }
+      const val = c[key as keyof Campaign];
+      return typeof val === 'string' ? val : undefined;
+    };
+
+    // Apply query filters if provided
+    if (query && Object.keys(query).length > 0) {
+      const { q, ...filters } = query as Record<string, unknown> & { q?: string };
+
+      // Broad text search across title, description, category, and creator username
+      if (q && typeof q === 'string' && q.trim()) {
+        const searchTerm = q.toLowerCase().trim();
+        const searchRegex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        campaigns = campaigns.filter(c => {
+          const creatorUsername = idToUsername.get(c.creatorId) || '';
+          return (
+            searchRegex.test(c.title) ||
+            searchRegex.test(c.description) ||
+            (c.category && searchRegex.test(c.category)) ||
+            searchRegex.test(creatorUsername)
+          );
         });
       }
-      
-      // Apply pagination
-      if (options.skip) {
-        result = result.slice(options.skip);
+
+      // Structured filters: support Mongo-like {$regex, $options} and primitives
+      for (const [key, value] of Object.entries(filters)) {
+        if (value == null) continue;
+
+        campaigns = campaigns.filter(c => {
+          // Handle regex objects: { $regex: string, $options?: string }
+          if (typeof value === 'object' && value && ('$regex' in (value as Record<string, unknown>))) {
+            const rxStr = String((value as Record<string, unknown>).$regex ?? '');
+            const rxOpt = String((value as Record<string, unknown>).$options ?? 'i');
+            try {
+              const rx = new RegExp(rxStr, rxOpt);
+              const fieldVal = getFieldString(c, key) || '';
+              return rx.test(fieldVal);
+            } catch {
+              // If regex construction fails, fallback to substring includes
+              const fieldVal = (getFieldString(c, key) || '').toLowerCase();
+              return fieldVal.includes(rxStr.toLowerCase());
+            }
+          }
+
+          // Primitive comparisons as before
+          const fieldValue = c[key as keyof Campaign] as unknown;
+          if (typeof fieldValue === 'string') {
+            return fieldValue.toLowerCase().includes(String(value).toLowerCase());
+          } else if (typeof fieldValue === 'number') {
+            return fieldValue === Number(value);
+          } else if (Array.isArray(fieldValue)) {
+            if (Array.isArray(value)) {
+              return value.some(v => (fieldValue as unknown[]).includes(v as never));
+            } else {
+              return (fieldValue as unknown[]).includes(value as never);
+            }
+          }
+          return true;
+        });
       }
-      
-      if (options.limit) {
-        result = result.slice(0, options.limit);
-      }
-      
-      return { campaigns: result, total };
     }
-    
+
+    const total = campaigns.length;
+
+    // Sorting
+    if (options?.sort) {
+      campaigns = [...campaigns].sort((a, b) => {
+        for (const [field, direction] of Object.entries(options.sort!)) {
+          const aVal = a[field as keyof Campaign] as unknown;
+          const bVal = b[field as keyof Campaign] as unknown;
+          if (aVal == null || bVal == null) continue;
+          if (aVal < bVal) return -Number(direction);
+          if (aVal > bVal) return Number(direction);
+        }
+        return 0;
+      });
+    }
+
+    // Pagination
+    if (options?.skip) {
+      campaigns = campaigns.slice(options.skip);
+    }
+    if (options?.limit) {
+      campaigns = campaigns.slice(0, options.limit);
+    }
+
     return { campaigns, total };
   }
 

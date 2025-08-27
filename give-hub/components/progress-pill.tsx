@@ -5,9 +5,11 @@ interface ProgressPillProps {
   raised: number
   goal: number
   size?: 'sm' | 'md' | 'lg'
+  // Whether amounts are stored as cents in MongoDB
+  isCents?: boolean
 }
 
-export function ProgressPill({ raised, goal, size = 'lg' }: ProgressPillProps) {
+export function ProgressPill({ raised, goal, size = 'lg', isCents = true }: ProgressPillProps) {
   const rawPercentage = goal > 0 ? (raised / goal) * 100 : 0
   const barPercentage = Math.min(rawPercentage, 100)
   
@@ -29,7 +31,7 @@ export function ProgressPill({ raised, goal, size = 'lg' }: ProgressPillProps) {
             size === 'md' && "text-2xl",
             size === 'sm' && "text-lg"
           )}>
-            {formatCurrency(raised)}
+            {formatCurrency(raised, 'USD', isCents)}
           </div>
           <div className={cn(
             "text-[color:var(--muted)]",
@@ -37,7 +39,7 @@ export function ProgressPill({ raised, goal, size = 'lg' }: ProgressPillProps) {
             size === 'md' && "text-base",
             size === 'sm' && "text-sm"
           )}>
-            raised of {formatCurrency(goal)} goal
+            raised of {formatCurrency(goal, 'USD', isCents)} goal
           </div>
         </div>
         

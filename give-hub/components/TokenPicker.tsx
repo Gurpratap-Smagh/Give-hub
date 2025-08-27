@@ -8,7 +8,7 @@ type ByChain = Record<string, Token[]>;
 type Picked = { chain: string; symbol: string; address: string };
 
 const CHAIN_LABEL: Record<string, string> = {
-  ZETA: 'zeta_native',
+  ZETA: 'ZetaChain',
   SEPOLIA: 'Ethereum Sepolia',
   BTC: 'Bitcoin Testnet',
   SOLANA: 'Solana Testnet',
@@ -79,6 +79,13 @@ export default function TokenPicker({
   const tokens = useMemo(() => data[chain] ?? [], [data, chain]);
   const hasTokens = tokens.length > 0;
 
+  // Keep internal chain in sync with provided value to avoid overriding preselected tokens
+  useEffect(() => {
+    if (value?.chain && value.chain !== chain) {
+      setChain(value.chain);
+    }
+  }, [value?.chain, chain]);
+
   // FancySelect items for chains (grouped headers)
   const chainItems = useMemo<FancyItem[]>(() => {
     const items: FancyItem[] = [];
@@ -114,14 +121,7 @@ export default function TokenPicker({
   }, [chain, hasTokens, tokens, value, onChange, creatorMode]);
 
   // Keep value coherent if chain changes
-  useEffect(() => {
-    if (creatorMode) return; // Skip in creator mode
-    if (!value) return;
-    if (value.chain !== chain) {
-      if (hasTokens) onChange({ chain, ...tokens[0] });
-      else onChange({ chain, symbol: '', address: '' });
-    }
-  }, [chain, hasTokens, tokens, value, onChange, creatorMode]);
+  // Removed effect that attempted to sync parent value on every chain change to avoid render loops.
 
   // WZETA-only mode for campaign creators
   if (creatorMode) {
@@ -159,7 +159,16 @@ export default function TokenPicker({
       <FancySelect
         items={chainItems}
         value={chain}
-        onChange={(v) => setChain(v)}
+        onChange={(v) => {
+          if (v !== chain) {
+            setChain(v);
+            if (!creatorMode) {
+              const list = data[v] ?? [];
+              if (list.length > 0) onChange({ chain: v, ...list[0] });
+              else onChange({ chain: v, symbol: '', address: '' });
+            }
+          }
+        }}
         disabled={creatorMode}
         placeholder="Select chain"
         className="w-60 sm:w-72"

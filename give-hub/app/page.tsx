@@ -32,33 +32,39 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
   
   if (resolvedSearchParams.search && resolvedSearchParams.param) {
     const raw = resolvedSearchParams.search.trim()
-    const searchParameter = resolvedSearchParams.param as 'title' | 'creator' | 'category'
+    const searchParameter = resolvedSearchParams.param as 'all' | 'title' | 'creator' | 'category'
     const rawLower = raw.toLowerCase()
 
     if (!raw) {
       const result = await db.searchCampaignsAdvanced({}) as { campaigns: Campaign[], total: number }
       campaigns = result.campaigns
     } else {
-      const query: { [key: string]: { $regex: string; $options: string } } = {} 
-      switch (searchParameter) {
-        case 'title': {
-          query.title = { $regex: rawLower, $options: 'i' }
-          break
+      if (searchParameter === 'all') {
+        // Broad text search across title, description, category, and creator username
+        const result = await db.searchCampaignsAdvanced({ q: rawLower }) as { campaigns: Campaign[], total: number }
+        campaigns = result.campaigns
+      } else {
+        const query: { [key: string]: { $regex: string; $options: string } } = {} 
+        switch (searchParameter) {
+          case 'title': {
+            query.title = { $regex: rawLower, $options: 'i' }
+            break
+          }
+          case 'creator': {
+            query['creator.username'] = { $regex: rawLower, $options: 'i' }
+            break
+          }
+          case 'category': {
+            query.category = { $regex: rawLower, $options: 'i' }
+            break
+          }
+          default: {
+            query.title = { $regex: rawLower, $options: 'i' }
+          }
         }
-        case 'creator': {
-          query['creator.username'] = { $regex: rawLower, $options: 'i' }
-          break
-        }
-        case 'category': {
-          query.category = { $regex: rawLower, $options: 'i' }
-          break
-        }
-        default: {
-          query.title = { $regex: rawLower, $options: 'i' }
-        }
+        const result = await db.searchCampaignsAdvanced(query) as { campaigns: Campaign[], total: number }
+        campaigns = result.campaigns
       }
-      const result = await db.searchCampaignsAdvanced(query) as { campaigns: Campaign[], total: number }
-      campaigns = result.campaigns
     }
   } else {
     const result = await db.searchCampaignsAdvanced({}) as { campaigns: Campaign[], total: number }
