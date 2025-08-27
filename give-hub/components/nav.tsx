@@ -4,10 +4,9 @@ import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/auth-context'
-import type { User, Creator, Campaign } from '@/lib/db'
+import type { User, Creator } from '@/lib/db'
 import ProfilePictureUpload from '@/components/profile-picture-upload'
-import AIOverlay from '@/components/ai-overlay'
-import PaymentModal from '@/components/payment-modal'
+ 
 
 /**
  * Main Navigation Component
@@ -31,13 +30,8 @@ export function Nav() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [showProfileDropdown, setShowProfileDropdown] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchParam, setSearchParam] = useState<'title' | 'creator' | 'category'>('title')
-  const [showAI, setShowAI] = useState(false)
-  const [payOpen, setPayOpen] = useState(false)
-  const [payCampaign, setPayCampaign] = useState<Campaign | null>(null)
-  const [payInitialAmount, setPayInitialAmount] = useState<number | undefined>(undefined)
-  const [payInitialChain, setPayInitialChain] = useState<string | undefined>(undefined)
-  const [payAutoSubmit, setPayAutoSubmit] = useState<boolean>(false)
+  const [searchParam, setSearchParam] = useState<'all' | 'title' | 'creator' | 'category'>('all')
+  
   // Theme state: light/dark (persisted)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const { user, signout } = useAuth()
@@ -140,6 +134,7 @@ export function Nav() {
   }
 
   const searchParamLabels = {
+    all: 'All',
     title: 'Title',
     creator: 'Creator', 
     category: 'Category'
@@ -164,7 +159,7 @@ export function Nav() {
               <div ref={searchRef} className="relative flex-1">
                 <input
                   type="text"
-                  placeholder={`Search campaigns by ${searchParam}...`}
+                  placeholder={searchParam === 'all' ? 'Search campaigns...' : `Search campaigns by ${searchParam}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => {
@@ -211,7 +206,7 @@ export function Nav() {
                       <button
                         key={key}
                         onClick={() => {
-                          setSearchParam(key as 'title' | 'creator' | 'category')
+                          setSearchParam(key as 'all' | 'title' | 'creator' | 'category')
                           setShowSearchDropdown(false)
                         }}
                         className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg ${
@@ -233,7 +228,7 @@ export function Nav() {
             {pathname !== '/studio' && !showSearch && (
               <button
                 className="h-9 w-9 inline-flex items-center justify-center rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm border border-gray-200"
-                onClick={() => { setShowAI(false); setShowSearch(!showSearch) }}
+                onClick={() => { setShowSearch(!showSearch) }}
                 aria-label="Toggle search"
                 aria-expanded={showSearch}
               >
@@ -244,7 +239,7 @@ export function Nav() {
             )}
             {/* Dark mode toggle (desktop) */}
             <button
-              onClick={() => { setShowAI(false); toggleTheme() }}
+              onClick={() => { toggleTheme() }}
               className="hidden md:inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-sm border border-gray-200"
               aria-label="Toggle dark mode"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -277,7 +272,7 @@ export function Nav() {
             {user ? (
               <div className="relative" ref={profileDropdownRef}>
                 <button
-                  onClick={() => { setShowAI(false); setShowProfileDropdown(!showProfileDropdown) }}
+                  onClick={() => { setShowProfileDropdown(!showProfileDropdown) }}
                   className="inline-flex items-center space-x-2 px-2 py-1 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   aria-label="User menu"
                 >
@@ -371,7 +366,7 @@ export function Nav() {
             ) : (
               <div className="relative" ref={profileDropdownRef}>
                 <button
-                  onClick={() => { setShowAI(false); setShowProfileDropdown(!showProfileDropdown) }}
+                  onClick={() => { setShowProfileDropdown(!showProfileDropdown) }}
                   className="inline-flex items-center space-x-1 px-1.5 py-1 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   aria-label="Anonymous menu"
                 >
@@ -436,14 +431,14 @@ export function Nav() {
           <div className="flex flex-col p-4 space-y-4">
             {user?.role === 'creator' && (
               isStudio ? (
-                <Link href="/create" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Create Campaign</Link>
+                <Link href="/create" onClick={() => { setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Create Campaign</Link>
               ) : (
-                <Link href="/studio" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Creator Studio</Link>
+                <Link href="/studio" onClick={() => { setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Creator Studio</Link>
               )
             )}
             {user ? (
               <>
-                <Link href="/profile" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="inline-flex items-center px-2 py-1 rounded-md" aria-label="Profile" title="Profile">
+                <Link href="/profile" onClick={() => { setIsMobileMenuOpen(false) }} className="inline-flex items-center px-2 py-1 rounded-md" aria-label="Profile" title="Profile">
                   <ProfilePictureUpload
                     currentUser={user as User | Creator}
                     currentPicture={user?.profilePicture}
@@ -453,14 +448,14 @@ export function Nav() {
                   />
                 </Link>
                 <button
-                  onClick={() => { setShowAI(false); setIsMobileMenuOpen(false); signout(); }}
+                  onClick={() => { setIsMobileMenuOpen(false); signout(); }}
                   className="w-full text-center px-4 py-2 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors text-gray-700"
                 >
                   Logout
                 </button>
               </>
             ) : (
-              <Link href="/auth?mode=signin" onClick={() => { setShowAI(false); setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <Link href="/auth?mode=signin" onClick={() => { setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 Login
               </Link>
             )}
@@ -470,66 +465,6 @@ export function Nav() {
       {/* END_REGION: Mobile Menu (Dropdown) */}
 
     </nav>
-    {/* Floating AI button (bottom-right) */}
-    <button
-      onClick={() => { setIsMobileMenuOpen(false); setShowSearch(false); setShowAI((v) => !v) }}
-      className="fixed bottom-[25px] right-[25px] h-9 w-9 rounded-full bg-blue-600 bg-opacity-5 text-white shadow-lg hover:bg-blue-700 hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500 z-[60] inline-flex items-center justify-center"
-      aria-label="Open AI Assistant"
-      title="Open AI Assistant"
-    >
-      <span className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${theme === 'dark' ? 'bg-black' : 'bg-white'} text-xl text-blue-500 ring-1 ring-blue-500 shadow-sm`}>✦</span>
-    </button>
-    {showAI && (
-      <AIOverlay
-        open={showAI}
-        theme={theme}
-        onClose={() => setShowAI(false)}
-        onAction={async (action) => {
-          if (action.type === 'open_payment') {
-            try {
-              const res = await fetch(`/api/campaigns/${action.campaignId}`)
-              if (!res.ok) throw new Error('Campaign fetch failed')
-              const data = await res.json()
-              const campaign = data?.campaign
-              if (campaign) {
-                setPayCampaign(campaign)
-                setPayInitialAmount(action.amount)
-                setPayInitialChain(action.chain)
-                setPayAutoSubmit(!!action.confirm)
-                setPayOpen(true)
-              }
-            } catch (e) {
-              console.error('Failed to open payment modal:', e)
-            }
-          }
-        }}
-      />
-    )}
-
-    {payCampaign && (
-      <PaymentModal
-        campaign={payCampaign}
-        isOpen={payOpen}
-        onClose={() => { setPayOpen(false); setPayAutoSubmit(false) }}
-        onPaymentSuccess={() => {
-          setPayOpen(false)
-          setPayAutoSubmit(false)
-        }}
-        initialAmount={payInitialAmount}
-        initialChain={payInitialChain}
-        onPaymentError={() => {
-          // Keep AI overlay open; simply close the payment modal
-          setPayOpen(false)
-          setPayAutoSubmit(false)
-        }}
-        onCancel={() => {
-          // User closed the modal; keep AI overlay open for next steps
-          setPayOpen(false)
-          setPayAutoSubmit(false)
-        }}
-        autoSubmit={payAutoSubmit}
-      />
-    )}
     </>
   )
 }

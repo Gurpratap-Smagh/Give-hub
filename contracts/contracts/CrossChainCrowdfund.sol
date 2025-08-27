@@ -86,7 +86,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   /*------------------------------- TYPES -------------------------------*/
 
   struct Creator {
-    address preferredZRC20; // must be WZETA
+    address preferredZRC20; // any whitelisted token
     bool exists;
   }
 
@@ -104,7 +104,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
   struct Campaign {
     address creator;         // ZEVM address
-    address preferredZRC20;  // must equal WZETA
+    address preferredZRC20;  // any whitelisted token
     bool    active;
   }
 
@@ -150,7 +150,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   error RouterNotSet();
   error OnlySystem();
   error UnknownAction();
-  error PayoutMustBeWZETA();
+  error PayoutTokenNotAllowed();
 
   /*------------------------------ STORAGE ------------------------------*/
 
@@ -173,6 +173,10 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   IUniswapV2Router02 public router;
 
   bool public debug = true;
+
+  // Token whitelist for allowed payout tokens
+  mapping(address => bool) public allowedOutTokens;
+  event AllowedOutTokenSet(address token, bool allowed);
 
   /*---------------------------- CONSTRUCTOR ----------------------------*/
 
@@ -201,6 +205,12 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     tokenToChainName[_btcZRC20] = "Bitcoin";
     if (_usdcZRC20 != address(0)) tokenToChainName[_usdcZRC20] = "USDC";
     tokenToChainName[_wzeta] = "ZetaChain";
+
+    // Initialize token whitelist
+    allowedOutTokens[_wzeta] = true;
+    allowedOutTokens[_ethZRC20] = true;
+    allowedOutTokens[_btcZRC20] = true;
+    if (_usdcZRC20 != address(0)) allowedOutTokens[_usdcZRC20] = true;
   }
 
   /*----------------------------- ADMIN SET -----------------------------*/
@@ -214,6 +224,12 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   function setDebug(bool enabled) external onlyOwner {
     debug = enabled;
     emit DebugToggle(enabled);
+  }
+
+  function setAllowedOutToken(address token, bool allowed) external onlyOwner {
+    require(token != address(0), "ZERO_TOKEN");
+    allowedOutTokens[token] = allowed;
+    emit AllowedOutTokenSet(token, allowed);
   }
 
   /*--------------------------- UNIVERSAL ENTRY --------------------------*/
@@ -241,10 +257,10 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
   /*------------------------- CAMPAIGN MANAGEMENT ------------------------*/
 
-  // Enforce WZETA-only payout on creation
+  // Allow any whitelisted payout token on creation
   function createCampaign(address preferredZRC20) external returns (uint256 campaignId) {
     if (preferredZRC20 == address(0)) revert InvalidToken();
-    if (preferredZRC20 != WZETA) revert PayoutMustBeWZETA();
+    require(allowedOutTokens[preferredZRC20], "PAYOUT_TOKEN_NOT_ALLOWED");
 
     campaignId = ++nextCampaignId;
 
@@ -261,6 +277,19 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     });
 
     emit CampaignCreated(campaignId, msg.sender, preferredZRC20);
+  }
+
+  // Allow campaign creator to update payout token
+  function updateCampaignPayoutToken(uint256 campaignId, address newToken) external {
+    Campaign storage campaign = campaigns[campaignId];
+    require(campaign.creator == msg.sender, "NOT_CREATOR");
+    require(campaign.active, "CAMPAIGN_INACTIVE");
+    require(allowedOutTokens[newToken], "PAYOUT_TOKEN_NOT_ALLOWED");
+
+    campaign.preferredZRC20 = newToken;
+    creators[msg.sender].preferredZRC20 = newToken;
+
+    emit CampaignCreated(campaignId, msg.sender, newToken); // Reuse event for simplicity
   }
 
   function pauseCampaign(uint256 campaignId) external {
@@ -290,14 +319,13 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     Campaign storage campaign = campaigns[campaignId];
     if (campaign.creator == address(0)) revert InvalidCampaign();
     if (!campaign.active) revert CampaignInactive();
-    if (campaign.preferredZRC20 != WZETA) revert PayoutMustBeWZETA();
 
     address donorAddress = _deriveDonorAddress(ctx);
 
     if (debug) emit DebugDonationBegin(campaignId, campaign.creator, zrc20In, amount);
 
-    // Force tokenOut = WZETA
-    address tokenOut = WZETA;
+    // Route to campaign's chosen payout token
+    address tokenOut = campaign.preferredZRC20;
     uint256 amountOut = _swapExactViaPath(zrc20In, tokenOut, amount);
 
     if (debug) emit DebugTransferOut(tokenOut, campaign.creator, amountOut);
@@ -346,14 +374,12 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     Campaign storage c = campaigns[campaignId];
     if (c.creator == address(0)) revert InvalidCampaign();
     if (!c.active) revert CampaignInactive();
-    if (c.preferredZRC20 != WZETA) revert PayoutMustBeWZETA();
 
-    IWZETA(WZETA).deposit{ value: msg.value }(); // wrap to WZETA
+    IWZETA(WZETA).deposit{ value: msg.value }(); // wrap ZETA -> WZETA
 
-    address tokenOut = WZETA;
-    uint256 converted = msg.value; // already WZETA
+    address tokenOut = c.preferredZRC20;
+    uint256 converted = _swapExactViaPath(WZETA, tokenOut, msg.value);
 
-    if (debug) emit DebugTransferOut(tokenOut, c.creator, converted);
     IERC20Minimal(tokenOut).safeTransfer(c.creator, converted);
 
     uint256 id = ++nextContributionId;
@@ -397,11 +423,10 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     Campaign storage c = campaigns[campaignId];
     if (c.creator == address(0)) revert InvalidCampaign();
     if (!c.active) revert CampaignInactive();
-    if (c.preferredZRC20 != WZETA) revert PayoutMustBeWZETA();
 
     IERC20Minimal(token).safeTransferFrom(msg.sender, address(this), amount);
 
-    address tokenOut = WZETA;
+    address tokenOut = c.preferredZRC20;
     uint256 converted = _swapExactViaPath(token, tokenOut, amount);
 
     if (debug) emit DebugTransferOut(tokenOut, c.creator, converted);

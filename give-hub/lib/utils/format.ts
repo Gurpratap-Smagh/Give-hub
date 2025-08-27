@@ -14,14 +14,18 @@ export function cn(...inputs: ClassValue[]) {
  * Formats a number as a currency string.
  * @param amount - The number to format.
  * @param currency - The currency code (e.g., 'USD').
+ * @param isCents - Whether the amount is in cents and needs to be divided by 100.
  * @returns The formatted currency string.
  */
-export function formatCurrency(amount: number, currency = 'USD'): string {
+export function formatCurrency(amount: number, currency = 'USD', isCents = false): string {
+  // If amount is stored as cents in MongoDB, convert to dollars for display
+  const displayAmount = isCents ? amount / 100 : amount;
+  
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
-  }).format(amount);
+  }).format(displayAmount);
 }
 
 /**

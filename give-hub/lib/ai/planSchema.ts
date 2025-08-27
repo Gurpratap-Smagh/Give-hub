@@ -14,13 +14,22 @@ export const PlanSchema = z.union([
       limit: z.number().int().min(1).max(25).optional(),
       sortBy: z.enum(["goal", "raised", "deadline", "created"]).optional(),
       sortOrder: z.enum(["asc", "desc"]).optional(),
+      titleOnly: z.boolean().optional(),
     }),
   }),
   z.object({
     type: z.literal("open_payment"),
-    campaignId: z.string(),
+    campaignId: z.string().optional(),
     amount: z.number().optional(),
     chain: z.string().optional(),
+    token: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("fill_payment"),
+    campaignId: z.string().optional(),
+    amount: z.number().optional(),
+    chain: z.string().optional(),
+    token: z.string().optional(),
   }),
   z.object({
     type: z.literal("info"),

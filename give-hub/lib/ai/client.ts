@@ -15,6 +15,9 @@ function nextGeminiKey() {
   return GEMINI_KEYS[keyIdx];
 }
 
+// Default timeout (ms) for LLM requests; can be overridden via env
+const LLM_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || process.env.LLM_TIMEOUT_MS || 15000);
+
 function wantsJSON(system: string): boolean {
   const s = system || "";
   return /application\/json/i.test(s)
@@ -26,42 +29,7 @@ export async function llmJSON(userText: string, system: string, contextParts: st
   // Graceful no-API fallback for local dev
   if (!GEMINI_KEYS.length) {
     console.warn("🚨 NO GEMINI_API_KEY configured! Create .env.local file with GEMINI_API_KEY. See .env.example");
-    if (wantsJSON(system)) {
-      // Provide intelligent fallbacks based on common patterns
-      const userLower = userText.toLowerCase();
-      
-      // Search intents
-      if (userLower.includes('find') || userLower.includes('search') || userLower.includes('show') || 
-          userLower.includes('campaign') || userLower.includes('community') || userLower.includes('tech')) {
-        return JSON.stringify({ 
-          type: "search_campaigns", 
-          query: { q: userText.slice(0, 50), limit: 10 } 
-        });
-      }
-      
-      // Donation intents
-      if (userLower.includes('donate') || userLower.includes('give') || userLower.includes('$') || 
-          userLower.includes('zeta') || userLower.includes('support')) {
-        const amountMatch = userText.match(/(\d+)/);
-        return JSON.stringify({ 
-          type: "open_payment", 
-          amount: amountMatch ? parseInt(amountMatch[1]) : undefined,
-          chain: userLower.includes('zeta') ? 'zeta' : undefined
-        });
-      }
-      
-      // Greetings
-      if (userLower.includes('hello') || userLower.includes('hi') || userLower.includes('hey') || 
-          userLower.includes('what can you do')) {
-        return JSON.stringify({ 
-          type: "info", 
-          text: "Hello! I'm the GiveHub assistant. I can help you search for campaigns and make donations. What would you like to do?" 
-        });
-      }
-      
-      // Default fallback
-      return JSON.stringify({ type: "final", text: userText.slice(0, 400) });
-    }
+    // Do not fabricate JSON or replies; return raw user text so caller can decide.
     return userText;
   }
 
@@ -74,10 +42,7 @@ export async function llmJSON(userText: string, system: string, contextParts: st
     if (/\b(429|resource_exhausted|timeout|unavailable|5\d{2})\b/i.test(msg)) {
       const altKey = nextGeminiKey();
       try { return await call(body, altKey); } catch {}
-      // Final safe fallback to avoid 500s when no alternate provider is available
-      if (wantsJSON(system)) {
-        return JSON.stringify({ type: "final", text: userText.slice(0, 400) });
-      }
+      // Final fallback: do not fabricate JSON or replies; return raw user text
       return userText;
     }
     throw e;
@@ -99,14 +64,29 @@ function buildBody(userText:string, system:string, ctx:string[]){
 }
 
 async function call(body: unknown, apiKey:string){
-  // Gemini-only call
-  const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key="+apiKey,{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify(body)
-  });
-  const j = await r.json();
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText}: ${JSON.stringify(j)}`);
-  const text = j.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  return text;
+  // Gemini-only call with timeout
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort('timeout'), LLM_TIMEOUT_MS);
+  try {
+    const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key="+apiKey,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}: ${JSON.stringify(j)}`);
+    const text = j.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    return text;
+  } catch (e) {
+    // Normalize aborts to a 'timeout' error so caller can rotate keys/fallback
+    const name = (e as { name?: string })?.name || '';
+    const msg = String((e as { message?: string })?.message || e || '');
+    if (name === 'AbortError' || /aborted/i.test(msg)) {
+      throw new Error('timeout');
+    }
+    throw e as Error;
+  } finally {
+    clearTimeout(timer);
+  }
 }

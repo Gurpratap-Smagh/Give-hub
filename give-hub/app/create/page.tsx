@@ -662,18 +662,6 @@ export default function CreateCampaignPage() {
         </div>
       </div>
 
-      {/* Placeholder Notice */}
-      <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-center">
-          <div className="text-blue-600 mr-3">ℹ️</div>
-          <div>
-            <p className="text-sm text-blue-800 font-medium">Enhanced with AI</p>
-            <p className="text-xs text-blue-700 mt-1">
-              Campaign creation will be enhanced with Gemini AI for content optimization and validation.
-            </p>
-          </div>
-        </div>
-      </div>
       {/* Hidden file input for image upload */}
       <input
         ref={fileInputRef}

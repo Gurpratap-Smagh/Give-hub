@@ -1,20 +1,26 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 interface AIOverlayProps {
   open: boolean
   onClose: () => void
-  onAction?: (action: { type: "open_payment"; campaignId: string; amount?: number; chain?: string; confirm?: boolean }) => void
+  onAction?: (action:
+    | { type: "open_payment" | "fill_payment"; campaignId: string; amount?: number; chain?: string; token?: string; confirm?: boolean }
+    | { type: "open_search"; search: string; param?: string }
+  ) => void
   theme?: 'light' | 'dark'
 }
 
 type ChatMsg = { id: string; role: "system" | "user" | "assistant"; text: string }
 
-// Approx. double a card width on desktop; full width on mobile
-const POPUP_WIDTH = "w-full sm:w-[520px] md:w-[560px] lg:w-[600px]"
+// Default dimensions
+const DEFAULT_WIDTH = 600
+const DEFAULT_HEIGHT = 400
+const MIN_WIDTH = 320
+const MIN_HEIGHT = 200
 
 export default function AIOverlay({ open, onClose, onAction, theme: themeProp }: AIOverlayProps) {
   const [input, setInput] = useState("")
@@ -22,13 +28,211 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
   const [error, setError] = useState<string | null>(null)
   const [payMode, setPayMode] = useState(false)
   const [lastResults, setLastResults] = useState<Array<{ id: string; title: string }>>([])
-  const [lastPayment, setLastPayment] = useState<{ campaignId: string; amount?: number; chain?: string } | null>(null)
+  const [lastPayment, setLastPayment] = useState<{ campaignId: string; amount?: number; chain?: string; token?: string } | null>(null)
   const [messages, setMessages] = useState<ChatMsg[]>([{
     id: "welcome",
     role: "system",
     text: "Welcome to GiveHub AI — ask me anything about your campaigns."
   }])
   const endRef = useRef<HTMLDivElement | null>(null)
+  
+  // Panel position and size state
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [size, setSize] = useState({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT })
+  const [isDragging, setIsDragging] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0, posX: 0, posY: 0, edge: 'se' as 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw' })
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Initialize and clamp position/size to stay on-screen (run once on mount)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const marginLeft = 12
+    const marginRight = 60
+    const marginTop = 80 // leave room for navbar
+    const marginBottom = 60
+
+    // Clamp size to viewport minus margins
+    const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - marginLeft - marginRight)
+    const maxHeight = Math.max(MIN_HEIGHT, window.innerHeight - marginTop - marginBottom)
+    const initWidth = Math.min(DEFAULT_WIDTH, maxWidth)
+    const initHeight = Math.min(DEFAULT_HEIGHT, maxHeight)
+    setSize(prev => {
+      const clampedWidth = Math.min(prev.width, maxWidth)
+      const clampedHeight = Math.min(prev.height, maxHeight)
+      return (clampedWidth !== prev.width || clampedHeight !== prev.height)
+        ? { width: clampedWidth, height: clampedHeight }
+        : prev
+    })
+
+    // Prefer bottom-right within bounds
+    const x = Math.max(marginLeft, Math.min(window.innerWidth - initWidth - marginRight, window.innerWidth - initWidth - marginRight))
+    const y = Math.max(marginTop, Math.min(window.innerHeight - initHeight - marginBottom, window.innerHeight - initHeight - marginBottom))
+    setPosition({ x, y })
+  }, [])
+
+  // When the panel size changes (via user resize), keep the current position but clamp within margins
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const marginLeft = 12
+    const marginRight = 60
+    const marginTop = 80
+    const marginBottom = 60
+
+    const maxX = window.innerWidth - size.width - marginRight
+    const maxY = window.innerHeight - size.height - marginBottom
+    setPosition((p) => ({
+      x: Math.max(marginLeft, Math.min(p.x, maxX)),
+      y: Math.max(marginTop, Math.min(p.y, maxY)),
+    }))
+  }, [size.width, size.height])
+
+  // Drag handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsDragging(true)
+    setDragStart({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    })
+  }, [position.x, position.y])
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (isDragging) {
+      const marginLeft = 12
+      const marginRight = 60
+      const marginTop = 80
+      const marginBottom = 60
+      const newX = Math.max(marginLeft, Math.min(window.innerWidth - size.width - marginRight, e.clientX - dragStart.x))
+      const newY = Math.max(marginTop, Math.min(window.innerHeight - size.height - marginBottom, e.clientY - dragStart.y))
+      setPosition({ x: newX, y: newY })
+    }
+    if (isResizing) {
+      const dx = e.clientX - resizeStart.x
+      const dy = e.clientY - resizeStart.y
+      let newWidth = resizeStart.width
+      let newHeight = resizeStart.height
+      let newX = position.x
+      let newY = position.y
+
+      const marginLeft = 12
+      const marginRight = 60
+      const marginTop = 80
+      const marginBottom = 60
+      const maxW = window.innerWidth - marginLeft - marginRight
+      const maxH = window.innerHeight - marginTop - marginBottom
+
+      switch (resizeStart.edge) {
+        case 'e':
+          newWidth = resizeStart.width + dx
+          break
+        case 's':
+          newHeight = resizeStart.height + dy
+          break
+        case 'se':
+          newWidth = resizeStart.width + dx
+          newHeight = resizeStart.height + dy
+          break
+        case 'w':
+          newWidth = resizeStart.width - dx
+          newX = resizeStart.posX + dx
+          break
+        case 'n':
+          newHeight = resizeStart.height - dy
+          newY = resizeStart.posY + dy
+          break
+        case 'ne':
+          newWidth = resizeStart.width + dx
+          newHeight = resizeStart.height - dy
+          newY = resizeStart.posY + dy
+          break
+        case 'sw':
+          newWidth = resizeStart.width - dx
+          newHeight = resizeStart.height + dy
+          newX = resizeStart.posX + dx
+          break
+        case 'nw':
+          newWidth = resizeStart.width - dx
+          newHeight = resizeStart.height - dy
+          newX = resizeStart.posX + dx
+          newY = resizeStart.posY + dy
+          break
+      }
+
+      // Clamp size within viewport minus margins
+      newWidth = Math.max(MIN_WIDTH, Math.min(newWidth, maxW))
+      newHeight = Math.max(MIN_HEIGHT, Math.min(newHeight, maxH))
+
+      // Clamp position so panel stays on screen within margins
+      newX = Math.max(marginLeft, Math.min(newX, window.innerWidth - newWidth - marginRight))
+      newY = Math.max(marginTop, Math.min(newY, window.innerHeight - newHeight - marginBottom))
+
+      setSize({ width: newWidth, height: newHeight })
+      setPosition({ x: newX, y: newY })
+    }
+  }, [isDragging, isResizing, dragStart, resizeStart, size.width, size.height, position.x, position.y])
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+    setIsResizing(false)
+  }, [])
+
+  // Resize handler
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const target = e.currentTarget as HTMLElement
+    const edge = (target.getAttribute('data-edge') as 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw') || 'se'
+    setIsResizing(true)
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      width: size.width,
+      height: size.height,
+      posX: position.x,
+      posY: position.y,
+      edge
+    })
+  }, [size.width, size.height, position.x, position.y])
+
+  // Mouse event listeners
+  useEffect(() => {
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseup', handleMouseUp)
+      }
+    }
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp])
+
+  // Clamp position and size on window resize so the panel never gets lost off-screen
+  useEffect(() => {
+    const onResize = () => {
+      if (typeof window === 'undefined') return
+      const marginLeft = 12
+      const marginRight = 120
+      const marginTop = 80
+      const marginBottom = 120
+
+      const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - marginLeft - marginRight)
+      const maxHeight = Math.max(MIN_HEIGHT, window.innerHeight - marginTop - marginBottom)
+      const newWidth = Math.min(size.width, maxWidth)
+      const newHeight = Math.min(size.height, maxHeight)
+      if (newWidth !== size.width || newHeight !== size.height) {
+        setSize({ width: newWidth, height: newHeight })
+      }
+
+      const newX = Math.max(marginLeft, Math.min(position.x, window.innerWidth - newWidth - marginRight))
+      const newY = Math.max(marginTop, Math.min(position.y, window.innerHeight - newHeight - marginBottom))
+      if (newX !== position.x || newY !== position.y) {
+        setPosition({ x: newX, y: newY })
+      }
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [position.x, position.y, size.width, size.height])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -60,7 +264,10 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
       if (!res.ok) throw new Error(`AI request failed (${res.status})`)
       const data = (await res.json()) as {
         text?: string;
-        action?: { type: "open_payment"; campaignId: string; amount?: number; chain?: string; confirm?: boolean };
+        action?: (
+          | { type: "open_payment" | "fill_payment"; campaignId: string; amount?: number; chain?: string; token?: string; confirm?: boolean }
+          | { type: "open_search"; search: string; param?: string }
+        );
         results?: Array<{ id: string; title: string }>
       }
       const text = (data.text ?? "").trim()
@@ -69,10 +276,14 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
       if (Array.isArray(data.results) && data.results.length) {
         setLastResults(data.results.map(r => ({ id: r.id, title: r.title })))
       }
-      if (data.action && data.action.type === 'open_payment') {
-        // Keep overlay open; parent can open payment modal
-        setLastPayment({ campaignId: data.action.campaignId, amount: data.action.amount, chain: data.action.chain })
-        if (onAction) onAction(data.action)
+      if (data.action) {
+        if (data.action.type === 'open_payment' || data.action.type === 'fill_payment') {
+          // Keep overlay open; parent can open payment modal
+          setLastPayment({ campaignId: data.action.campaignId, amount: data.action.amount, chain: data.action.chain, token: (data.action as { token?: string }).token })
+          if (onAction) onAction(data.action)
+        } else if (data.action.type === 'open_search') {
+          if (onAction) onAction(data.action)
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to get AI response"
@@ -94,11 +305,18 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
   // Auto-scroll to bottom on new messages
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages, loading])
 
-  // Position popup above the bottom-right launcher (25px from edges, launcher ~56px tall)
-  // We place the box ~96px above bottom to clear the launcher + gap, aligned to right.
-  const containerClasses = useMemo(() => `fixed bottom-[96px] right-[25px] z-[70] pointer-events-none transition-all duration-200 ease-out ${
+  // Position popup based on state
+  const containerClasses = useMemo(() => `fixed inset-0 z-[70] pointer-events-none ${
     open ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
-  }`, [open])
+  } transition-all duration-200 ease-out`, [open])
+  
+  const panelStyle = useMemo(() => ({
+    left: `${position.x}px`,
+    top: `${position.y}px`,
+    width: `${size.width}px`,
+    height: `${size.height}px`,
+    cursor: isDragging ? 'grabbing' : 'default'
+  }), [position.x, position.y, size.width, size.height, isDragging])
 
   // Resolve current theme from prop or document
   const resolvedTheme = useMemo<'light' | 'dark'>(() => {
@@ -115,27 +333,36 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
   }, [themeProp])
 
   return (
-    <div className={containerClasses}>
-      {/* Right-aligned floating container above launcher */}
-      <div className={`pointer-events-auto ${POPUP_WIDTH}`}>
-          <div className="relative rounded-2xl shadow-2xl border border-gray-200/70 bg-white/95 backdrop-blur-xl overflow-hidden">
-            {/* Accent top border */}
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-violet-500 to-green-500" />
+    <div className={containerClasses} data-testid="ai-overlay-container">
+      {/* Draggable and resizable AI panel */}
+      <div 
+        ref={panelRef}
+        className="pointer-events-auto absolute"
+        style={panelStyle}
+      >
+        <div className="relative h-full rounded-2xl shadow-2xl border border-gray-200/70 bg-white/95 backdrop-blur-xl overflow-hidden flex flex-col">
 
-            {/* Tail (speech-bubble pointer) */}
-            <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white/95 border border-gray-200/70 rotate-45 shadow-md" />
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${resolvedTheme === 'dark' ? 'bg-black' : 'bg-white'} text-blue-500 ring-1 ring-blue-500 shadow-sm`}>
-                  ✦
-                </span>
-                <span className="font-semibold text-gray-900">GiveHub AI</span>
-              </div>
+          {/* Header */}
+          <div 
+            className="flex items-center justify-between px-4 py-3"
+          >
+            <div
+              className="flex items-center gap-2 drag-handle select-none cursor-grab active:cursor-grabbing"
+              onMouseDown={handleMouseDown}
+            >
+              <span
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${resolvedTheme === 'dark' ? 'bg-black' : 'bg-white'} text-blue-500 ring-1 ring-blue-500 shadow-sm`}
+                title="Drag"
+                aria-label="Drag GiveHub AI"
+              >
+                ✦
+              </span>
+              <span className="font-semibold text-gray-900">GiveHub AI</span>
+            </div>
               <button
                 onClick={onClose}
                 className="p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                data-testid="ai-overlay-close"
                 aria-label="Close AI"
               >
                 <svg className="w-4 h-4 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -144,8 +371,8 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
               </button>
             </div>
 
-            {/* Messages */}
-            <div className="px-4 pb-3 max-h-72 overflow-y-auto space-y-3">
+            {/* Messages - with custom scrollbar */}
+            <div className="px-4 pb-3 flex-1 overflow-y-auto space-y-3 ai-scrollbar">
               {error && (
                 <div className="flex justify-center">
                   <div className="px-3 py-2 rounded-2xl bg-red-50 text-red-700 text-xs border border-red-200">
@@ -232,6 +459,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
                   onClick={() => setPayMode((v) => !v)}
                   className={`h-9 w-9 rounded-lg border text-sm font-semibold transition-all ${payMode ? 'bg-blue-600 border-blue-600 text-white shadow-[0_0_0_2px_rgba(59,130,246,0.5)]' : 'bg-white border-blue-400 text-blue-600 hover:bg-blue-50'}`}
                   title="Payment mode"
+                  data-testid="ai-pay-toggle"
                   aria-pressed={payMode}
                 >
                   $
@@ -241,16 +469,64 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask GiveHub AI…"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  data-testid="ai-input"
                 />
                 <button
                   type="submit"
                   disabled={loading}
                   className="px-4 py-2 rounded-xl bg-white text-blue-600 border border-blue-500 font-medium shadow-sm hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 active:bg-blue-100 disabled:opacity-50"
+                  data-testid="ai-send"
                 >
                   Send
                 </button>
               </div>
             </form>
+
+            {/* Resize handles: corners and edges */}
+            <div 
+              className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize bg-gray-300 text-gray-400 hover:text-blue-500 hover:ring-2 hover:ring-blue-500 rounded-sm transition-colors"
+              data-edge="se"
+              onMouseDown={handleResizeStart}
+              style={{
+                background: 'linear-gradient(-45deg, transparent 30%, currentColor 30%, currentColor 50%, transparent 50%, transparent 80%, currentColor 80%)'
+              }}
+            />
+            <div 
+              className="absolute bottom-0 right-4 left-4 h-1 cursor-s-resize bg-transparent hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500 transition-colors"
+              data-edge="s"
+              onMouseDown={handleResizeStart}
+            />
+            <div 
+              className="absolute top-4 bottom-4 right-0 w-1 cursor-e-resize bg-transparent hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500 transition-colors"
+              data-edge="e"
+              onMouseDown={handleResizeStart}
+            />
+            <div 
+              className="absolute top-0 right-4 left-4 h-1 cursor-n-resize bg-transparent hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500 transition-colors"
+              data-edge="n"
+              onMouseDown={handleResizeStart}
+            />
+            <div 
+              className="absolute top-4 bottom-4 left-0 w-1 cursor-w-resize bg-transparent hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500 transition-colors"
+              data-edge="w"
+              onMouseDown={handleResizeStart}
+            />
+            {/* Optional corner handles for completeness */}
+            <div 
+              className="absolute top-0 right-0 w-4 h-4 cursor-ne-resize bg-transparent hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500 rounded-sm transition-colors"
+              data-edge="ne"
+              onMouseDown={handleResizeStart}
+            />
+            <div 
+              className="absolute bottom-0 left-0 w-4 h-4 cursor-sw-resize bg-transparent hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500 rounded-sm transition-colors"
+              data-edge="sw"
+              onMouseDown={handleResizeStart}
+            />
+            <div 
+              className="absolute top-0 left-0 w-4 h-4 cursor-nw-resize bg-transparent hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500 rounded-sm transition-colors"
+              data-edge="nw"
+              onMouseDown={handleResizeStart}
+            />
           </div>
         </div>
     </div>

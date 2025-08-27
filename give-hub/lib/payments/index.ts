@@ -2,6 +2,7 @@
 'use client';
 
 import { BrowserProvider, Contract, parseEther, parseUnits } from 'ethers';
+import { ensureWalletOnChain } from '@/lib/web3/client';
 
 // Crowdfund ABI supports native and ZRC-20 paths (handle naming drift)
 const CROWDFUND_ABI = [
@@ -113,6 +114,17 @@ export async function processDonation(params: {
   setStatus?: (s: string) => void;
 }) {
   const { contract, WZETA } = requireEnv();
+  // Force wallet onto ZetaChain (ZEVM) before any signer/tx usage
+  try {
+    const targetChainId = Number(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || 7001);
+    if (Number.isFinite(targetChainId)) {
+      await ensureWalletOnChain(targetChainId);
+    }
+  } catch (e) {
+    // Surface a clear message while preserving original error for logs
+    const msg = (e as Error)?.message || 'Failed to switch wallet to ZetaChain';
+    throw new Error(msg);
+  }
   const { signer } = await getSigner();
 
   // Preflight check: Ensure campaign's preferred token is WZETA

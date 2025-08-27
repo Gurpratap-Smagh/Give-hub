@@ -2,12 +2,19 @@ import { db } from '@/lib/db';
 import type { UserRole, User, Creator } from '@/lib/db';
 import { JWTPayload } from 'jose';
 import { SignJWT, jwtVerify } from 'jose';
+import bcrypt from 'bcrypt';
 
 const secretKey = process.env.JWT_SECRET || 'fallback-secret-key-for-development';
 const key = new TextEncoder().encode(secretKey);
+const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12');
 
-const mockHash = async (password: string) => `hashed_${password}`;
-const mockCompare = async (password: string, hash: string) => `hashed_${password}` === hash;
+const hashPassword = async (password: string): Promise<string> => {
+  return await bcrypt.hash(password, saltRounds);
+};
+
+const comparePassword = async (password: string, hash: string): Promise<boolean> => {
+  return await bcrypt.compare(password, hash);
+};
 
 interface AuthPayload extends JWTPayload {
   userId: string;
@@ -46,7 +53,7 @@ export const authService = {
       return { success: false, error: 'Username already in use' };
     }
 
-    const hashedPassword = await mockHash(data.password);
+    const hashedPassword = await hashPassword(data.password);
     // Route creator signups to proper creator creation to ensure required fields
     const created: User | Creator = data.role === 'creator'
       ? await db.createCreator({ ...(data as Omit<Creator, 'id' | 'createdAt' | 'updatedAt'>), password: hashedPassword })
@@ -75,7 +82,7 @@ export const authService = {
       return { success: false, error: 'Invalid credentials' };
     }
 
-    const isPasswordValid = await mockCompare(data.password, user.password);
+    const isPasswordValid = await comparePassword(data.password, user.password);
     if (!isPasswordValid) {
       return { success: false, error: 'Invalid credentials' };
     }
@@ -99,7 +106,8 @@ export const authService = {
 };
 
 function sanitizeUser(u: User | Creator): Omit<User | Creator, 'password'> {
-  const { password: _removed, ...rest } = u as any;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { password, ...rest } = u as User & Creator & { password: string };
   return rest;
 }
 
