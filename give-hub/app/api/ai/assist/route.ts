@@ -105,70 +105,52 @@ export async function POST(req: NextRequest) {
   if (mode === 'profile') {
     try {
       const PROFILE_SYSTEM = `You are a profile improvement assistant for GiveHub users.\n\nReturn ONLY a single JSON object with these exact keys:\n{\n  "bio": string,\n  "location": string,\n  "website": string\n}\n\nRules:\n- Bio: 1-2 concise paragraphs, authentic and friendly\n- Location: city, state/country format\n- Website: valid URL or empty string\n- No markdown, no code fences, no extra text`;
-      const ctxParts: string[] = [ensureJsonHint(), 'mode=profile'];
+      
+      const ctxParts: string[] = [
+        ensureJsonHint(), 
+        'mode=profile',
+        'Current profile data:\n' + JSON.stringify(context?.profile || {})
+      ];
+      
       const raw = await llmJSON(userMessage, PROFILE_SYSTEM, ctxParts);
-      let outText = typeof raw === 'string' ? raw : JSON.stringify(raw);
-      // Robustly extract the first JSON object if any wrappers slipped in
-      if (typeof outText === 'string') {
+      
+      // Parse and validate the response
+      let parsed: {bio?: string, location?: string, website?: string} = {};
+      
+      if (typeof raw === 'string') {
         try {
-          // Try direct parse first
-          const parsed = JSON.parse(outText) as unknown;
-          // If it doesn't look like desired shape, try to improve below
-          if (
-            !parsed ||
-            typeof parsed !== 'object' ||
-            !('bio' in (parsed as Record<string, unknown>)) ||
-            !('location' in (parsed as Record<string, unknown>)) ||
-            !('website' in (parsed as Record<string, unknown>))
-          ) {
-            throw new Error('missing keys');
-          }
+          parsed = JSON.parse(raw);
         } catch {
-          const candidate = extractFirstJSONObject(outText);
-          if (candidate) {
-            try {
-              const parsed = JSON.parse(candidate) as Record<string, unknown>;
-              if ('bio' in parsed && 'location' in parsed && 'website' in parsed) {
-                outText = candidate;
-              } else {
-                throw new Error('candidate missing keys');
-              }
-            } catch {
-              // Fall through to attempt extracting the input JSON from the original prompt as a last resort
-              const inputCandidate = extractFirstJSONObject(userMessage);
-              if (inputCandidate) {
-                try {
-                  const inputParsed = JSON.parse(inputCandidate) as Record<string, unknown>;
-                  const bio = typeof inputParsed.bio === 'string' ? inputParsed.bio : '';
-                  const location = typeof inputParsed.location === 'string' ? inputParsed.location : '';
-                  const website = typeof inputParsed.website === 'string' ? inputParsed.website : '';
-                  if (bio || location || website) {
-                    outText = JSON.stringify({ bio, location, website });
-                  }
-                } catch {}
-              }
-            }
-          } else {
-            // No candidate; try to salvage from the original prompt input JSON
-            const inputCandidate = extractFirstJSONObject(userMessage);
-            if (inputCandidate) {
-              try {
-                const inputParsed = JSON.parse(inputCandidate) as Record<string, unknown>;
-                const bio = typeof inputParsed.bio === 'string' ? inputParsed.bio : '';
-                const location = typeof inputParsed.location === 'string' ? inputParsed.location : '';
-                const website = typeof inputParsed.website === 'string' ? inputParsed.website : '';
-                if (bio || location || website) {
-                  outText = JSON.stringify({ bio, location, website });
-                }
-              } catch {}
-            }
-          }
+          const extracted = extractFirstJSONObject(raw);
+          if (extracted) parsed = JSON.parse(extracted);
         }
+      } else if (typeof raw === 'object') {
+        parsed = raw;
       }
-      return NextResponse.json({ text: outText, reply: outText });
+      
+      // Validate and sanitize fields
+      const result = {
+        bio: typeof parsed.bio === 'string' ? parsed.bio : '',
+        location: typeof parsed.location === 'string' ? parsed.location : '',
+        website: typeof parsed.website === 'string' && 
+                 (parsed.website === '' || parsed.website.startsWith('http')) ? 
+                 parsed.website : ''
+      };
+      
+      return NextResponse.json({
+        text: JSON.stringify(result),
+        reply: JSON.stringify(result),
+        profileUpdate: result,
+        type: 'profile_update'
+      });
+      
     } catch (e) {
-      console.error('✏️ profile mode failed:', e);
-      // Fall through to generic flow only if rewrite fails hard
+      console.error('Profile update failed:', e);
+      return NextResponse.json({
+        text: 'Failed to process profile update',
+        reply: 'Failed to process profile update',
+        error: 'PROFILE_UPDATE_FAILED'
+      }, {status: 400});
     }
   }
 

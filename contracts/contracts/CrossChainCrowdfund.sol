@@ -31,6 +31,7 @@ interface IUniswapV2Router02 {
     address to,
     uint deadline
   ) external returns (uint[] memory amounts);
+  function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts);
 }
 
 interface IERC20Minimal {
@@ -85,10 +86,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
   /*------------------------------- TYPES -------------------------------*/
 
-  struct Creator {
-    address preferredZRC20; // any whitelisted token
-    bool exists;
-  }
+  // Creator struct removed (redundant with Campaign info)
 
   struct Contribution {
     uint256 campaignId;
@@ -112,6 +110,8 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
   // Public business events
   event CampaignCreated(uint256 indexed campaignId, address indexed creator, address preferredZRC20);
+  event CampaignPaused(uint256 indexed campaignId, address indexed creator);
+  event CampaignResumed(uint256 indexed campaignId, address indexed creator);
   event ContributionReceived(
     uint256 indexed campaignId,
     address indexed donor,
@@ -156,15 +156,16 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
   SystemContract public immutable systemContract;
 
-  mapping(address => Creator) public creators;
+  // creators mapping removed (redundant with campaigns mapping)
   mapping(uint256 => Campaign) public campaigns;
   mapping(uint256 => Contribution) public contributions;
 
   uint256 public nextCampaignId;
   uint256 public nextContributionId;
 
-  mapping(address => string) public tokenToChainName;
-
+  // Token labeling
+  mapping(address => string) public tokenLabel; // e.g. "zETH.Sepolia", "USDC.Sepolia", "WZETA"
+  
   address public immutable WZETA;
   address public immutable ethZRC20;
   address public immutable btcZRC20;
@@ -174,9 +175,34 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
   bool public debug = true;
 
-  // Token whitelist for allowed payout tokens
+  // Token allowlists
+  mapping(address => bool) public allowedInTokens;
   mapping(address => bool) public allowedOutTokens;
+  
+  event AllowedInTokenSet(address token, bool allowed);
   event AllowedOutTokenSet(address token, bool allowed);
+
+  function setAllowedInToken(address t, bool allowed) external onlyOwner {
+    require(t != address(0), "ZERO_TOKEN");
+    allowedInTokens[t] = allowed;
+    emit AllowedInTokenSet(t, allowed);
+  }
+
+  function setAllowedOutToken(address t, bool allowed) external onlyOwner {
+    require(t != address(0), "ZERO_TOKEN");
+    allowedOutTokens[t] = allowed;
+    emit AllowedOutTokenSet(t, allowed);
+  }
+
+  // Slippage configuration
+  uint256 public slippageBps = 300; // 3.00% default
+  event SlippageUpdated(uint256 bps);
+  
+  function setSlippageBps(uint256 bps) external onlyOwner {
+    require(bps <= 2000, "SLIPPAGE_TOO_HIGH"); // cap at 20%
+    slippageBps = bps;
+    emit SlippageUpdated(bps);
+  }
 
   /*---------------------------- CONSTRUCTOR ----------------------------*/
 
@@ -201,16 +227,24 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     btcZRC20 = _btcZRC20;
     usdcZRC20 = _usdcZRC20;
 
-    tokenToChainName[_ethZRC20] = "Ethereum";
-    tokenToChainName[_btcZRC20] = "Bitcoin";
-    if (_usdcZRC20 != address(0)) tokenToChainName[_usdcZRC20] = "USDC";
-    tokenToChainName[_wzeta] = "ZetaChain";
+    tokenLabel[_ethZRC20] = "zETH.Sepolia";
+    tokenLabel[_btcZRC20] = "zBTC.Sepolia";
+    if (_usdcZRC20 != address(0)) tokenLabel[_usdcZRC20] = "USDC.Sepolia";
+    tokenLabel[_wzeta] = "WZETA";
 
-    // Initialize token whitelist
+    // Initialize token allowlists
+    allowedInTokens[_wzeta] = true;
+    allowedInTokens[_ethZRC20] = true;
+    allowedInTokens[_btcZRC20] = true;
+    if (_usdcZRC20 != address(0)) allowedInTokens[_usdcZRC20] = true;
     allowedOutTokens[_wzeta] = true;
     allowedOutTokens[_ethZRC20] = true;
     allowedOutTokens[_btcZRC20] = true;
     if (_usdcZRC20 != address(0)) allowedOutTokens[_usdcZRC20] = true;
+  }
+
+  function setTokenLabel(address token, string calldata label) external onlyOwner {
+    tokenLabel[token] = label;
   }
 
   /*----------------------------- ADMIN SET -----------------------------*/
@@ -226,12 +260,6 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     emit DebugToggle(enabled);
   }
 
-  function setAllowedOutToken(address token, bool allowed) external onlyOwner {
-    require(token != address(0), "ZERO_TOKEN");
-    allowedOutTokens[token] = allowed;
-    emit AllowedOutTokenSet(token, allowed);
-  }
-
   /*--------------------------- UNIVERSAL ENTRY --------------------------*/
 
   event debugger(address sender);
@@ -241,6 +269,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     uint256 amount,
     bytes calldata message
   ) external override {
+    require(msg.sender == address(router), "ONLY_ROUTER");
     emit debugger(msg.sender);
     if (debug) emit DebugOnCallEntered(ctx.sender, ctx.chainID, zrc20, amount);
 
@@ -264,11 +293,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
     campaignId = ++nextCampaignId;
 
-    if (!creators[msg.sender].exists) {
-      creators[msg.sender] = Creator({ preferredZRC20: preferredZRC20, exists: true });
-    } else {
-      creators[msg.sender].preferredZRC20 = preferredZRC20;
-    }
+    // Creator tracking moved to campaigns mapping
 
     campaigns[campaignId] = Campaign({
       creator: msg.sender,
@@ -287,7 +312,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     require(allowedOutTokens[newToken], "PAYOUT_TOKEN_NOT_ALLOWED");
 
     campaign.preferredZRC20 = newToken;
-    creators[msg.sender].preferredZRC20 = newToken;
+    // No need to update separate creators mapping anymore
 
     emit CampaignCreated(campaignId, msg.sender, newToken); // Reuse event for simplicity
   }
@@ -296,12 +321,14 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     Campaign storage c = campaigns[campaignId];
     if (c.creator != msg.sender) revert NotCreator();
     c.active = false;
+    emit CampaignPaused(campaignId, msg.sender);
   }
 
   function resumeCampaign(uint256 campaignId) external {
     Campaign storage c = campaigns[campaignId];
     if (c.creator != msg.sender) revert NotCreator();
     c.active = true;
+    emit CampaignResumed(campaignId, msg.sender);
   }
 
   /*--------------------------- DONATION HANDLING ------------------------*/
@@ -315,6 +342,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     string memory note
   ) internal {
     if (amount == 0) revert AmountZero();
+    if (!allowedInTokens[zrc20In]) revert InvalidToken();
 
     Campaign storage campaign = campaigns[campaignId];
     if (campaign.creator == address(0)) revert InvalidCampaign();
@@ -331,9 +359,9 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     if (debug) emit DebugTransferOut(tokenOut, campaign.creator, amountOut);
     IERC20Minimal(tokenOut).safeTransfer(campaign.creator, amountOut);
 
-    string memory chainName = bytes(tokenToChainName[zrc20In]).length == 0
+    string memory chainName = bytes(tokenLabel[zrc20In]).length == 0
       ? "ZetaChain"
-      : tokenToChainName[zrc20In];
+      : tokenLabel[zrc20In];
 
     uint256 id = ++nextContributionId;
     contributions[id] = Contribution({
@@ -419,6 +447,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     string calldata note
   ) external nonReentrant {
     require(amount > 0, "NO_AMOUNT");
+    if (!allowedInTokens[token]) revert InvalidToken();
 
     Campaign storage c = campaigns[campaignId];
     if (c.creator == address(0)) revert InvalidCampaign();
@@ -432,9 +461,9 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     if (debug) emit DebugTransferOut(tokenOut, c.creator, converted);
     IERC20Minimal(tokenOut).safeTransfer(c.creator, converted);
 
-    string memory chainName = bytes(tokenToChainName[token]).length == 0
+    string memory chainName = bytes(tokenLabel[token]).length == 0
       ? "ZetaChain"
-      : tokenToChainName[token];
+      : tokenLabel[token];
 
     uint256 id = ++nextContributionId;
     contributions[id] = Contribution({
@@ -464,6 +493,20 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     );
   }
 
+  /*--------------------------- RESCUE FUNCTIONS --------------------------*/
+  
+  event Rescue(address indexed token, address indexed to, uint256 amount);
+  
+  function rescueToken(address token, address to, uint256 amount) external onlyOwner {
+    IERC20Minimal(token).safeTransfer(to, amount);
+    emit Rescue(token, to, amount);
+  }
+
+  function rescueNative(address to, uint256 amount) external onlyOwner {
+    payable(to).transfer(amount);
+    emit Rescue(address(0), to, amount);
+  }
+
   /*------------------------------ SWAPPING ------------------------------*/
 
   function _swapExactViaPath(
@@ -477,11 +520,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
       revert RouterNotSet();
     }
 
-    if (debug) emit DebugApproveReset(tokenIn, 0);
-    IERC20Minimal(tokenIn).safeApprove(address(router), 0);
-    if (debug) emit DebugApprove(tokenIn, amountIn);
-    IERC20Minimal(tokenIn).safeApprove(address(router), amountIn);
-
+    // Get quoted amount out
     address[] memory path;
     if (tokenIn != WZETA && tokenOut != WZETA) {
       path = new address[](3);
@@ -493,18 +532,29 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
       path[0] = tokenIn;
       path[1] = tokenOut;
     }
+    
+    uint[] memory amounts = router.getAmountsOut(amountIn, path);
+    uint256 minOut = (amounts[amounts.length - 1] * (10_000 - slippageBps)) / 10_000;
+
+    if (debug) emit DebugApproveReset(tokenIn, 0);
+    IERC20Minimal(tokenIn).safeApprove(address(router), 0);
+    if (debug) emit DebugApprove(tokenIn, amountIn);
+    IERC20Minimal(tokenIn).safeApprove(address(router), amountIn);
 
     if (debug) emit DebugSwapPlanned(tokenIn, tokenOut, amountIn, path.length);
 
     try router.swapExactTokensForTokens(
       amountIn,
-      1, // minOut=1 for debug; tune later for slippage
+      minOut, // Use calculated slippage protection
       path,
       address(this),
       block.timestamp + 600
     ) returns (uint[] memory amounts) {
       amountOut = amounts[amounts.length - 1];
       if (debug) emit DebugSwapSucceeded(amountOut);
+      
+      // Clean up approval after swap
+      IERC20Minimal(tokenIn).safeApprove(address(router), 0);
     } catch Error(string memory reason) {
       if (debug) emit DebugSwapFailed(reason);
       revert(reason);

@@ -143,7 +143,7 @@ export default function CreatorStudioPage() {
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       {/* Header */}
-      <div className="mb-2">
+      <div className="mb-2 flex items-center">
         <h1 className="text-3xl font-bold text-gray-900">Creator Panel</h1>
       </div>
 
@@ -161,16 +161,7 @@ export default function CreatorStudioPage() {
           <p className="text-sm text-gray-500 mb-1">Status</p>
           <p className="text-3xl font-bold text-gray-900">{myCampaigns.length > 0 ? 'Active' : 'Getting Started'}</p>
         </div>
-        {/* Web3 Financials Placeholder */}
-        <div className="md:col-span-3 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-          <div className="flex items-center">
-            <div className="text-purple-600 mr-3">💸</div>
-            <div>
-              <p className="text-sm text-purple-800 font-medium">Web3 Financials Coming Soon</p>
-              <p className="text-xs text-purple-700 mt-1">Wallet-based revenue and on-chain stats will appear here. The schema already includes placeholders for contract ownership and wallet addresses.</p>
-            </div>
-          </div>
-        </div>
+
         {/* On-chain Controls removed in no-escrow mode */}
       </div>
 
@@ -181,6 +172,27 @@ export default function CreatorStudioPage() {
 
       {/* Your Campaigns */}
       <h2 className="text-2xl font-bold text-gray-900 mb-4">Your Campaigns</h2>
+      {/* Add Campaign Card - matches campaign card dimensions */}
+      <div className="mb-6">
+        <Link href="/create" className="block">
+          <div className="w-80 h-30 relative bg-white rounded-xl border border-gray-200 p-3 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-md hover:border-gray-300 transform hover:-translate-y-1 flex flex-col h-full">
+            {/* Plus icon in same position as campaign image */}
+            <div className="w-40 h-20 relative rounded-lg overflow-hidden mb-1 flex items-center justify-center bg-gray-100">
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                  <path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75v6h6a.75.75 0 010 1.5h-6v6a.75.75 0 01-1.5 0v-6h-6a.75.75 0 010-1.5h6v-6A.75.75 0 0112 4.5z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+            {/* Title matching campaign card styling */}
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Add Campaign</h3>
+            {/* Subtitle matching progress bar area */}
+            <div className="mt-auto">
+              <p className="text-sm text-gray-600">Create a new fundraising campaign</p>
+            </div>
+          </div>
+        </Link>
+      </div>
       {/* Campaigns Grid with blur after 6 */}
       <div className="relative">
         {/* Show loading state while campaigns load */}
@@ -215,16 +227,6 @@ export default function CreatorStudioPage() {
         </div>
       )}
 
-      {/* AI placeholder note */}
-      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-        <div className="flex items-center">
-          <div className="text-green-600 mr-3">🤖</div>
-          <div>
-            <p className="text-sm text-green-800 font-medium">AI Editing Coming Soon</p>
-            <p className="text-xs text-green-700 mt-1">You&apos;ll soon be able to use AI to improve your campaign content directly from here.</p>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

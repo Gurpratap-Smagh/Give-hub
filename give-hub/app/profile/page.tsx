@@ -152,40 +152,58 @@ export default function ProfilePage() {
     try {
       setIsEditing(true)
       setAiLoading(true)
-      const prompt = `TASK: Improve this GiveHub user profile.\n\nCurrent data:\n- Name: ${profileData.name}\n- Bio: ${profileData.bio}\n- Location: ${profileData.location}\n- Website: ${profileData.website}\n\nRules:\n- Keep it authentic, friendly, and specific\n- Bio should be 1-2 short paragraphs, concise\n- No links in bio, no emojis, no headings, no lists\n- Location should be city, state/country format\n- Website should be valid URL or empty\n\nReturn a JSON object with improved fields: {"bio": "...", "location": "...", "website": "..."}\nOutput ONLY valid JSON, nothing else.`
+      
+      // Prepare context with current profile data
+      const context = {
+        profile: {
+          bio: profileData.bio,
+          location: profileData.location,
+          website: profileData.website
+        }
+      }
       
       const res = await fetch('/api/ai/assist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ prompt, mode: 'profile' }),
+        body: JSON.stringify({ 
+          prompt: '', 
+          mode: 'profile',
+          context
+        }),
       })
       
       if (!res.ok) throw new Error(`AI request failed (${res.status})`)
-      const data = (await res.json()) as { text?: string }
-      const responseText = (data.text || '').trim()
       
-      if (!responseText) {
-        notify('AI did not return suggestions. Try again.', 'error')
-        return
-      }
+      const data = await res.json()
       
-      try {
-        // Try to parse as JSON first
-        const parsed = JSON.parse(responseText) as { bio?: string; location?: string; website?: string }
-        
-        setProfileData((prev) => ({
+      // Check for structured profileUpdate in response
+      if (data.profileUpdate) {
+        setProfileData(prev => ({
           ...prev,
-          bio: parsed.bio || prev.bio,
-          location: parsed.location || prev.location,
-          website: parsed.website || prev.website
+          bio: data.profileUpdate.bio || prev.bio,
+          location: data.profileUpdate.location || prev.location,
+          website: data.profileUpdate.website || prev.website
         }))
-        
         notify('Profile improved with AI suggestions', 'success')
-      } catch {
-        // If not JSON, treat as bio improvement only
-        setProfileData((prev) => ({ ...prev, bio: responseText }))
-        notify('Bio improved with AI suggestions', 'success')
+      } 
+      // Fallback to text extraction if needed
+      else if (data.text) {
+        try {
+          const parsed = JSON.parse(data.text)
+          setProfileData(prev => ({
+            ...prev,
+            bio: parsed.bio || prev.bio,
+            location: parsed.location || prev.location,
+            website: parsed.website || prev.website
+          }))
+          notify('Profile improved with AI suggestions', 'success')
+        } catch {
+          setProfileData(prev => ({ ...prev, bio: data.text }))
+          notify('Bio improved with AI suggestions', 'success')
+        }
+      } else {
+        throw new Error('No valid response from AI')
       }
     } catch (e) {
       console.error(e)

@@ -28,6 +28,9 @@ const ERC20_ABI = [
 let __deploymentCache: DeploymentInfo | null = null;
 let __deploymentPending: Promise<DeploymentInfo> | null = null;
 
+// Track wallet connection state to prevent duplicate requests
+let __connectionInProgress = false;
+
 export async function fetchDeployment(): Promise<DeploymentInfo> {
   // Serve from cache if available
   if (__deploymentCache) {
@@ -160,12 +163,20 @@ async function waitForReceiptWithRetries(
 }
 
 export async function connectWallet(): Promise<{ signer: ethers.Signer; address: string; chainId: number }>{
-  const provider = await getProvider();
-  await provider.send("eth_requestAccounts", []);
-  const signer = await provider.getSigner();
-  const address = await signer.getAddress();
-  const network = await provider.getNetwork();
-  return { signer, address, chainId: Number(network.chainId) };
+  if (__connectionInProgress) {
+    throw new Error('Wallet connection already in progress');
+  }
+  __connectionInProgress = true;
+  try {
+    const provider = await getProvider();
+    await provider.send("eth_requestAccounts", []);
+    const signer = await provider.getSigner();
+    const address = await signer.getAddress();
+    const network = await provider.getNetwork();
+    return { signer, address, chainId: Number(network.chainId) };
+  } finally {
+    __connectionInProgress = false;
+  }
 }
 
 /**
