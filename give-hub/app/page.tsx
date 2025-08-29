@@ -20,6 +20,7 @@ import { CampaignsGrid } from '../components/campaigns-grid' // Client grid w/ l
 import ScrollToTopOnMount from '@/components/scroll-to-top-on-mount'
 import ErrorMessage from '@/components/error-message'
 import type { Campaign } from '@/lib/db'
+import { headers } from 'next/headers'
 
 /**
  * Home page component - campaign discovery and browsing
@@ -35,8 +36,21 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
   try {
     // Use the API route that implements on-chain verification instead of direct DB access
     // By default, the API will only return campaigns that are verified to exist on-chain
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    
+    // Derive a safe absolute base URL (handles Vercel and local without env)
+    const envBase = (process.env.NEXT_PUBLIC_APP_URL || '').trim()
+    let baseUrl = ''
+    if (envBase && /^https?:\/\//i.test(envBase)) {
+      baseUrl = envBase
+    } else if (process.env.VERCEL_URL) {
+      // Vercel provides host without protocol
+      baseUrl = `https://${process.env.VERCEL_URL}`
+    } else {
+      const hdrs = await headers()
+      const proto = hdrs.get('x-forwarded-proto') || 'http'
+      const host = hdrs.get('x-forwarded-host') || hdrs.get('host') || 'localhost:3000'
+      baseUrl = `${proto}://${host}`
+    }
+
     const apiUrl = new URL('/api/campaigns', baseUrl)
     
     // Add appropriate search parameters if needed
