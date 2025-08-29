@@ -53,19 +53,30 @@ const CARD_PLACEHOLDER_2x1 = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
  * Props for CampaignCard component
  * @param campaign - Campaign data object with all details
  * @param variant - Display mode: 'minimal' for grid, 'detailed' for campaign page
+ * @param isLive - Indicates if the campaign has recent donation activity
+ * @param className - Optional CSS class names for styling
  */
 interface CampaignCardProps {
   campaign: Campaign
   variant?: 'minimal' | 'detailed'
+  isLive?: boolean
+  /** Compact mode for homepage: hides live badge, sync dot, and progress section */
+  compact?: boolean
+  /** Verification states for blockchain validation */
+  verifying?: boolean
+  verified?: boolean
+  className?: string
 }
 
 /**
  * Campaign card component - displays campaign info in card format
  * @param campaign - Campaign data to display
  * @param variant - Card display variant (minimal or detailed)
+ * @param compact - Compact mode for homepage: hides progress section
+ * @param className - Optional CSS class names for styling
  * @returns JSX element with campaign card
  */
-export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProps) {
+export function CampaignCard({ campaign, variant = 'minimal', compact = false, className = '' }: CampaignCardProps) {
   // Calculate funding progress percentage
   // Both raised and goal are stored as cents in MongoDB
   const progressPercentage = Math.round((campaign.raised / campaign.goal) * 100)
@@ -103,7 +114,13 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
   if (variant === 'minimal') {
     return (
       <Link href={`/campaign/${campaign.id}`}>
-        <div className="relative bg-white rounded-xl border border-gray-200 p-3 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-md hover:border-gray-300 transform hover:-translate-y-1 flex flex-col">
+        <div className={`relative bg-gray-900/5 backdrop-blur-sm rounded-xl border border-white/10 p-4 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-lg hover:border-white/20 transform hover:-translate-y-1 flex flex-col ${className}`}>
+          {!compact && (
+            <>
+              {/* Verification Status Indicator removed for cleaner UI */}
+            </>
+          )}
+          
           {/* Category chip pinned to card's top-right (5px by 5px) */}
           {displayCategory && (
             <div className="absolute top-[10px] right-[10px] z-10">
@@ -112,8 +129,10 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
               </span>
             </div>
           )}
+          
+          {/* Live donation activity indicator removed */}
           {/* Image (always render; fallback placeholder keeps size consistent) */}
-          <div className="w-40 h-20 relative rounded-lg overflow-hidden mb-1">
+          <div className="w-full h-32 relative rounded-lg overflow-hidden mb-3">
             <Image
               key={imgSrc}
               src={imgSrc}
@@ -140,27 +159,31 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
             {campaign.title}
           </h3>
           
-          {/* Progress Section - Building Block: Funding visualization */}
-          <div className="mt-auto">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-lg font-semibold text-gray-900">
-                {formatCurrency(campaign.raised, 'USD', true)}
-              </span>
-              <span className="text-sm text-gray-500 font-medium">
-                {progressPercentage}% funded
-              </span>
-            </div>
-            {/* Progress Bar */}
-            <div className="w-full bg-gray-200 rounded-full h-2.5 shadow-inner">
-              <div
-                className="bg-gradient-to-r from-green-500 to-blue-500 h-2.5 rounded-full transition-all duration-500 shadow-sm"
-                style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Goal: {formatCurrency(campaign.goal, 'USD', true)}
-            </p>
-          </div>
+          {!compact && (
+            <>
+              {/* Progress Section - Building Block: Funding visualization */}
+              <div className="mt-auto">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-lg font-semibold text-gray-900">
+                    {formatCurrency(campaign.raised, 'USD', true)}
+                  </span>
+                  <span className="text-sm text-gray-500 font-medium">
+                    {progressPercentage}% funded
+                  </span>
+                </div>
+                {/* Progress Bar */}
+                <div className="w-full bg-gray-200 rounded-full h-2.5 shadow-inner">
+                  <div
+                    className="bg-gradient-to-r from-green-500 to-blue-500 h-2.5 rounded-full transition-all duration-500 shadow-sm"
+                    style={{ width: `${Math.min(progressPercentage, 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Goal: {formatCurrency(campaign.goal, 'USD', true)}
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </Link>
     )
@@ -168,7 +191,7 @@ export function CampaignCard({ campaign, variant = 'minimal' }: CampaignCardProp
 
   // Detailed variant for campaign detail page
   return (
-    <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-100 hover:shadow-2xl transition-shadow duration-300">
+    <div className={`bg-white rounded-2xl p-8 shadow-xl border border-gray-100 hover:shadow-2xl transition-shadow duration-300 ${className}`}>
       {/* Chain pills removed to prioritize imagery per design */}
       
       {/* Campaign Title - Building Block: Campaign identification (emphasize title) */}

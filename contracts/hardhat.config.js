@@ -17,7 +17,7 @@ module.exports = {
   networks: {
     // ZetaChain Testnet
     zetachain_testnet: {
-      url: "https://zetachain-evm.blockpi.network/v1/rpc/public",
+      url: "https://zetachain-athens-evm.blockpi.network/v1/rpc/public",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 7001,
       gas: 5000000,
@@ -25,7 +25,7 @@ module.exports = {
     },
     // ZetaChain Athens (with private Alchemy RPC)
     zeta_athens: {
-      url: process.env.ZETA_HTTP || "https://zetachain-testnet.g.alchemy.com/v2/your-key",
+      url: process.env.ZETA_HTTP || "https://zetachain-testnet.g.alchemy.com/v2/w7aPAiyoYb5dp_tCmL1ZAU5kAlEnZDXw",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 7001,
       gas: 5000000,

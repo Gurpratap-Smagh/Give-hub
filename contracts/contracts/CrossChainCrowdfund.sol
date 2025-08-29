@@ -110,8 +110,6 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
   // Public business events
   event CampaignCreated(uint256 indexed campaignId, address indexed creator, address preferredZRC20);
-  event CampaignPaused(uint256 indexed campaignId, address indexed creator);
-  event CampaignResumed(uint256 indexed campaignId, address indexed creator);
   event ContributionReceived(
     uint256 indexed campaignId,
     address indexed donor,
@@ -269,8 +267,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     uint256 amount,
     bytes calldata message
   ) external override {
-    require(msg.sender == address(router), "ONLY_ROUTER");
-    emit debugger(msg.sender);
+    if (msg.sender != address(systemContract)) revert OnlySystem();
     if (debug) emit DebugOnCallEntered(ctx.sender, ctx.chainID, zrc20, amount);
 
     (string memory action, bytes memory data) = abi.decode(message, (string, bytes));
@@ -317,19 +314,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     emit CampaignCreated(campaignId, msg.sender, newToken); // Reuse event for simplicity
   }
 
-  function pauseCampaign(uint256 campaignId) external {
-    Campaign storage c = campaigns[campaignId];
-    if (c.creator != msg.sender) revert NotCreator();
-    c.active = false;
-    emit CampaignPaused(campaignId, msg.sender);
-  }
-
-  function resumeCampaign(uint256 campaignId) external {
-    Campaign storage c = campaigns[campaignId];
-    if (c.creator != msg.sender) revert NotCreator();
-    c.active = true;
-    emit CampaignResumed(campaignId, msg.sender);
-  }
+  
 
   /*--------------------------- DONATION HANDLING ------------------------*/
 
@@ -562,6 +547,93 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
       if (debug) emit DebugSwapFailedBytes(lowLevelData);
       revert("SWAP_FAILED");
     }
+  }
+
+  /*------------------------------ VIEW FUNCTIONS -------------------------------*/
+
+  struct CampaignInfo {
+    uint256 campaignId;
+    address creator;
+    address preferredZRC20;
+    bool active;
+  }
+
+  /**
+   * @notice Get all synced campaigns - optimized view function for faster matching
+   * @dev Returns campaign data in batches to avoid gas limits
+   * @param startId Starting campaign ID (use 1 for first batch)
+   * @param limit Maximum number of campaigns to return (max 100)
+   * @return infos Array of campaign info
+   * @return nextStart Next starting ID for pagination (0 if no more)
+   */
+  function getAllSyncedCampaigns(uint256 startId, uint256 limit) 
+    external 
+    view 
+    returns (CampaignInfo[] memory infos, uint256 nextStart) 
+  {
+    require(limit > 0 && limit <= 100, "INVALID_LIMIT");
+    require(startId > 0, "INVALID_START_ID");
+    
+    uint256 totalCampaigns = nextCampaignId;
+    uint256 remainingCampaigns = totalCampaigns >= startId ? totalCampaigns - startId + 1 : 0;
+    uint256 batchSize = remainingCampaigns > limit ? limit : remainingCampaigns;
+    
+    infos = new CampaignInfo[](batchSize);
+    uint256 count = 0;
+    
+    for (uint256 i = startId; i <= totalCampaigns && count < limit; i++) {
+      Campaign storage c = campaigns[i];
+      if (c.creator != address(0)) {
+        infos[count] = CampaignInfo({
+          campaignId: i,
+          creator: c.creator,
+          preferredZRC20: c.preferredZRC20,
+          active: c.active
+        });
+        count++;
+      }
+    }
+    
+    // Resize array if needed
+    if (count < batchSize) {
+      CampaignInfo[] memory resized = new CampaignInfo[](count);
+      for (uint256 i = 0; i < count; i++) {
+        resized[i] = infos[i];
+      }
+      infos = resized;
+    }
+    
+    // Calculate next start for pagination
+    nextStart = (startId + limit <= totalCampaigns) ? startId + limit : 0;
+  }
+
+  /**
+   * @notice Get specific campaign information
+   * @param campaignId The campaign ID to query
+   * @return info Campaign information struct
+   */
+  function getCampaignInfo(uint256 campaignId) external view returns (CampaignInfo memory info) {
+    Campaign storage campaign = campaigns[campaignId];
+    require(campaign.creator != address(0), "CAMPAIGN_NOT_FOUND");
+    
+    info = CampaignInfo({
+      campaignId: campaignId,
+      creator: campaign.creator,
+      preferredZRC20: campaign.preferredZRC20,
+      active: campaign.active
+    });
+  }
+
+  /**
+   * @notice Check if a campaign exists and is active
+   * @param campaignId The campaign ID to check
+   * @return exists Whether the campaign exists
+   * @return active Whether the campaign is active
+   */
+  function campaignStatus(uint256 campaignId) external view returns (bool exists, bool active) {
+    Campaign storage campaign = campaigns[campaignId];
+    exists = campaign.creator != address(0);
+    active = exists && campaign.active;
   }
 
   /*------------------------------ HELPERS -------------------------------*/

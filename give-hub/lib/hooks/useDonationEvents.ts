@@ -56,7 +56,7 @@ const getDecimals = (addrLower: string) => {
 };
 
 // polling interval for live updates (ms)
-const POLL_INTERVAL_MS = 8000;
+const POLL_INTERVAL_MS = 5000;
 
 // ---------- types ----------
 export type DonationEvent = {
@@ -80,13 +80,15 @@ export type DonationEvent = {
 export function useDonationEvents(
   targetCampaignId?: string | number,
   lookbackBlocks = 20_000,
-  step = 300
+  step = 300,
+  options?: { enabled?: boolean }
 ) {
   const [events, setEvents] = useState<DonationEvent[]>([]);
+  const [error, setError] = useState<unknown>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const seen = useRef<Set<string>>(new Set());
   const loadingBackfill = useRef(false);
   const lastBlockRef = useRef<number | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const iface = useMemo(() => new ethers.Interface(CROWDFUND_ABI), []);
   const topic0 = useMemo(
@@ -94,6 +96,8 @@ export function useDonationEvents(
     []
   );
   const topic1 = useMemo(() => toTopic1IfNumeric(targetCampaignId), [targetCampaignId]);
+
+  const enabled = useMemo(() => options?.enabled !== false, [options?.enabled]);
 
   // Only apply in-memory filtering by campaignId when the prop is numeric
   const expectedCidStr = useMemo(() => {
@@ -117,11 +121,21 @@ export function useDonationEvents(
     if (!parsed) {
       throw new Error("Unexpected log format for ContributionReceived");
     }
-    const {
-      campaignId, donor, contributionId,
-      originalToken, originalAmount, convertedAmount,
-      originChain, donorName, note,
-    } = parsed.args as any;
+    // ContributionReceived(
+    //   uint256 campaignId, address donor, uint256 contributionId,
+    //   address originalToken, uint256 originalAmount, uint256 convertedAmount,
+    //   string originChain, string donorName, string note
+    // )
+    const args = parsed.args as readonly unknown[];
+    const campaignId = args[0] as bigint;
+    const donor = args[1] as string;
+    const contributionId = args[2] as bigint;
+    const originalToken = args[3] as string;
+    const originalAmount = args[4] as bigint;
+    const convertedAmount = args[5] as bigint;
+    const originChain = args[6] as string;
+    const donorName = args[7] as string;
+    const note = args[8] as string;
 
     const origAddr = String(originalToken).toLowerCase();
     const dec = getDecimals(origAddr);
@@ -148,12 +162,16 @@ export function useDonationEvents(
   useEffect(() => {
     let alive = true;
     (async () => {
+      if (!enabled) return;
       if (loadingBackfill.current) return;
       loadingBackfill.current = true;
+      setIsLoading(true);
+      setError(null);
       try {
         if (!rpcUrl || !contractAddress) {
           throw new Error('Missing RPC URL or contract address. Check NEXT_PUBLIC_ZETA_RPC_URL and NEXT_PUBLIC_CROSSCHAIN_CONTRACT');
         }
+        // Use read-only provider to avoid any wallet connection prompts
         const latest = await http.getBlockNumber();
         const start = Math.max(0, latest - lookbackBlocks);
         // hard-cap the range to stay well below common provider limits (<=500)
@@ -201,28 +219,32 @@ export function useDonationEvents(
         }
         // initialize live polling cursor
         lastBlockRef.current = latest;
+      } catch (err) {
+        if (alive) setError(err);
       } finally {
+        if (alive) setIsLoading(false);
         loadingBackfill.current = false;
       }
     })();
 
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic0, topic1, expectedCidStr]);
+  }, [topic0, topic1, expectedCidStr, enabled]);
 
   // ------- live polling fallback (works on providers without eth_subscribe) -------
   useEffect(() => {
     let mounted = true;
+    let currentPollTimer: NodeJS.Timeout | null = null;
 
     async function poll() {
       try {
-        if (!rpcUrl || !contractAddress) return;
+        if (!mounted || !enabled || !rpcUrl || !contractAddress) return;
         const latest = await http.getBlockNumber();
         const maxRange = Math.min(step ?? 300, 300);
         let from = (lastBlockRef.current ?? Math.max(0, latest - maxRange)) + 1;
         if (from > latest) return;
 
-        while (from <= latest) {
+        while (from <= latest && mounted) {
           const to = Math.min(latest, from + maxRange);
           let logs: ethers.Log[] = [];
           try {
@@ -233,15 +255,23 @@ export function useDonationEvents(
               toBlock: to,
               topics: topicsArr,
             });
-          } catch {
-            await new Promise(r => setTimeout(r, 250));
-            const topicsArr = topic1 ? [topic0, topic1] : [topic0];
-            logs = await http.getLogs({
-              address: contractAddress,
-              fromBlock: from,
-              toBlock: to,
-              topics: topicsArr,
-            });
+          } catch (err) {
+            console.warn('[useDonationEvents] Failed to fetch logs, retrying...', err);
+            await new Promise(r => setTimeout(r, 500));
+            if (!mounted) return;
+            try {
+              const topicsArr = topic1 ? [topic0, topic1] : [topic0];
+              logs = await http.getLogs({
+                address: contractAddress,
+                fromBlock: from,
+                toBlock: to,
+                topics: topicsArr,
+              });
+            } catch (retryErr) {
+              console.error('[useDonationEvents] Retry failed, skipping this range', retryErr);
+              from = to + 1;
+              continue;
+            }
           }
 
           if (!mounted) return;
@@ -256,7 +286,7 @@ export function useDonationEvents(
             if (decoded.length) {
               setEvents(prev => {
                 const next = [...prev, ...decoded];
-                next.sort((a, b) => a.blockNumber - b.blockNumber || a.logIndex - b.logIndex);
+                next.sort((a, b) => b.blockNumber - a.blockNumber || b.logIndex - a.logIndex); // Most recent first
                 return next;
               });
             }
@@ -265,22 +295,28 @@ export function useDonationEvents(
           lastBlockRef.current = to;
           from = to + 1;
         }
-      } catch {
-        // swallow errors; will try again next tick
+      } catch (err) {
+        console.error('[useDonationEvents] Polling error:', err);
+        // Don't set error state for polling failures, just log and continue
+      }
+
+      // Schedule next poll
+      if (mounted && enabled) {
+        currentPollTimer = setTimeout(poll, POLL_INTERVAL_MS);
       }
     }
 
-    // start interval
-    timerRef.current = setInterval(poll, POLL_INTERVAL_MS);
-    // run once immediately
-    poll();
+    if (enabled && lastBlockRef.current !== null) {
+      // Only start polling after initial backfill is complete
+      currentPollTimer = setTimeout(poll, 1000); // Start first poll after 1s
+    }
 
     return () => {
       mounted = false;
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (currentPollTimer) clearTimeout(currentPollTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topic0, topic1, expectedCidStr]);
+  }, [topic0, topic1, expectedCidStr, enabled, lastBlockRef.current]);
 
-  return { events };
+  return { events, error, isLoading };
 }

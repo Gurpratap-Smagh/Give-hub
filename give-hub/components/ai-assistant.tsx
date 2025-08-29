@@ -6,6 +6,7 @@ import { useAssistant } from "@/app/ai/assistant/useAssistant";
 import PaymentModal from "@/components/payment-modal";
 import type { Campaign } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils/format";
+import { notify } from "@/lib/utils/notify"; // Import the notify utility
 
 export default function AIAssistant() {
   const {
@@ -57,9 +58,17 @@ export default function AIAssistant() {
           }
           // Fetch campaign data
           const res = await fetch(`/api/campaigns/${id}`);
-          if (!res.ok) throw new Error(`Failed to fetch campaign: ${res.status}`);
+          if (!res.ok) {
+            const errorMsg = `Failed to fetch campaign: ${res.status}`;
+            notify(errorMsg, 'error');
+            throw new Error(errorMsg);
+          }
           const data = await res.json();
-          if (!data?.success || !data?.campaign) throw new Error("Campaign not found");
+          if (!data?.success || !data?.campaign) {
+            const errorMsg = "Campaign not found";
+            notify(errorMsg, 'error');
+            throw new Error(errorMsg);
+          }
           setPaymentCampaign(data.campaign as Campaign);
           setInitialAmount(typeof action.amount === "number" ? action.amount : undefined);
           setInitialChain(typeof action.chain === "string" ? action.chain : undefined);
@@ -69,7 +78,7 @@ export default function AIAssistant() {
           if (action.type === "open_payment") {
             setReply("Opening payment… Waiting for your confirmation in MetaMask…");
           } else {
-            setReply("I’ve prefilled the donation form for you.");
+            setReply("I've prefilled the donation form for you.");
           }
           // Clear action to avoid re-processing
           setAction(null);
@@ -129,13 +138,20 @@ export default function AIAssistant() {
             </div>
           )}
 
+          {/* Show critical errors inline, but use toast for most errors */}
           {error && (
             <div className="text-xs text-red-600">{error}</div>
           )}
 
           {reply !== null && (
             <div className="mt-2 bg-gray-50 rounded-md border border-gray-200 p-3 text-sm whitespace-pre-wrap text-gray-800">
-              {reply || "(No content returned)"}
+              {reply || 
+                (() => {
+                  // If we got no content, show a message and notify user with toast
+                  setTimeout(() => notify("No response from assistant. Please try again.", "error"), 100);
+                  return "(No content returned)";
+                })()
+              }
             </div>
           )}
 
@@ -171,15 +187,18 @@ export default function AIAssistant() {
           onClose={() => { setShowPayment(false); setPaymentCampaign(null); }}
           onPaymentSuccess={(amt, chain) => {
             setReply(`✅ Transaction confirmed! Thank you for donating ${amt}${chain ? ` via ${chain}` : ""}.`);
+            notify(`Thank you for donating ${amt}${chain ? ` via ${chain}` : ""}!`, "success");
             setShowPayment(false);
             setPaymentCampaign(null);
           }}
           onPaymentError={(err) => {
             const msg = err instanceof Error ? err.message : String(err);
             setReply(`Payment failed: ${msg}`);
+            notify(`Payment failed: ${msg}`, "error");
           }}
           onCancel={() => {
             setReply("Payment canceled.");
+            notify("Payment canceled", "info");
           }}
           initialAmount={initialAmount}
           initialChain={initialChain}

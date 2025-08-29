@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
+import React, { useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import type { Campaign } from '@/lib/db'
 import { notify } from '@/lib/utils/notify'
-import { getCampaignInfo } from '@/lib/web3/client'
 
 interface CampaignEditFormProps {
   campaign: Campaign
@@ -46,9 +45,7 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
       : ''
   )
   const formRef = useRef<HTMLFormElement>(null)
-  const ONCHAIN_ENABLED = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || 'local').toLowerCase() === 'zetachain'
-  const [onChainToken, setOnChainToken] = useState<string | null>(null)
-  const [onChainTokenStatus, setOnChainTokenStatus] = useState<'idle' | 'loading' | 'error' | 'done'>('idle')
+
   useImperativeHandle(ref, () => {
     const el = formRef.current as HTMLFormElement & { requestSubmit: () => void };
     return Object.assign((el || ({} as unknown)) as HTMLFormElement & { requestSubmit: () => void }, {
@@ -58,36 +55,7 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
     })
   });
 
-  // Defer parent onChange notifications to the commit phase
-  useEffect(() => {
-    const mappedCategory = formData.category === 'other' ? otherCategory : formData.category
-    const partial: Partial<Campaign> = { ...formData, category: mappedCategory }
-    onChange?.(partial)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData, otherCategory])
-
-  // Load on-chain preferred token if campaign is mapped
-  useEffect(() => {
-    const idStr = campaign?.onChain?.campaignId
-    if (!ONCHAIN_ENABLED || !idStr) {
-      setOnChainToken(null)
-      setOnChainTokenStatus('idle')
-      return
-    }
-    let cancelled = false
-    ;(async () => {
-      try {
-        setOnChainTokenStatus('loading')
-        const info = await getCampaignInfo(BigInt(idStr))
-        if (cancelled) return
-        setOnChainToken(info?.preferredZRC20 || '')
-        setOnChainTokenStatus('done')
-      } catch {
-        if (!cancelled) setOnChainTokenStatus('error')
-      }
-    })()
-    return () => { cancelled = true }
-  }, [campaign.onChain?.campaignId, ONCHAIN_ENABLED])
+  // Removed effect-based onChange to prevent update depth issues
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -97,10 +65,15 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
         [name]: name === 'goal' ? parseFloat(value) || 0 : value
       }
     })
+    // Push granular updates to parent without causing loops
+    const next = { ...formData, [name]: name === 'goal' ? (parseFloat(value) || 0) : value }
+    const mappedCategory = (next.category === 'other' ? otherCategory : next.category) as string
+    onChange?.({ ...next, category: mappedCategory })
   }
 
-  // Chains selection has been removed from the edit form
+  // Token update state is managed above
 
+  // Store token changes to be applied on form submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.title.trim()) return notify('Campaign title is required', 'error')
@@ -109,7 +82,9 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
 
     const finalCategory = formData.category === 'other' ? otherCategory : formData.category
     if (!finalCategory.trim()) return notify('Category is required', 'error')
-
+    
+    // No token updates - removed token editing functionality
+    
     await onSave({ ...formData, category: finalCategory })
   }
 
@@ -184,35 +159,7 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
         </div>
       </div>
 
-      {ONCHAIN_ENABLED && (
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Preferred ZRC-20 Token</label>
-          {campaign.onChain?.campaignId ? (
-            <>
-              <input
-                type="text"
-                value={onChainToken || ''}
-                readOnly
-                className="w-full p-3 border-2 border-gray-200 rounded-lg bg-gray-50 cursor-not-allowed"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                This token is set on-chain at creation and cannot be changed in edits.
-              </p>
-              {onChainTokenStatus === 'loading' && (
-                <p className="mt-1 text-xs text-gray-400">Loading token…</p>
-              )}
-              {onChainTokenStatus === 'error' && (
-                <p className="mt-1 text-xs text-red-600">Failed to fetch on-chain token.</p>
-              )}
-            </>
-          ) : (
-            <div className="p-3 border rounded-lg bg-yellow-50 border-yellow-200 text-yellow-800 text-sm">
-              Preferred token is chosen when creating a campaign on-chain. Edit form cannot set it for existing campaigns.
-            </div>
-          )}
-        </div>
-      )}
-
+      {/* Token editing section removed - tokens can only be set during initial campaign creation */}
       {/* Chains selection removed */}
     </form>
   )

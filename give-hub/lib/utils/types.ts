@@ -29,6 +29,11 @@ export interface Campaign {
   donations: Donation[];
   chains: string[];
   contractOwnership: { chain: string; address: string }[];
+  onChain?: {
+    chainId: number;
+    contract: string;
+    campaignId: string;
+  };
 }
 
 export interface Donation {

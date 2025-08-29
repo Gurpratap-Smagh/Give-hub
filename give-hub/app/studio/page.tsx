@@ -5,60 +5,68 @@ import Link from 'next/link'
 import { useAuth } from '@/lib/auth/auth-context'
 import Spinner from '@/components/spinner'
 import type { Campaign } from '@/lib/db';
-import CampaignsGrid from '@/components/campaigns-grid'
+import { CampaignsGrid } from '@/components/campaigns-grid'
 import CampaignEditForm from '@/components/campaign-edit-form'
+import { UnsyncedCampaignCard } from '@/components/unsynced-campaign-card'
 import { notify } from '@/lib/utils/notify'
+import { formatCurrency } from '@/lib/utils/format'
 // No-escrow: withdrawals disabled, so web3 withdraw actions are removed from UI
 
 
 
 export default function CreatorStudioPage() {
   const { user, isLoading } = useAuth()
-  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([])
+  const [syncedCampaigns, setSyncedCampaigns] = useState<Campaign[]>([])
+  const [unsyncedCampaigns, setUnsyncedCampaigns] = useState<Campaign[]>([])
   const [loadingCampaigns, setLoadingCampaigns] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   // Edit state
   const [editing, setEditing] = useState<Campaign | null>(null)
   const [saving, setSaving] = useState(false)
   // No-escrow: remove withdraw states
 
-  // Fetch all campaigns (client-side) and filter to creator
+  // Fetch verified synced and unsynced campaigns using same API logic as homepage
   useEffect(() => {
-    let mounted = true
     const fetchCampaigns = async () => {
       try {
-        setLoadingCampaigns(true)
-        const res = await fetch('/api/campaigns')
-        const data = await res.json()
-        if (mounted) {
-          if (data?.success) {
-            setAllCampaigns(data.campaigns || [])
-          } else {
-            setError('Failed to load campaigns')
-          }
+        if (!user?.id) return;
+        
+        // Optimize: Single API call with creator filter to reduce requests
+        const [syncedRes, unsyncedRes] = await Promise.all([
+          fetch(`/api/campaigns?creatorId=${user.id}`),
+          fetch(`/api/campaigns?showUnsynced=true&creatorId=${user.id}`),
+        ])
+        
+        const syncedJson = await syncedRes.json()
+        const unsyncedJson = await unsyncedRes.json()
+        
+        if (syncedJson?.success) {
+          setSyncedCampaigns(syncedJson.campaigns as Campaign[])
         }
-      } catch {
-        if (mounted) setError('Failed to load campaigns')
+        if (unsyncedJson?.success) {
+          setUnsyncedCampaigns(unsyncedJson.campaigns as Campaign[])
+        }
+      } catch (error) {
+        console.error('Error fetching campaigns:', error)
       } finally {
-        if (mounted) setLoadingCampaigns(false)
+        setLoadingCampaigns(false)
       }
     }
-    fetchCampaigns()
-    return () => { mounted = false }
-  }, [])
 
-  const myCampaigns: Campaign[] = useMemo(() => {
-    if (!user) return []
-    return (allCampaigns || []).filter((c) => c.creatorId === user.id)
-  }, [allCampaigns, user])
+    fetchCampaigns()
+  }, [user?.id])
 
   const totalRaised = useMemo(() => {
-    return myCampaigns.reduce((sum, c) => sum + (Number(c.raised) || 0), 0)
-  }, [myCampaigns])
+    // Sum only synced campaigns' raised amounts (stored as cents)
+    return syncedCampaigns.reduce((sum, c) => sum + (Number(c.raised) || 0), 0)
+  }, [syncedCampaigns])
 
-  const gridCampaigns: Campaign[] = useMemo(() => {
-    return myCampaigns.map((c) => ({
+  const myCampaignsCount = useMemo(() => {
+    return (syncedCampaigns.length + unsyncedCampaigns.length)
+  }, [syncedCampaigns.length, unsyncedCampaigns.length])
+
+  const syncedGridCampaigns: Campaign[] = useMemo(() => {
+    return syncedCampaigns.map((c) => ({
       id: c.id,
       title: c.title,
       description: c.description,
@@ -68,17 +76,35 @@ export default function CreatorStudioPage() {
       creatorId: c.creatorId,
       chains: c.chains,
       category: c.category,
+      onChain: c.onChain,
     }))
-  }, [myCampaigns])
+  }, [syncedCampaigns]);
+
+  const unsyncedGridCampaigns: Campaign[] = useMemo(() => {
+    return unsyncedCampaigns.map((c) => ({
+      id: c.id,
+      title: c.title,
+      description: c.description,
+      image: c.image,
+      raised: c.raised,
+      goal: c.goal,
+      creatorId: c.creatorId,
+      chains: c.chains,
+      category: c.category,
+    }));
+  }, [unsyncedCampaigns]);
 
   // No-escrow: remove on-chain campaign helpers (unused)
+
+  // Track any error messages
+  const [error, setError] = useState<string | null>(null)
 
   // Save handler for edits
   const handleSave = async (update: Partial<Campaign>) => {
     if (!editing) return
     try {
       setSaving(true)
-      // Placeholder: Web3 integration removed. Off-chain update only.
+      // Update campaign off-chain
       const res = await fetch(`/api/campaigns/${editing.id}/edit`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -88,12 +114,14 @@ export default function CreatorStudioPage() {
       if (!res.ok || !json?.success) throw new Error(json?.error || 'Save failed')
 
       // Update local state
-      setAllCampaigns((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...update } as Campaign : c)))
+      setSyncedCampaigns((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...update } as Campaign : c)))
+      setUnsyncedCampaigns((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...update } as Campaign : c)))
       setEditing(null)
       notify('Campaign updated successfully', 'success')
     } catch (e) {
       console.error(e)
       notify('Failed to update campaign', 'error')
+      setError('Failed to update campaign')
     } finally {
       setSaving(false)
     }
@@ -151,15 +179,15 @@ export default function CreatorStudioPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-500 mb-1">Your Campaigns</p>
-          <p className="text-3xl font-bold text-gray-900">{myCampaigns.length}</p>
+          <p className="text-3xl font-bold text-gray-900">{myCampaignsCount}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-500 mb-1">Total Raised</p>
-          <p className="text-3xl font-bold text-gray-900">${totalRaised.toLocaleString()}</p>
+          <p className="text-3xl font-bold text-gray-900">{formatCurrency(totalRaised, 'USD', true)}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-500 mb-1">Status</p>
-          <p className="text-3xl font-bold text-gray-900">{myCampaigns.length > 0 ? 'Active' : 'Getting Started'}</p>
+          <p className="text-3xl font-bold text-gray-900">{myCampaignsCount > 0 ? 'Active' : 'Getting Started'}</p>
         </div>
 
         {/* On-chain Controls removed in no-escrow mode */}
@@ -172,39 +200,49 @@ export default function CreatorStudioPage() {
 
       {/* Your Campaigns */}
       <h2 className="text-2xl font-bold text-gray-900 mb-4">Your Campaigns</h2>
-      {/* Add Campaign Card - matches campaign card dimensions */}
-      <div className="mb-6">
-        <Link href="/create" className="block">
-          <div className="w-80 h-30 relative bg-white rounded-xl border border-gray-200 p-3 hover:shadow-xl transition-all duration-300 cursor-pointer shadow-md hover:border-gray-300 transform hover:-translate-y-1 flex flex-col h-full">
-            {/* Plus icon in same position as campaign image */}
-            <div className="w-40 h-20 relative rounded-lg overflow-hidden mb-1 flex items-center justify-center bg-gray-100">
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                  <path fillRule="evenodd" d="M12 4.5a.75.75 0 01.75.75v6h6a.75.75 0 010 1.5h-6v6a.75.75 0 01-1.5 0v-6h-6a.75.75 0 010-1.5h6v-6A.75.75 0 0112 4.5z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-            {/* Title matching campaign card styling */}
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Add Campaign</h3>
-            {/* Subtitle matching progress bar area */}
-            <div className="mt-auto">
-              <p className="text-sm text-gray-600">Create a new fundraising campaign</p>
-            </div>
-          </div>
-        </Link>
-      </div>
+
       {/* Campaigns Grid with blur after 6 */}
       <div className="relative">
         {/* Show loading state while campaigns load */}
-        {loadingCampaigns ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 flex items-center gap-3">
-            <Spinner size={20} />
-            <p className="text-gray-600">Loading campaigns...</p>
-          </div>
-        ) : (
-          <CampaignsGrid initialCampaigns={gridCampaigns} gradientFromClass="from-blue-100" />
-        )}
+        <CampaignsGrid 
+          initialCampaigns={syncedGridCampaigns} 
+          showAddCampaignCard={true}
+          isLoading={loadingCampaigns}
+        />
       </div>
+      
+      {/* Unsynced Campaigns Section */}
+      {unsyncedGridCampaigns.length > 0 && (
+        <>
+          
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Unsynced Campaigns</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {unsyncedCampaigns.map((campaign) => (
+              <UnsyncedCampaignCard
+                key={campaign.id}
+                campaign={campaign}
+                onSynced={(campaignId, onChainData) => {
+                  // Move from unsynced -> synced with upsert (replace if exists)
+                  // Build the updated campaign using the current closure-scoped "campaign"
+                  const updated = { ...campaign, onChain: onChainData }
+                  // First, upsert into synced list (replace if already present to avoid duplicates)
+                  setSyncedCampaigns(prev => {
+                    const idx = prev.findIndex(c => c.id === campaignId)
+                    if (idx !== -1) {
+                      const next = prev.slice()
+                      next[idx] = { ...prev[idx], ...updated }
+                      return next
+                    }
+                    return [...prev, updated]
+                  })
+                  // Then, remove from unsynced list
+                  setUnsyncedCampaigns(prev => prev.filter(c => c.id !== campaignId))
+                }}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Removed redundant editable list panel */}
 

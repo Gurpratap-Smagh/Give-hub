@@ -304,7 +304,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="space-y-6">
-                {/* Lower action: Fix with AI (prefill placeholder) */}
+                {/* AI assistance for profile improvement */}
                 <div className="flex justify-end -mt-4 mb-2">
                   {isEditing && (
                     <button

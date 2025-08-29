@@ -3,7 +3,7 @@ import { connectMongo } from '@/lib/mongodb/connection'
 import { CampaignModel } from '@/lib/mongodb/models/campaign'
 import { EventModel } from '@/lib/mongodb/models/event'
 import { SyncStateModel } from '@/lib/mongodb/models/syncState'
-import { getContract, getStartBlock } from '@/lib/services/zetachain'
+import { getContract, getStartBlock, getProvider } from '@/lib/services/zetachain'
 
 export type SyncResult = {
   fromBlock: number
@@ -21,13 +21,16 @@ function asNum18(v: bigint): number {
 }
 
 export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
+  const startedAt = Date.now()
+  const syncId = Math.random().toString(36).slice(2, 8)
+  const t = () => Date.now() - startedAt
   await connectMongo()
   const { address, iface } = getContract()
 
   // Load sync state
   const key = 'givehub:crowdfund'
   const state = await SyncStateModel.findOne({ key })
-  const provider = new ethers.JsonRpcProvider(process.env.ZETA_RPC_URL || process.env.NEXT_PUBLIC_ZETA_RPC_URL)
+  const provider = getProvider()
   const latest = await provider.getBlockNumber()
 
   const start = state?.lastBlock && state.lastBlock > 0
@@ -35,6 +38,7 @@ export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
     : (getStartBlock() ?? Math.max(0, latest - 25_000))
 
   const toBlock = Math.min(latest, start + maxRange)
+  console.log(`[indexer][${syncId}] +${t()}ms range`, { fromBlock: start, toBlock, latest })
   if (toBlock < start) {
     return { fromBlock: start, toBlock: start, processed: { CampaignCreated: 0, CampaignUpdated: 0, DonationReceived: 0 } }
   }
@@ -45,7 +49,16 @@ export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
   const topicContribution = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)")
 
   // Match either CampaignCreated OR ContributionReceived as topic0
-  const logs = await provider.getLogs({ address, fromBlock: start, toBlock, topics: [[topicCreated, topicContribution]] })
+  let logs: ethers.Log[] = []
+  console.log(`[indexer][${syncId}] +${t()}ms getLogs:start`, { fromBlock: start, toBlock, address })
+  try {
+    const s0 = Date.now()
+    logs = await provider.getLogs({ address, fromBlock: start, toBlock, topics: [[topicCreated, topicContribution]] })
+    console.log(`[indexer][${syncId}] +${t()}ms getLogs:done in ${Date.now() - s0}ms logs=${logs.length}`)
+  } catch (e) {
+    console.error(`[indexer][${syncId}] +${t()}ms getLogs:error`, e)
+    return { fromBlock: start, toBlock, processed: { CampaignCreated: 0, CampaignUpdated: 0, DonationReceived: 0 } }
+  }
 
   let created = 0
   const updated = 0
@@ -162,6 +175,12 @@ export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
     { $set: { key, contract: address.toLowerCase(), lastBlock: toBlock, updatedAt: new Date() } },
     { upsert: true }
   )
+
+  console.log(`[indexer][${syncId}] +${t()}ms done`, {
+    fromBlock: start,
+    toBlock,
+    processed: { CampaignCreated: created, CampaignUpdated: updated, DonationReceived: donated },
+  })
 
   return {
     fromBlock: start,

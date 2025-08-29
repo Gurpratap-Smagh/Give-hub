@@ -13,21 +13,24 @@ import { extractChainAndToken } from "@/app/ai/assistant/tokens";
 
 // -------- route handler --------
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now();
+  const reqId = Math.random().toString(36).slice(2, 8);
+  const t = () => Date.now() - startedAt;
   const { message, prompt, mode = "default", context, history, paymentConfirmed, campaignId } = await req.json();
   const userMessage = (prompt ?? message ?? "").toString();
   
-  console.log("🚀 AI ASSIST REQUEST:", { 
-    userMessage, 
-    mode, 
+  console.log(`[ai][${reqId}] +${t()}ms REQUEST`, { 
+    mode,
     paymentConfirmed,
     campaignId,
-    context: context ? Object.keys(context) : 'none', 
-    historyLength: history?.length || 0 
+    context: context ? Object.keys(context) : 'none',
+    historyLength: history?.length || 0,
+    userLen: userMessage.length,
   });
   
   // Handle payment confirmation responses
   if (paymentConfirmed === true) {
-    console.log("💰 PAYMENT CONFIRMED for campaign:", campaignId);
+    console.log(`[ai][${reqId}] +${t()}ms PAYMENT CONFIRMED`, { campaignId });
     const thankYouMessage = "Thank you for your generous donation! Your support makes a real difference to this campaign.";
     return NextResponse.json({ 
       text: thankYouMessage, 
@@ -43,7 +46,9 @@ export async function POST(req: NextRequest) {
     try {
       const REWRITE_SYSTEM = `You are a precise rewriting assistant for GiveHub creators.\n\nReturn ONLY a single application/json object with EXACT keys:\n{\n  "title": string,\n  "description": string\n}\n\nRules:\n- Title: concise, clear, compelling.\n- Description: 2–5 sentences, specific and inspiring.\n- Do NOT invent facts.\n- No markdown, no code fences, no extra text.`;
       const ctxParts: string[] = [ensureJsonHint(), 'mode=rewrite'];
+      console.log(`[ai][${reqId}] +${t()}ms REWRITE:start`);
       const raw = await llmJSON(userMessage, REWRITE_SYSTEM, ctxParts);
+      console.log(`[ai][${reqId}] +${t()}ms REWRITE:done`);
       let outText = typeof raw === 'string' ? raw : JSON.stringify(raw);
       // Robustly extract the first JSON object if any wrappers slipped in
       if (typeof outText === 'string') {
@@ -96,7 +101,7 @@ export async function POST(req: NextRequest) {
       }
       return NextResponse.json({ text: outText, reply: outText });
     } catch (e) {
-      console.error('✏️ rewrite mode failed:', e);
+      console.error(`[ai][${reqId}] +${t()}ms REWRITE:error`, e);
       // Fall through to generic flow only if rewrite fails hard
     }
   }
@@ -112,7 +117,9 @@ export async function POST(req: NextRequest) {
         'Current profile data:\n' + JSON.stringify(context?.profile || {})
       ];
       
+      console.log(`[ai][${reqId}] +${t()}ms PROFILE:start`);
       const raw = await llmJSON(userMessage, PROFILE_SYSTEM, ctxParts);
+      console.log(`[ai][${reqId}] +${t()}ms PROFILE:done`);
       
       // Parse and validate the response
       let parsed: {bio?: string, location?: string, website?: string} = {};
@@ -145,7 +152,7 @@ export async function POST(req: NextRequest) {
       });
       
     } catch (e) {
-      console.error('Profile update failed:', e);
+      console.error(`[ai][${reqId}] +${t()}ms PROFILE:error`, e);
       return NextResponse.json({
         text: 'Failed to process profile update',
         reply: 'Failed to process profile update',
@@ -155,33 +162,36 @@ export async function POST(req: NextRequest) {
   }
 
   // 1) PLAN (always call planner first)
+  console.log(`[ai][${reqId}] +${t()}ms PLANNER:start`);
   const planResult = await runPlanner(userMessage, { mode, context, history });
+  console.log(`[ai][${reqId}] +${t()}ms PLANNER:done ok=${planResult.ok}`);
   if (!planResult.ok) {
     const text = (planResult.text || userMessage || "").toString();
+    console.log(`[ai][${reqId}] +${t()}ms PLANNER:fallback`);
     return NextResponse.json({ text, reply: text });
   }
   let plan: Plan = planResult.plan;
 
   // Handle campaignId inference for donation intents
   if (plan.type === 'open_payment' && !plan.campaignId) {
-    console.log("🔍 INFERRING CAMPAIGN ID from history...");
+    console.log(`[ai][${reqId}] +${t()}ms INFER:open_payment`);
     const inferredId = inferCampaignIdFromHistory(userMessage, history, context);
     if (inferredId) {
-      console.log("✅ INFERRED CAMPAIGN ID:", inferredId);
+      console.log(`[ai][${reqId}] +${t()}ms INFER:open_payment ->`, inferredId);
       plan = { ...plan, campaignId: inferredId };
     } else {
-      console.log("❌ COULD NOT INFER CAMPAIGN ID");
+      console.log(`[ai][${reqId}] +${t()}ms INFER:open_payment -> none`);
     }
   }
   // Also attempt inference for fill_payment intents
   if (plan.type === 'fill_payment' && !plan.campaignId) {
-    console.log("🔍 INFERRING CAMPAIGN ID for fill_payment from history...");
+    console.log(`[ai][${reqId}] +${t()}ms INFER:fill_payment`);
     const inferredId = inferCampaignIdFromHistory(userMessage, history, context);
     if (inferredId) {
-      console.log("✅ INFERRED CAMPAIGN ID (fill):", inferredId);
+      console.log(`[ai][${reqId}] +${t()}ms INFER:fill_payment ->`, inferredId);
       plan = { ...plan, campaignId: inferredId };
     } else {
-      console.log("❌ COULD NOT INFER CAMPAIGN ID (fill)");
+      console.log(`[ai][${reqId}] +${t()}ms INFER:fill_payment -> none`);
     }
   }
 
@@ -189,7 +199,7 @@ export async function POST(req: NextRequest) {
   if (plan.type === 'open_payment') {
     const { tokenExplicit, chain: inferredChain } = extractChainAndToken(userMessage);
     if (!tokenExplicit) {
-      console.log("🛡️ Downgrading open_payment to fill_payment: token not explicitly mentioned by user");
+      console.log(`[ai][${reqId}] +${t()}ms DOWNGRADE:open_payment->fill_payment (token not explicit)`);
       plan = {
         ...plan,
         type: 'fill_payment',
@@ -201,11 +211,12 @@ export async function POST(req: NextRequest) {
 
   let result: unknown = null;
 
-  console.log("🔄 EXECUTING PLAN:", plan);
+  console.log(`[ai][${reqId}] +${t()}ms EXEC:start`, { type: plan.type });
 
   try {
     if (plan.type === "search_campaigns") {
-      console.log("🔍 CALLING SEARCH with query:", plan.query);
+      console.log(`[ai][${reqId}] +${t()}ms SEARCH:start`, plan.query);
+      const s0 = Date.now();
       {
         const qrec = plan.query as Record<string, unknown>;
         const creatorUsername = typeof qrec.creatorUsername === 'string'
@@ -224,6 +235,7 @@ export async function POST(req: NextRequest) {
           }
         );
       }
+      console.log(`[ai][${reqId}] +${t()}ms SEARCH:done in ${Date.now() - s0}ms`);
       // Prepare a UI action to open the search page as well
       // Map planner query fields to homepage search params (defaults to title)
       {
@@ -250,11 +262,11 @@ export async function POST(req: NextRequest) {
           }
         };
       }
-      console.log("🔍 SEARCH RESULTS:", result);
+      console.log(`[ai][${reqId}] +${t()}ms SEARCH:prepared`);
     } else if (plan.type === "open_payment") {
       // Enforce donation gating: only allow when mode === 'pay'
       if (mode !== 'pay') {
-        console.log("⛔ Donation intent blocked: not in pay mode");
+        console.log(`[ai][${reqId}] +${t()}ms PAY:block (mode!=pay)`);
         // Convert to info guidance instead of opening payment
         const guidance = "⚠️ Please turn on $ (pay) mode first by clicking the dollar icon. This gives me permission to help with donations.";
         // DIRECT MESSAGE: Don't use executor for this critical instruction
@@ -262,13 +274,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ text: guidance, reply: guidance });
       } else {
         if (!plan.campaignId) {
-          console.log("❌ No campaignId provided; asking user to pick one");
+          console.log(`[ai][${reqId}] +${t()}ms PAY:missing campaignId`);
           const guidance = "Which campaign would you like to support? Say the title or id, or tap a result.";
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           plan = { type: 'info', text: guidance } as any;
           result = { text: guidance };
         } else {
-          console.log("💰 PREPARING PAYMENT for campaign:", plan.campaignId);
+          console.log(`[ai][${reqId}] +${t()}ms PAY:prepare`, { campaignId: plan.campaignId });
           // DO NOT call donateToCampaign here (needs browser signer).
           // Return an action so the client can run donateToCampaign(...)
           const confirmMsg = "Please confirm the donation in your wallet when prompted.";
@@ -283,7 +295,7 @@ export async function POST(req: NextRequest) {
             },
             text: confirmMsg
           };
-          console.log("💰 PAYMENT ACTION:", result);
+          console.log(`[ai][${reqId}] +${t()}ms PAY:action prepared`);
           
           // DIRECT MESSAGE: Skip executor for payment confirmation instructions
           // Include special paymentPending flag for frontend to detect
@@ -298,12 +310,12 @@ export async function POST(req: NextRequest) {
     } else if (plan.type === "fill_payment") {
       // Do NOT gate fill_payment by mode. It's safe to prefill without submitting.
       if (!plan.campaignId) {
-        console.log("❌ No campaignId provided for fill_payment; asking user to pick one");
+        console.log(`[ai][${reqId}] +${t()}ms PREFILL:missing campaignId`);
         const guidance = "Which campaign would you like to support? Say the title or id, or tap a result.";
         // DIRECT MESSAGE: Don't use executor for this campaign selection guidance
         return NextResponse.json({ text: guidance, reply: guidance });
       } else {
-        console.log("🧾 PREPARING PREFILL for campaign:", plan.campaignId);
+        console.log(`[ai][${reqId}] +${t()}ms PREFILL:prepare`, { campaignId: plan.campaignId });
         const fillMsg = "Please complete any missing details and confirm when ready.";
         result = {
           action: {
@@ -316,7 +328,7 @@ export async function POST(req: NextRequest) {
           },
           text: fillMsg
         };
-        console.log("🧾 PREFILL ACTION:", result);
+        console.log(`[ai][${reqId}] +${t()}ms PREFILL:action prepared`);
         
         // DIRECT MESSAGE: Skip executor for payment form instructions
         // Include special paymentForm flag for frontend to detect
@@ -329,17 +341,17 @@ export async function POST(req: NextRequest) {
         });
       }
     } else if (plan.type === "info" || plan.type === "chat" || plan.type === "suggest" || plan.type === "reject") {
-      console.log("💬 HANDLING ACTION TYPE:", plan.type, "with text:", plan.text);
+      console.log(`[ai][${reqId}] +${t()}ms SIMPLE:`, { type: plan.type });
       // For these new action types, the result is just the text from the plan
       result = { text: plan.text };
     } else {
       const anyPlan = plan as unknown as { text?: unknown };
       const txt = typeof anyPlan.text === 'string' ? anyPlan.text : '';
-      console.log("📝 DEFAULT ACTION with text:", txt);
+      console.log(`[ai][${reqId}] +${t()}ms DEFAULT`);
       result = { text: txt };
     }
   } catch (err: unknown) {
-    console.log("🚨 BACKEND ERROR:", err);
+    console.log(`[ai][${reqId}] +${t()}ms ERROR during action`, err);
     // Enhanced error handling with specific messages
     if (plan.type === "search_campaigns") {
       result = { error: "I'm having trouble accessing our database right now. Please try again in a moment." };
@@ -356,7 +368,9 @@ export async function POST(req: NextRequest) {
   // 2) EXECUTOR (craft nice reply)
   let reply: string;
   try {
+    console.log(`[ai][${reqId}] +${t()}ms EXECUTOR:start`);
     reply = await runExecutor({ plan, result }, { mode, context, history });
+    console.log(`[ai][${reqId}] +${t()}ms EXECUTOR:done`);
   } catch {
     // Final fallback if executor completely fails
     if (plan.type === "search_campaigns" && Array.isArray(result)) {
@@ -383,23 +397,28 @@ export async function POST(req: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       results = (result as any).results;
     }
+    console.log(`[ai][${reqId}] +${t()}ms RESP:search_campaigns`);
     return NextResponse.json({ text: reply, reply, results, ...(action ? { action } : {}) });
   }
   if (plan.type === "open_payment") {
     const action = (typeof result === "object" && result && "action" in (result as Record<string, unknown>))
       ? (result as { action?: unknown }).action
       : undefined;
+    console.log(`[ai][${reqId}] +${t()}ms RESP:open_payment`);
     return NextResponse.json({ text: reply, reply, action });
   }
   if (plan.type === "fill_payment") {
     const action = (typeof result === "object" && result && "action" in (result as Record<string, unknown>))
       ? (result as { action?: unknown }).action
       : undefined;
+    console.log(`[ai][${reqId}] +${t()}ms RESP:fill_payment`);
     return NextResponse.json({ text: reply, reply, action });
   }
   // Handle new action types
   if (plan.type === "info" || plan.type === "chat" || plan.type === "suggest" || plan.type === "reject") {
+    console.log(`[ai][${reqId}] +${t()}ms RESP:${plan.type}`);
     return NextResponse.json({ text: reply, reply, type: plan.type });
   }
+  console.log(`[ai][${reqId}] +${t()}ms RESP:default`);
   return NextResponse.json({ text: reply, reply });
 }

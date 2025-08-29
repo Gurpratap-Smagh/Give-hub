@@ -2,6 +2,7 @@
 
 import { ethers } from "ethers";
 import { CrossChainCrowdfundABI } from "./abi/GiveHubCrowdfund";
+import { handleBlockchainError } from "@/lib/utils/blockchain-errors";
 
 export type DeploymentInfo = {
   address: string;
@@ -174,6 +175,14 @@ export async function connectWallet(): Promise<{ signer: ethers.Signer; address:
     const address = await signer.getAddress();
     const network = await provider.getNetwork();
     return { signer, address, chainId: Number(network.chainId) };
+  } catch (error) {
+    // Use the blockchain error handler but don't show toast here - let calling code decide
+    const { message } = handleBlockchainError(error, { 
+      showToast: false, 
+      logError: true
+    });
+    
+    throw new Error(message || "Failed to connect wallet");
   } finally {
     __connectionInProgress = false;
   }
@@ -194,6 +203,9 @@ export async function ensureWalletOnChain(targetChainId: number): Promise<number
   try {
     await provider.send("wallet_switchEthereumChain", [{ chainId: hex }]);
   } catch (err: unknown) {
+    // Use the blockchain error handler to categorize the error
+    const { message, category } = handleBlockchainError(err, { showToast: false });
+    
     // 4902: Unrecognized chain, try adding
     const e = err as { code?: number; message?: string };
     if (e?.code === 4902 || /Unrecognized chain/i.test(String(e?.message || ""))) {
@@ -210,58 +222,93 @@ export async function ensureWalletOnChain(targetChainId: number): Promise<number
       };
       if (explorer) params.blockExplorerUrls = [explorer];
       console.debug("[web3] adding network:", params);
-      await provider.send("wallet_addEthereumChain", [params]);
-      await provider.send("wallet_switchEthereumChain", [{ chainId: hex }]);
+      try {
+        await provider.send("wallet_addEthereumChain", [params]);
+        await provider.send("wallet_switchEthereumChain", [{ chainId: hex }]);
+      } catch (addError) {
+        const { message: addErrorMsg, category: addCategory } = handleBlockchainError(addError, { 
+          showToast: false,
+          logError: true 
+        });
+        if (addCategory === 'user_rejected') {
+          throw new Error("Network switch was rejected by user");
+        } else {
+          throw new Error(addErrorMsg || "Failed to add network to wallet");
+        }
+      }
+    } else if (category === 'user_rejected') {
+      throw new Error("Network switch was rejected by user");
     } else {
-      throw err;
+      throw new Error(message || "Failed to switch network");
     }
   }
   const after = await provider.getNetwork();
   return Number(after.chainId);
 }
 
-export async function getContract(signer?: ethers.Signer) {
+export async function getContract(signer?: ethers.Signer, readOnly?: boolean) {
   const dep = await fetchDeployment();
-  let s = signer;
-  if (!s) {
-    const c = await connectWallet();
-    s = c.signer;
+  // If no signer provided and not explicitly read-only, check if we already have a wallet connection
+  // This avoids unnecessary connection attempts for read-only operations
+  if (!signer && !readOnly) {
+    try {
+      // Check if wallet is already connected before attempting to connect
+      const walletStatus = await checkWalletConnection();
+      if (walletStatus.connected && walletStatus.address) {
+        // Wallet is already connected, get signer without showing prompts
+        const provider = await getProvider();
+        signer = await provider.getSigner(walletStatus.address);
+      }
+    } catch {
+      // Silently fall back to read-only provider without warning
+      // This avoids the unnecessary error messages
+    }
   }
+
+  // Use the signer's provider if available, otherwise fallback to read-only
+  let provider: ethers.AbstractProvider;
+  if (signer) {
+    provider = signer.provider as ethers.AbstractProvider;
+  } else {
+    provider = await getReadOnlyProvider();
+  }
+  
   if (!dep.address || typeof dep.address !== "string" || dep.address.length !== 42) {
     throw new Error("Invalid contract address from deployment info");
   }
   if (/^0x0{40}$/i.test(dep.address)) {
     throw new Error("Contract address is zero address. Set NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS or deployments latest.json correctly.");
   }
+  
   // Best-effort ensure we're on the right chain for this deployment
-  try {
-    const chainNum = Number(dep.chainId as unknown as number);
-    if (Number.isFinite(chainNum)) {
-      await ensureWalletOnChain(chainNum);
-      // Rebind signer to current network to avoid ethers NETWORK_ERROR on event="changed"
-      try {
-        const prov = await getProvider();
-        // Preserve the same account if possible
-        let addr: string | undefined;
-        try { addr = await (s as ethers.Signer).getAddress(); } catch {}
-        s = addr ? await prov.getSigner(addr) : await prov.getSigner();
-      } catch {}
+  // Only do this when we have a signer (connected wallet)
+  if (signer) {
+    try {
+      const chainNum = Number(dep.chainId as unknown as number);
+      if (Number.isFinite(chainNum)) {
+        await ensureWalletOnChain(chainNum);
+        // Rebind signer to current network to avoid ethers NETWORK_ERROR on event="changed"
+        try {
+          const prov = await getProvider();
+          // Preserve the same account if possible
+          let addr: string | undefined;
+          try { addr = await (signer as ethers.Signer).getAddress(); } catch {}
+          signer = addr ? await prov.getSigner(addr) : await prov.getSigner();
+        } catch {}
+      }
+    } catch {
+      // non-fatal; we validate code presence below
     }
-  } catch {
-    // non-fatal; we validate code presence below
   }
-
   // Validate there is contract code at the address on the current network
-  const provider = (s?.provider as ethers.BrowserProvider) || (await getProvider());
   const code = await provider.getCode(dep.address);
   if (!code || code === "0x" || code === "0x00") {
     throw new Error(
       `No contract code at ${dep.address} on current network. Check chain switch and address (expected chainId=${dep.chainId}).`
     );
   }
-
   console.debug("[web3] using contract address:", dep.address);
-  return new ethers.Contract(dep.address, CrossChainCrowdfundABI, s!);
+  return new ethers.Contract(dep.address, CrossChainCrowdfundABI, signer || provider);
 }
 
 export async function isCreator(address: string): Promise<boolean> {
@@ -414,6 +461,81 @@ export async function withdrawCampaignFunds(campaignId: bigint): Promise<void> {
   );
 }
 
+// Update the preferred ZRC-20 token for a campaign
+/**
+ * Update the preferred ZRC-20 token for a campaign
+ * Calls the contract's updateCampaignPayoutToken method
+ */
+export async function updateCampaignPayoutToken(
+  campaignId: bigint,
+  newTokenAddress: string,
+  chain?: string
+): Promise<string> {
+  const dep = await fetchDeployment();
+  // Ensure correct network before obtaining signer
+  try {
+    await ensureWalletOnChain(Number(dep.chainId));
+  } catch (error) {
+    handleBlockchainError(error, { 
+      showToast: true,
+      toastMessage: "Failed to switch to the correct network",
+      logError: true
+    });
+    throw error;
+  }
+  
+  // Validate token address format
+  if (!newTokenAddress || !/^0x[a-fA-F0-9]{40}$/.test(newTokenAddress)) {
+    throw new Error("Invalid token address format");
+  }
+  
+  const prov = await getProvider();
+  const signer = await prov.getSigner();
+  const contract = await getContract(signer);
+  
+  console.debug("[web3] updateCampaignPayoutToken args:", {
+    campaignId: campaignId.toString(),
+    newTokenAddress,
+    chain: chain || 'ZETA', // Chain is tracked for UI but not needed for contract call
+    chainId: dep.chainId,
+    contract: dep.address
+  });
+  
+  try {
+    // Call the contract method with the correct parameters
+    const tx = await contract.updateCampaignPayoutToken(campaignId, newTokenAddress);
+    console.debug("[web3] updateCampaignPayoutToken tx:", tx?.hash);
+    
+    // Await the receipt; if the RPC says "tx not found", fallback to manual polling
+    let receipt: ethers.TransactionReceipt | null = null;
+    try {
+      receipt = await tx.wait(1);
+    } catch (e) {
+      if (isTxNotFoundError(e)) {
+        const prov = ("provider" in signer ? (signer as ethers.Signer & { provider?: ethers.AbstractProvider | null }).provider : null) || null;
+        const useProv = prov ?? (await getProvider());
+        console.warn('[web3] tx.wait reported tx not found; retrying via manual polling…', { hash: tx.hash, err: e });
+        receipt = await waitForReceiptWithRetries(useProv, tx.hash);
+      } else {
+        throw e as Error;
+      }
+    }
+    
+    if (!receipt) throw new Error("No transaction receipt for updateCampaignPayoutToken");
+    console.debug("[web3] updateCampaignPayoutToken receipt status:", receipt?.status);
+    
+    return tx.hash;
+  } catch (error) {
+    // Handle contract call errors
+    handleBlockchainError(error, {
+      showToast: true,
+      toastMessage: "Failed to update preferred token",
+      logError: true
+    });
+    throw error;
+  }
+}
+
 export async function getCampaignBalance(campaignId: bigint): Promise<string> {
   // No-escrow mode: funds are forwarded immediately to the creator.
   // Contract does not maintain campaign balances; return 0 for display.
@@ -422,7 +544,8 @@ export async function getCampaignBalance(campaignId: bigint): Promise<string> {
 }
 
 export async function getCampaignInfo(campaignId: bigint): Promise<{creator: string, preferredZRC20: string, active: boolean}> {
-  const contract = await getContract();
+  // Use readOnly=true to avoid unnecessary wallet connection attempts
+  const contract = await getContract(undefined, true);
   const campaign = await contract.campaigns(campaignId);
   return {
     creator: campaign.creator,
@@ -668,7 +791,14 @@ export async function donateToCampaign(
   // Ensure correct network before obtaining signer
   try {
     await ensureWalletOnChain(Number(dep.chainId));
-  } catch {}
+  } catch (error) {
+    handleBlockchainError(error, { 
+      showToast: true,
+      toastMessage: "Failed to switch to the correct network",
+      logError: true
+    });
+    throw error;
+  }
   const prov = await getProvider();
   const signer = await prov.getSigner();
   const contract = await getContract(signer);
@@ -682,21 +812,37 @@ export async function donateToCampaign(
   });
 
   // No-escrow path: send native ZETA (value) and let contract wrap+forward
-  const tx = await contract.donateNative(campaignId, donorName || '', note, { value: amount });
-  console.debug("[web3] donation tx:", tx?.hash);
   try {
-    await tx.wait(1);
-  } catch (e) {
-    if (isTxNotFoundError(e)) {
-      const prov = ("provider" in signer ? (signer as ethers.Signer & { provider?: ethers.AbstractProvider | null }).provider : null) || null;
-      const useProv = prov ?? (await getProvider());
-      console.warn('[web3] tx.wait (donation) reported tx not found; retrying via manual polling…', { hash: tx.hash, err: e });
-      await waitForReceiptWithRetries(useProv, tx.hash);
-    } else {
-      throw e as Error;
+    const tx = await contract.donateNative(campaignId, donorName || '', note, { value: amount });
+    console.debug("[web3] donation tx:", tx?.hash);
+    try {
+      await tx.wait(1);
+    } catch (e) {
+      if (isTxNotFoundError(e)) {
+        const prov = ("provider" in signer ? (signer as ethers.Signer & { provider?: ethers.AbstractProvider | null }).provider : null) || null;
+        const useProv = prov ?? (await getProvider());
+        console.warn('[web3] tx.wait (donation) reported tx not found; retrying via manual polling…', { hash: tx.hash, err: e });
+        await waitForReceiptWithRetries(useProv, tx.hash);
+      } else {
+        // Use our blockchain error handler but don't throw yet
+        handleBlockchainError(e, {
+          showToast: true,
+          toastMessage: "Donation transaction confirmation failed",
+          logError: true
+        });
+        throw e as Error;
+      }
     }
+    return tx.hash;
+  } catch (error) {
+    // Handle contract call errors
+    handleBlockchainError(error, {
+      showToast: true,
+      toastMessage: "Donation failed",
+      logError: true
+    });
+    throw error;
   }
-  return tx.hash;
 }
 
 // Donation function using ZRC-20 (local ERC20 on Zeta)
@@ -712,7 +858,14 @@ export async function donateZRC20ToCampaign(
   // Ensure correct network before obtaining signer
   try {
     await ensureWalletOnChain(Number(dep.chainId));
-  } catch {}
+  } catch (error) {
+    handleBlockchainError(error, { 
+      showToast: true,
+      toastMessage: "Failed to switch to the correct network",
+      logError: true
+    });
+    throw error;
+  }
   const prov = await getProvider();
   const signer = await prov.getSigner();
 
@@ -733,7 +886,9 @@ export async function donateZRC20ToCampaign(
       const d: bigint | number = await erc20.decimals();
       const n = Number(d);
       if (Number.isFinite(n) && n > 0 && n <= 36) decimals = n;
-    } catch {}
+    } catch (error) {
+      console.warn("Failed to read token decimals, using default:", decimals);
+    }
   }
 
   const amountUnits = ethers.parseUnits(amount, decimals);
@@ -744,12 +899,13 @@ export async function donateZRC20ToCampaign(
   let approveTx: ethers.TransactionResponse;
   try {
     approveTx = await erc20.approve(contractAddress, amountUnits);
-  } catch (e) {
-    const msg = (e as Error)?.message || '';
-    if (/user rejected|denied|rejected the request/i.test(msg)) {
-      throw new Error('User cancelled token approval');
-    }
-    throw e as Error;
+  } catch (error) {
+    handleBlockchainError(error, {
+      showToast: true,
+      toastMessage: "Failed to approve token spending",
+      logError: true
+    });
+    throw error;
   }
 
   // Wait for approval (tolerate transient tx-not-found like native path)
@@ -760,31 +916,50 @@ export async function donateZRC20ToCampaign(
       const useProv = provider ?? (await getProvider());
       await waitForReceiptWithRetries(useProv, approveTx.hash);
     } else {
+      handleBlockchainError(e, {
+        showToast: true,
+        toastMessage: "Token approval failed to confirm",
+        logError: true
+      });
       throw e as Error;
     }
   }
 
   // Donate using token
-  const donateTx = await (contract as unknown as {
-    donateZRC20: (
-      zrc20In: string,
-      amount: bigint,
-      campaignId: bigint,
-      donorName: string,
-      note: string,
-    ) => Promise<ethers.TransactionResponse>
-  }).donateZRC20(tokenAddress, amountUnits, campaignId, donorName || '', note);
-
   try {
-    await donateTx.wait(1);
-  } catch (e) {
-    if (isTxNotFoundError(e)) {
-      const useProv = provider ?? (await getProvider());
-      await waitForReceiptWithRetries(useProv, donateTx.hash);
-    } else {
-      throw e as Error;
-    }
-  }
+    const donateTx = await (contract as unknown as {
+      donateZRC20: (
+        zrc20In: string,
+        amount: bigint,
+        campaignId: bigint,
+        donorName: string,
+        note: string,
+      ) => Promise<ethers.TransactionResponse>
+    }).donateZRC20(tokenAddress, amountUnits, campaignId, donorName || '', note);
 
-  return donateTx.hash;
+    try {
+      await donateTx.wait(1);
+    } catch (e) {
+      if (isTxNotFoundError(e)) {
+        const useProv = provider ?? (await getProvider());
+        await waitForReceiptWithRetries(useProv, donateTx.hash);
+      } else {
+        handleBlockchainError(e, {
+          showToast: true,
+          toastMessage: "Donation transaction confirmation failed",
+          logError: true
+        });
+        throw e as Error;
+      }
+    }
+
+    return donateTx.hash;
+  } catch (error) {
+    handleBlockchainError(error, {
+      showToast: true,
+      toastMessage: "Donation transaction failed",
+      logError: true
+    });
+    throw error;
+  }
 }
