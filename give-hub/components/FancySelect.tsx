@@ -158,7 +158,12 @@ export default function FancySelect({
                     aria-selected={selected}
                     onMouseEnter={() => setActiveIdx(optionIdx)}
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => item.value && onChange(item.value)}
+                    onClick={() => {
+                      if (item.value) {
+                        onChange(item.value);
+                        close();
+                      }
+                    }}
                     className={`flex cursor-pointer items-center gap-2 px-3 py-2 transition-colors select-none
                       ${selected ? 'bg-blue-50 font-semibold' : 'hover:bg-blue-50'}
                     `}

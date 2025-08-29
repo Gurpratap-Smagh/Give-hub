@@ -18,7 +18,7 @@
 
 'use client'
 
-import { useRef, useState, useContext, useEffect } from 'react'
+import React, { useRef, useState, useContext, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { AuthContext } from '../../lib/auth/auth-context' // Corrected path
@@ -33,6 +33,13 @@ import {
 import { isAddress } from '@/lib/address'
 
 // ZRC-20 options are fetched from the server via /api/zrc20-options
+
+interface Token {
+  address: string;
+  symbol: string;
+  decimals: number;
+  chain: string;
+}
 
 function parseRpcError(e: unknown): string {
   if (e && typeof e === 'object') {
@@ -70,21 +77,74 @@ export default function CreateCampaignPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [imageGenLoading, setImageGenLoading] = useState(false)
   const [isAiEditing, setIsAiEditing] = useState(false)
-  const [error, setError] = useState('')
-  // Web3/payment prefs (WZETA-only for creators on create page)
+  // Web3/payment prefs
   const [preferredToken, setPreferredToken] = useState('')
+  const [zrc20Options, setZrc20Options] = useState<{ symbol: string; address: string }[]>([])
   const requiresOnChain = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || '').toLowerCase() === 'zetachain'
   const wzetaAddrEnv = (process.env.NEXT_PUBLIC_WZETA_ADDRESS || '').trim()
-  const isTokenValid = preferredToken !== '' && isAddress(preferredToken)
-  // Force preferred token from env (no selectable list)
+  const [isTokenValid, setIsTokenValid] = useState(false)
+
+  // Fetch ZRC-20 options from API
   useEffect(() => {
     if (!requiresOnChain) return
-    if (wzetaAddrEnv && isAddress(wzetaAddrEnv)) {
-      setPreferredToken(wzetaAddrEnv)
-    } else {
-      setPreferredToken('')
+    const fetchTokens = async () => {
+      try {
+        const res = await fetch('/api/zrc20-options')
+        if (!res.ok) throw new Error('Failed to fetch tokens')
+        const data = await res.json()
+        const allTokens = data?.byChain || {}
+        setZrc20Options(allTokens)
+        // Default to WZETA if available, otherwise first token in first chain
+        const wzeta = (Object.values(allTokens) as Token[][])
+          .flat()
+          .find((t: Token) => t.symbol === 'WZETA')
+        if (wzeta) {
+          setPreferredToken(wzeta.address)
+        } else if ((Object.values(allTokens) as Token[][]).flat().length > 0) {
+          setPreferredToken((Object.values(allTokens) as Token[][])[0][0].address)
+        }
+      } catch (e) {
+        console.error('Failed to fetch ZRC-20 options:', e)
+        notify('Could not load token options.', 'error')
+      }
     }
-  }, [requiresOnChain, wzetaAddrEnv])
+    fetchTokens()
+  }, [requiresOnChain])
+
+  // Validate token when preferredToken changes
+  useEffect(() => {
+    if (!requiresOnChain || !preferredToken) {
+      setIsTokenValid(true)
+      return
+    }
+
+    const validateToken = async () => {
+      try {
+        // Skip validation for WZETA and zETH
+        if (preferredToken.includes('WZETA') || preferredToken.includes('zETH')) {
+          setIsTokenValid(true)
+          return
+        }
+
+        // Additional validation for zBTC
+        if (preferredToken.includes('zBTC')) {
+          notify('zBTC is currently not supported for campaigns', 'error')
+          setIsTokenValid(false)
+          return
+        }
+
+        // Default validation
+        setIsTokenValid(isAddress(preferredToken))
+      } catch (e) {
+        console.error('Token validation failed:', e)
+        notify('Token validation failed. Please try another token.', 'error')
+        setIsTokenValid(false)
+      }
+    }
+
+    validateToken()
+  }, [preferredToken, requiresOnChain])
+
   // Tx UI state
   const [txHash, setTxHash] = useState<string | null>(null)
   const [txPhase, setTxPhase] = useState<'idle' | 'confirm' | 'sent' | 'mining' | 'done' | 'error'>('idle')
@@ -177,7 +237,7 @@ export default function CreateCampaignPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) {
-      setError('You must be logged in to create a campaign.')
+      notify('You must be logged in to create a campaign.', 'error')
       return
     }
     if (!formData.category) {
@@ -200,7 +260,6 @@ export default function CreateCampaignPage() {
     }
 
     setIsSubmitting(true)
-    setError('')
     setTxHash(null)
     setTxPhase('idle')
     
@@ -212,44 +271,51 @@ export default function CreateCampaignPage() {
       const isZeta = paymentProvider === 'zetachain';
       
       if (isZeta) {
-        notify('Connecting to wallet...', 'info')
-        
-        // Step 2: Connect wallet and ensure correct network
-        const { address, chainId } = await connectWallet()
-        const targetChainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
-        
-        if (chainId !== targetChainId) {
-          notify(`Switching to ZetaChain network...`, 'info')
-          await ensureWalletOnChain(targetChainId)
-        }
-        
-        // Step 3: Check if creator already exists on-chain (automatic registration in createCampaign)
-        const creatorExists = await isCreator(address)
-        if (!creatorExists) {
-          notify('Registering as creator on-chain...', 'info')
-          // Registration happens automatically in createCampaign for CrossChainCrowdfund
-        }
-        
-        // Step 4: Create campaign on-chain
-        setTxPhase('confirm')
-        notify('Confirm in MetaMask…', 'info')
-        const res = await createCampaignOnChain({
-          preferredZRC20: preferredToken,
-          onSent: (hash) => {
-            setTxHash(hash)
-            setTxPhase('sent')
-            const base = process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL
-            if (base) {
-              notify(`Transaction sent: ${base}/tx/${hash}`, 'success')
-            } else {
-              notify(`Transaction sent: ${hash}`, 'success')
-            }
+        try {
+          notify('Connecting to wallet...', 'info')
+          
+          // Step 2: Connect wallet and ensure correct network
+          const { address, chainId } = await connectWallet()
+          const targetChainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
+          
+          if (chainId !== targetChainId) {
+            notify(`Switching to ZetaChain network...`, 'info')
+            await ensureWalletOnChain(targetChainId)
           }
-        })
-        setTxPhase('mining')
-        onChainCampaignId = res.id
-        setTxPhase('done')
-        console.debug('[create] On-chain campaign created. ID:', onChainCampaignId?.toString(), 'tx:', res.txHash)
+          
+          // Step 3: Check if creator already exists on-chain
+          const creatorExists = await isCreator(address)
+          if (!creatorExists) {
+            notify('Registering as creator on-chain...', 'info')
+          }
+          
+          // Step 4: Create campaign on-chain
+          setTxPhase('confirm')
+          notify('Confirm in MetaMask…', 'info')
+          const res = await createCampaignOnChain({
+            preferredZRC20: preferredToken,
+            onSent: (hash) => {
+              setTxHash(hash)
+              setTxPhase('sent')
+              const base = process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL
+              if (base) {
+                notify(`Transaction sent: ${base}/tx/${hash}`, 'success')
+              } else {
+                notify(`Transaction sent: ${hash}`, 'success')
+              }
+            }
+          })
+          setTxPhase('mining')
+          onChainCampaignId = res.id
+          setTxPhase('done')
+          console.debug('[create] On-chain campaign created. ID:', onChainCampaignId?.toString(), 'tx:', res.txHash)
+        } catch (e) {
+          console.error('On-chain operation failed:', e)
+          const msg = e instanceof Error && e.message.includes('missing revert data') 
+            ? 'Token not supported by contract. Try WZETA or zETH.'
+            : parseRpcError(e)
+          notify(msg, 'error')
+        }
       }
 
       // Step 5: Save campaign to off-chain database
@@ -342,7 +408,6 @@ export default function CreateCampaignPage() {
       
     } catch (err: unknown) {
       const errorMsg = (err as Error).message || 'An error occurred'
-      setError(errorMsg)
       notify(errorMsg, 'error')
       
       // If on-chain creation succeeded but off-chain failed, show different message
@@ -538,6 +603,10 @@ export default function CreateCampaignPage() {
                 <option value="animals">Animal Welfare</option>
                 <option value="community">Community Development</option>
                 <option value="emergency">Emergency Relief</option>
+                <option value="tech">Technology</option>
+                <option value="open-source">Open Source</option>
+                <option value="research">Scientific Research</option>
+                <option value="arts">Arts & Culture</option>
                 <option value="other">Other</option>
               </select>
               {formData.category === 'other' && (
@@ -554,28 +623,38 @@ export default function CreateCampaignPage() {
               )}
             </div>
 
-            {/* Preferred Token (ZRC-20) - WZETA only (from env) */}
+            {/* Preferred Token (ZRC-20) */}
             <div>
               <label className="block text-lg font-semibold text-gray-900 mb-3">
-                Preferred Token (ZRC-20) {requiresOnChain ? '*' : ''}
+                Preferred Payout Token {requiresOnChain ? '*' : ''}
               </label>
-              <div className="w-full p-4 border-2 border-gray-200 rounded-lg bg-gray-50 text-lg flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 text-sm font-medium">WZETA</span>
-                  <span className="text-gray-700 text-sm">(Zeta)</span>
-                </div>
-                {preferredToken ? (
-                  <code className="text-xs text-gray-500 break-all">{preferredToken}</code>
-                ) : null}
+              <div className="space-y-2">
+                {Object.entries(zrc20Options).map(([chain, tokens]) => (
+                  <div key={chain} className="space-y-1">
+                    <div className="text-sm text-gray-500">{chain}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {tokens && Array.isArray(tokens) && tokens.map((token) => (
+                        <button
+                          key={token.address}
+                          type="button"
+                          className={`px-3 py-1 text-sm rounded-full ${preferredToken === token.address ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 hover:bg-gray-200'}`}
+                          onClick={() => setPreferredToken(token.address)}
+                        >
+                          {token.symbol}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-              {!preferredToken && requiresOnChain && (
-                <p className="text-sm text-red-600 mt-1">Missing or invalid NEXT_PUBLIC_WZETA_ADDRESS. Set it to the WZETA contract address.</p>
+              {preferredToken && (
+                <p className="text-xs text-gray-500 mt-1">Contract address: {preferredToken}</p>
               )}
-              {preferredToken && !isTokenValid && (
-                <p className="text-sm text-red-600 mt-1">Invalid WZETA address in env.</p>
+              {!isTokenValid && requiresOnChain && (
+                <p className="text-sm text-red-600 mt-1">A valid token must be selected.</p>
               )}
-              {preferredToken && isTokenValid && (
-                <p className="text-sm text-gray-500 mt-1">Campaigns accept donations in WZETA only. Withdrawals are disabled.</p>
+              {isTokenValid && (
+                <p className="text-sm text-gray-500 mt-1">Donations will be automatically swapped to this token.</p>
               )}
             </div>
 
@@ -630,7 +709,7 @@ export default function CreateCampaignPage() {
               >
                 {/* Pencil icon */}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                  <path d="M16.862 3.487a1.5 1.5 0 0 1 2.121 0l1.53 1.53a1.5 1.5 0 0 1 0 2.121l-9.9 9.9a1.5 1.5 0 0 1-.67.386l-4.019 1.004a.75.75 0 0 1-.91-.91l1.003-4.02a1.5 1.5 0 0 1 .386-.669l9.9-9.9Zm-2.828 2.828L5.9 14.45a.5.5 0 0 0-.129.223l-.692 2.773 2.773-.692a.5.5 0 0 0 .223-.13l8.134-8.133-2.167-2.167Z" />
+                  <path d="M16.862 3.487a1.5 1.5 0 0 1 2.121 0l1.53 1.53a1.5 1.5 0 0 1 0 2.121l-9.9 9.9a1.5 1.5 0 0 1-.67.386l-4.019 1.004a.75.75 0 0 1-.91-.91l1.003-4.02a1.5 1.5 0 0 1 .386-.669l9.9-9.9Zm-2.828 2.828L5.9 14.45a.5.5 0 0 0-.129.223l-.692 2.773 2.773-.692a.5.5 0 0 0 .223-.129l8.134-8.133-2.167-2.167Z" />
                 </svg>
               </button>
             </div>
@@ -673,7 +752,7 @@ export default function CreateCampaignPage() {
         }}
         className="hidden"
       />
-      {error && <p>{error}</p>}
+      {/* Error display removed - using notify system instead */}
     </div>
   )
 }

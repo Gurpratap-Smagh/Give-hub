@@ -10,7 +10,10 @@ function escapeRegExp(s: string) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&
 let mongoClientPromise: Promise<MongoClient> | null = null;
 async function getMongo(): Promise<MongoClient> {
   if (!mongoClientPromise) {
-    mongoClientPromise = new MongoClient(process.env.MONGODB_URI as string, { serverSelectionTimeoutMS: 5000 }).connect();
+    mongoClientPromise = new MongoClient(process.env.MONGODB_URI as string, {
+      serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 5000),
+      socketTimeoutMS: Number(process.env.MONGO_SOCKET_TIMEOUT_MS || 20000),
+    }).connect();
   }
   return mongoClientPromise;
 }
@@ -46,9 +49,10 @@ async function mongoSearch(
 
   const filter = and.length ? { $and: [{ $or: or }, ...and] } : { $or: or };
 
+  const queryTimeout = Number(process.env.MONGO_QUERY_TIMEOUT_MS || 5000);
   const docs = await col.find(filter, {
     projection: { _id: 1, id: 1, slug: 1, title: 1, name: 1, category: 1, goal: 1, target: 1, raised: 1, amountRaised: 1 }
-  }).limit(Math.min(Math.max(limit, 1), 10)).toArray();
+  }).maxTimeMS(queryTimeout).limit(Math.min(Math.max(limit, 1), 10)).toArray();
 
   type RawCampaign = {
     _id?: { toString?: () => string } | unknown;

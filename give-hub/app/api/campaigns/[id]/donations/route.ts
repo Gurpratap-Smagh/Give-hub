@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
-import type { Creator } from '@/lib/db'
+import { mongoDb as db } from '../../../../../lib/mongodb/database'
 
 /**
  * GET /api/campaigns/[id]/donations
@@ -32,8 +31,7 @@ export async function GET(
 
     return NextResponse.json(donations)
 
-  } catch (error) {
-    console.error('Error fetching campaign donations:', error)
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -53,7 +51,12 @@ export async function POST(
 ) {
   try {
     const { id: campaignId } = await params
-    const { amount, chain, donorName, txId } = await request.json()
+    const body = await request.json()
+    const amount: number = body.amount
+    const chain: string = body.chain
+    const donorName: string = body.donorName ?? body.name
+    const txId: string | undefined = body.txId
+    const timestamp: Date | undefined = body.timestamp ? new Date(body.timestamp) : undefined
 
     // Basic validation
     if (!campaignId) {
@@ -106,6 +109,7 @@ export async function POST(
       amount,
       chain,
       // timestamp is set by adapter if omitted
+      timestamp,
     })
 
     // Update campaign raised amount (allow exceeding goal)
@@ -121,9 +125,10 @@ export async function POST(
     // Optional: update creator stats when applicable
     const creator = await db.findUserById(campaign.creatorId)
     if (creator && creator.role === 'creator') {
-      const creatorData = creator as Creator
-      const currentRaised = creatorData.totalRaised || 0
-      await db.updateUser(creatorData.id, { totalRaised: currentRaised + amount })
+      const currentRaised = ('totalRaised' in creator && typeof creator.totalRaised === 'number')
+        ? creator.totalRaised
+        : 0
+      await db.updateUser(creator.id, { totalRaised: currentRaised + amount })
     }
 
     return NextResponse.json({
@@ -145,8 +150,7 @@ export async function POST(
           : 0,
       },
     })
-  } catch (error) {
-    console.error('Error recording donation:', error)
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

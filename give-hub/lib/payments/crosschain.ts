@@ -7,6 +7,7 @@ import {
   parseEther,
   parseUnits,
 } from 'ethers';
+import { handleBlockchainError } from '@/lib/utils/blockchain-errors';
 
 export const CHAIN_HEX = {
   ZETA: '0x1b59',      // 7001 (Zeta Athens)
@@ -51,6 +52,10 @@ export async function ensureChain(chainHex: string) {
       params: [{ chainId: chainHex }],
     });
   } catch (e: unknown) {
+    const { message, category } = handleBlockchainError(e, { showToast: false });
+    if (category !== 'user_rejected') {
+      console.warn(`[${category}]`, message);
+    }
     const err = e as { code?: number };
     if (err?.code === 4902) {
       if (chainHex === CHAIN_HEX.ZETA) {
@@ -86,7 +91,7 @@ export async function ensureChain(chainHex: string) {
         params: [{ chainId: chainHex }],
       });
     } else {
-      throw e as Error;
+      throw new Error(message || 'Failed to switch to network');
     }
   }
   // Post-switch verification
@@ -98,6 +103,14 @@ export async function ensureChain(chainHex: string) {
       throw new Error(`Wallet is on chainId ${net.chainId.toString()} but expected ${expected}. Please approve the network switch in your wallet.`);
     }
   } catch (err) {
+    const { message, category } = handleBlockchainError(err, { showToast: false });
+    if (category !== 'user_rejected') {
+      console.warn(`[${category}]`, message);
+    }
+    // Throw the original error with enhanced context if possible
+    if (message) {
+      throw new Error(message);
+    }
     throw err;
   }
 }
@@ -134,7 +147,15 @@ export async function payFromSepolia(params: {
       throw new Error('Wallet did not switch to Ethereum Sepolia. Please approve the network switch in your wallet.');
     }
   } catch (e) {
-    throw e as Error;
+    const { message, category } = handleBlockchainError(e, { 
+      showToast: true,
+      toastMessage: 'Failed to switch to Sepolia network',
+      logError: true 
+    });
+    if (category !== 'user_rejected') {
+      console.warn(`[${category}]`, message);
+    }
+    throw new Error(message || 'Failed to switch to Sepolia network');
   }
 
   const provider = new BrowserProvider(eth);
@@ -152,27 +173,56 @@ export async function payFromSepolia(params: {
     const value = parseEther(String(params.amount));
     console.log('[payFromSepolia] native zETH amount(ETH)=', params.amount, ' value(wei)=', value.toString());
     params.setStatus?.('Confirming depositAndCall (native)…');
-    const tx = await gateway.depositAndCall(params.receiver, message, revertOpts, { value });
-    params.setStatus?.('Waiting for Sepolia confirmation…');
-    return await tx.wait();
+    
+    try {
+      const tx = await gateway.depositAndCall(params.receiver, message, revertOpts, { value });
+      params.setStatus?.('Waiting for Sepolia confirmation…');
+      return await tx.wait();
+    } catch (error) {
+      handleBlockchainError(error, {
+        showToast: true,
+        toastMessage: 'Transaction failed on Sepolia',
+        logError: true
+      });
+      throw error;
+    }
   } else {
     // ERC-20 path (e.g., USDC on Sepolia)
     const erc20 = new Contract(params.erc20, ERC20_ABI, signer);
     let decimals = params.erc20Decimals ?? 6;
     try {
       decimals = Number(await erc20.decimals());
-    } catch {
+    } catch (error) {
       // keep default if read fails
+      console.warn('Failed to read token decimals, using default:', decimals, error);
     }
     const amount = parseUnits(String(params.amount), decimals);
 
     params.setStatus?.('Approving token spend…');
-    await (await erc20.approve(params.gateway, amount)).wait();
+    try {
+      await (await erc20.approve(params.gateway, amount)).wait();
+    } catch (error) {
+      handleBlockchainError(error, {
+        showToast: true,
+        toastMessage: 'Failed to approve token spending',
+        logError: true
+      });
+      throw error;
+    }
 
     params.setStatus?.('Confirming depositAndCall (ERC-20)…');
-    const tx = await gateway.depositAndCall(params.receiver, amount, params.erc20, message, revertOpts);
-    params.setStatus?.('Waiting for Sepolia confirmation…');
-    return await tx.wait();
+    try {
+      const tx = await gateway.depositAndCall(params.receiver, amount, params.erc20, message, revertOpts);
+      params.setStatus?.('Waiting for Sepolia confirmation…');
+      return await tx.wait();
+    } catch (error) {
+      handleBlockchainError(error, {
+        showToast: true,
+        toastMessage: 'Transaction failed on Sepolia',
+        logError: true
+      });
+      throw error;
+    }
   }
 }
 

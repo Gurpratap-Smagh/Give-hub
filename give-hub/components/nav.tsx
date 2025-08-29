@@ -258,15 +258,9 @@ export function Nav() {
             </button>
             {/* Creator action inline on md+; moved into profile dropdown for <md */}
             {user?.role === 'creator' && (
-              isStudio ? (
-                <Link href="/create" className="hidden md:inline-flex items-center px-4 py-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                  Create Campaign
-                </Link>
-              ) : (
-                <Link href="/studio" className="hidden md:inline-flex items-center px-4 py-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                  Creator Studio
-                </Link>
-              )
+              <Link href="/studio" className="hidden md:inline-flex items-center px-4 py-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                Creator Studio
+              </Link>
             )}
             {/* User Profile - Building Block: User authentication state */}
             {user ? (
@@ -296,29 +290,16 @@ export function Nav() {
                 {showProfileDropdown && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                     {user?.role === 'creator' && (
-                      isStudio ? (
-                        <Link 
-                          href="/create" 
-                          className="md:hidden flex items-center px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
-                          onClick={() => setShowProfileDropdown(false)}
-                        >
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
-                          Create Campaign
-                        </Link>
-                      ) : (
-                        <Link 
-                          href="/studio" 
-                          className="md:hidden flex items-center px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
-                          onClick={() => setShowProfileDropdown(false)}
-                        >
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.343-3 3v5h6v-5c0-1.657-1.343-3-3-3z" />
-                          </svg>
-                          Creator Studio
-                        </Link>
-                      )
+                      <Link 
+                        href="/studio" 
+                        className="md:hidden flex items-center px-4 py-2 text-sm text-blue-700 hover:bg-blue-50"
+                        onClick={() => setShowProfileDropdown(false)}
+                      >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 1.343-3 3v5h6v-5c0-1.657-1.343-3-3-3z" />
+                        </svg>
+                        Creator Studio
+                      </Link>
                     )}
                     <Link 
                       href="/profile" 
@@ -430,11 +411,7 @@ export function Nav() {
         <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg rounded-b-lg border-t border-gray-200 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex flex-col p-4 space-y-4">
             {user?.role === 'creator' && (
-              isStudio ? (
-                <Link href="/create" onClick={() => { setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Create Campaign</Link>
-              ) : (
-                <Link href="/studio" onClick={() => { setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Creator Studio</Link>
-              )
+              <Link href="/studio" onClick={() => { setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Creator Studio</Link>
             )}
             {user ? (
               <>

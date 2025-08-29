@@ -3,6 +3,13 @@
 
 export type NotifyVariant = 'info' | 'success' | 'error'
 
+// Emoji mapping for each notification type
+const variantEmojis = {
+  info: '💡',
+  success: '✅',
+  error: '❌'
+}
+
 export function notify(message: string, variant: NotifyVariant = 'info') {
   if (typeof window === 'undefined') return
 
@@ -19,24 +26,31 @@ export function notify(message: string, variant: NotifyVariant = 'info') {
   const toast = document.createElement('div')
   toast.className = [
     'min-w-[260px] max-w-sm pointer-events-auto',
-    'rounded-xl shadow-lg border backdrop-blur bg-white/95',
-    'px-4 py-3 flex items-start gap-3',
+    'rounded-full shadow-lg',
+    'px-4 py-3 flex items-center gap-2',
     'transition-all duration-300 ease-out transform',
     'opacity-0 translate-x-6',
   ].join(' ')
+  
+  // Apply color based on variant
+  if (variant === 'success') {
+    toast.className += ' bg-green-500 text-white'
+  } else if (variant === 'error') {
+    toast.className += ' bg-red-500 text-white'
+  } else {
+    toast.className += ' bg-blue-500 text-white'
+  }
 
-  // Accent bar
-  const accent = document.createElement('div')
-  accent.className = 'w-1 rounded-full mt-0.5 '
-  if (variant === 'success') accent.className += 'bg-green-500'
-  else if (variant === 'error') accent.className += 'bg-red-500'
-  else accent.className += 'bg-blue-500'
+  // Emoji icon
+  const emoji = document.createElement('div')
+  emoji.className = 'text-lg flex-shrink-0'
+  emoji.textContent = variantEmojis[variant]
 
   const content = document.createElement('div')
-  content.className = 'flex-1 text-sm text-gray-800'
+  content.className = 'flex-1 text-sm font-medium text-white'
   content.textContent = message
 
-  toast.appendChild(accent)
+  toast.appendChild(emoji)
   toast.appendChild(content)
   container.appendChild(toast)
 

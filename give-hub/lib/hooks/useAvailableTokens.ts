@@ -77,7 +77,11 @@ export const useAvailableTokens = () => {
     },
     getNativeToken: (): Token | undefined => {
       const zero = "0x0000000000000000000000000000000000000000";
-      return tokens.find((t) => t.address.toLowerCase() === zero);
+      const specialNativeZeta = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE".toLowerCase();
+      return tokens.find((t) => {
+        const addr = t.address.toLowerCase();
+        return addr === zero || addr === specialNativeZeta;
+      });
     },
     refetch: () => {
       const { byChain, tokens } = loadFromEnv();

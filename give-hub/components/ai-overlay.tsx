@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { notify } from "@/lib/utils/notify"
 
 interface AIOverlayProps {
   open: boolean
@@ -261,7 +262,11 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
           },
         }),
       });
-      if (!res.ok) throw new Error(`AI request failed (${res.status})`)
+      if (!res.ok) {
+        const errorMsg = `AI request failed (${res.status})`;
+        notify(errorMsg, "error");
+        throw new Error(errorMsg);
+      }
       const data = (await res.json()) as {
         text?: string;
         action?: (
@@ -273,6 +278,12 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
       const text = (data.text ?? "").trim()
       const reply: ChatMsg = { id: crypto.randomUUID(), role: "assistant", text: text || "(No content returned)" }
       setMessages((m) => [...m, reply])
+      
+      // If no content was returned, show a toast notification
+      if (!text) {
+        notify("Assistant returned an empty response. Please try again.", "error");
+      }
+      
       if (Array.isArray(data.results) && data.results.length) {
         setLastResults(data.results.map(r => ({ id: r.id, title: r.title })))
       }
@@ -288,6 +299,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to get AI response"
       setError(msg)
+      notify(msg, "error") // Add toast notification for errors
       const reply: ChatMsg = { id: crypto.randomUUID(), role: "assistant", text: "Sorry, I couldn't process that request. Please try again." }
       setMessages((m) => [...m, reply])
     } finally {
@@ -373,6 +385,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
 
             {/* Messages - with custom scrollbar */}
             <div className="px-4 pb-3 flex-1 overflow-y-auto space-y-3 ai-scrollbar">
+              {/* Keep minimal inline errors for accessibility, but use toast for errors */}
               {error && (
                 <div className="flex justify-center">
                   <div className="px-3 py-2 rounded-2xl bg-red-50 text-red-700 text-xs border border-red-200">

@@ -36,6 +36,34 @@ const config: Config = {
       boxShadow: {
         'custom': '0 8px 24px rgba(0,0,0,.35)',
       },
+      animation: {
+        'spin-slow': 'spin 3s linear infinite',
+        'ping': 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite',
+        'fade-in': 'fadeIn 0.3s ease-out forwards',
+        'fade-out': 'fadeOut 0.3s ease-out forwards',
+      },
+      keyframes: {
+        spin: {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
+        ping: {
+          '0%': { transform: 'scale(1)', opacity: '0.2' },
+          '75%, 100%': { transform: 'scale(1.5)', opacity: '0' },
+        },
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'scale(0.9)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        fadeOut: {
+          '0%': { opacity: '1', transform: 'scale(1)' },
+          '100%': { opacity: '0', transform: 'scale(1.05)' },
+        },
+      },
+      scale: {
+        '102': '1.02',
+        '105': '1.05',
+      },
     },
   },
   plugins: [],

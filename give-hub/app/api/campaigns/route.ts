@@ -1,23 +1,112 @@
 /**
  * FILE: app/api/campaigns/route.ts
- * PURPOSE: Server API to fetch list of campaigns from the JSON mock DB
+ * PURPOSE: Server API to fetch list of campaigns from MongoDB or mock DB
  * ACCESS: GET /api/campaigns
- * NOTE: Keep interface stable for easy MongoDB swap
+ * NOTE: Environment determines MongoDB vs mock DB usage via USE_MONGODB
  */
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { authMiddleware, type AuthedRequest } from '@/lib/auth'
 import type { Campaign } from '@/lib/db'
+import { serverGetAllSyncedCampaignIds } from '@/lib/web3/server'
 
 // Note: authMiddleware reads 'auth-token' cookie, verifies JWT, and attaches request.user
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const campaigns = await db.getAllCampaigns()
-    return NextResponse.json({ success: true, campaigns }, { status: 200 })
-  } catch (error) {
-    console.error('GET /api/campaigns error:', error)
+    const { searchParams } = new URL(request.url)
+    const showUnsynced = searchParams.get('showUnsynced')
+    const skipBlockchainCheck = searchParams.get('skipBlockchain') === 'true'
+    // MongoDB status is managed internally by the db adapter
+    
+    // Get campaigns based on database config and filter params
+    const searchQuery = searchParams.get('search')?.trim();
+    const searchParam = searchParams.get('param') as 'all' | 'title' | 'creator' | 'category' || 'all';
+    
+    // Fetch all campaigns (DB adapter will use MongoDB or mock JSON based on environment)
+    const allCampaigns = await db.getAllCampaigns()
+    
+    // Handle search filtering
+    let filteredCampaigns = allCampaigns;
+    if (searchQuery) {
+      const searchLower = searchQuery.toLowerCase();
+      filteredCampaigns = allCampaigns.filter(campaign => {
+        // Default search in all fields
+        if (searchParam === 'all' || !searchParam) {
+          return (
+            campaign.title.toLowerCase().includes(searchLower) ||
+            campaign.description.toLowerCase().includes(searchLower) ||
+            (campaign.category && campaign.category.toLowerCase().includes(searchLower))
+          );
+        }
+        
+        // Search by specific field
+        if (searchParam === 'title') {
+          return campaign.title.toLowerCase().includes(searchLower);
+        }
+        if (searchParam === 'creator') {
+          return campaign.creatorId.toLowerCase().includes(searchLower);
+        }
+        if (searchParam === 'category') {
+          return campaign.category?.toLowerCase().includes(searchLower);
+        }
+        
+        return false;
+      });
+    }
+    
+    // If skipBlockchainCheck is true, return all campaigns quickly without verification
+    if (skipBlockchainCheck) {
+      // For quick loading, just filter based on whether campaigns have onChain property
+      let campaigns = filteredCampaigns
+      if (showUnsynced === 'true') {
+        // Show campaigns without onChain property
+        campaigns = filteredCampaigns.filter(campaign => !campaign.onChain)
+      } else if (showUnsynced === 'all') {
+        campaigns = filteredCampaigns // All campaigns for studio (with search applied)
+      } else {
+        // Show campaigns with onChain property
+        campaigns = filteredCampaigns.filter(campaign => !!campaign.onChain)
+      }
+      return NextResponse.json({ 
+        success: true, 
+        campaigns, 
+        verificationStatus: 'skipped'
+      }, { status: 200 })
+    }
+    
+    // Process using contract view: get all synced on-chain campaign IDs
+    const syncedOnChainIds = await serverGetAllSyncedCampaignIds(100)
+
+    // Filter campaigns based on verified on-chain sync status
+    let campaigns = filteredCampaigns
+    if (showUnsynced === 'true') {
+      // Only show campaigns that are not verified on-chain
+      campaigns = filteredCampaigns.filter(campaign => {
+        const onChainId = campaign.onChain?.campaignId
+        return !onChainId || !syncedOnChainIds.has(String(onChainId))
+      })
+    } else if (showUnsynced === 'all') {
+      campaigns = filteredCampaigns // All campaigns for studio
+    } else {
+      // Only show campaigns whose onChain id is present in the view results
+      campaigns = filteredCampaigns.filter(campaign => {
+        const onChainId = campaign.onChain?.campaignId
+        return !!onChainId && syncedOnChainIds.has(String(onChainId))
+      })
+    }
+    
+    return NextResponse.json({ 
+      success: true, 
+      campaigns, 
+      verificationStatus: 'complete' 
+    }, { status: 200 })
+  } catch (err) {
+    // Handle API errors and log only in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('GET /api/campaigns error:', err)
+    }
     return NextResponse.json({ success: false, error: 'Server error' }, { status: 500 })
   }
 }
@@ -53,13 +142,16 @@ export const POST = authMiddleware(async (req: AuthedRequest) => {
       description: String(description ?? ''),
       category: String(category),
       creatorId: req.user.id,
-      // Optional/extra fields
-      image: imgSrc ? String(imgSrc) : undefined,
-      active: true,
-      verified: false,
+      // Ensure required string field
+      image: String(imgSrc ?? ''),
+      // Core arrays
       chains: [],
-      // Leave uuid/contract fields undefined; DB layer/schema will ignore extras
-    } as Omit<Campaign, 'id'>
+      donations: [],
+      contractOwnership: [],
+      // Timestamps
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
 
     // Optionally attach on-chain mapping if provided (validated)
     if (onChain !== undefined) {

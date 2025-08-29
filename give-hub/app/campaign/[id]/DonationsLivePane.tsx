@@ -22,20 +22,9 @@ export default function DonationsLivePane({ campaignId, isActive = true }: Donat
   const noteRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const triggerRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Debug: log raw decoded events from the contract before UI formatting
+  // Debug logging removed to avoid console output in production
   useEffect(() => {
-    // Only log when events change and there is at least one event
-    if (events && events.length) {
-      try {
-        // Print compact and pretty versions for convenience
-        // Compact line (grep-friendly)
-        console.log('[live-donations/raw-events]', events);
-        // Pretty JSON (copy/paste friendly)
-        console.log('[live-donations/raw-events/json]', JSON.stringify(events, null, 2));
-      } catch {
-        // no-op
-      }
-    }
+    // Intentionally left blank; previously logged raw events
   }, [events]);
 
   // Removed callback ref that updated state during render to avoid update-depth loops.

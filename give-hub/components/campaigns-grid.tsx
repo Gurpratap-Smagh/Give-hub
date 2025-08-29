@@ -1,177 +1,183 @@
 /**
  * FILE: components/campaigns-grid.tsx
- * PURPOSE: Client grid with loading + progressive reveal (3 visible, blur rest until expanded)
- * MIGRATION: Swaps to real API/MongoDB seamlessly via /api/campaigns
+ * PURPOSE: Optimized campaign grid with simple sync/unsync filtering
+ * PERFORMANCE: Removed complex blockchain verification for speed
  */
 
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CampaignCard } from '@/components/campaign-card'
-import type { Campaign } from '@/lib/db'
+import type { Campaign } from '@/lib/utils/types';
+import { useCampaignLiveStatus } from '@/lib/hooks/useCampaignLiveStatus'
+import { SkeletonCard } from '@/components/skeleton-loader'
+import Link from 'next/link'
 
-// Use shared Campaign type from '@/lib/db' (kept compatible across mock and Mongo adapters)
 
-interface CampaignsGridProps {
+type CampaignsGridProps = {
+  /** Initial campaigns to display */
   initialCampaigns?: Campaign[]
-  /** Tailwind class for the gradient 'from' color, e.g. 'from-blue-100' */
-  gradientFromClass?: string
+  /** Should we show an "Add Campaign" card? */
+  showAddCampaignCard?: boolean
+  /** Show unsynced campaigns (false by default for home page) */
+  showUnsyncedCampaigns?: boolean
+  /** Enable the live status hook (disable on homepage to avoid RPC) */
+  enableLiveStatus?: boolean
+  /** Use compact cards (hide live badge and progress details) */
+  compactCards?: boolean
+  /** Title for the section */
+  sectionTitle?: string
+  /** Show loading state */
+  isLoading?: boolean
 }
 
-function SkeletonCard() {
-  return (
-    <div className="animate-pulse bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-      <div className="flex gap-2 mb-4">
-        <div className="h-6 w-16 bg-gray-200 rounded-full" />
-        <div className="h-6 w-20 bg-gray-200 rounded-full" />
-      </div>
-      <div className="h-6 bg-gray-200 rounded w-3/4 mb-4" />
-      <div className="space-y-2">
-        <div className="h-4 bg-gray-200 rounded w-1/2" />
-        <div className="h-2 bg-gray-200 rounded w-full" />
-        <div className="h-2 bg-gray-200 rounded w-5/6" />
-      </div>
-    </div>
-  )
-}
-
-export function CampaignsGrid({ initialCampaigns = [], gradientFromClass = 'from-gray-50' }: CampaignsGridProps) {
+export function CampaignsGrid({
+  initialCampaigns = [],
+  showAddCampaignCard = false,
+  showUnsyncedCampaigns = false,
+  enableLiveStatus = false,
+  compactCards = false,
+  sectionTitle,
+  isLoading = false,
+}: CampaignsGridProps) {
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns)
-  const [loading] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  const initialRef = useRef(initialCampaigns)
+  // Removed background sync verification; trust server/API to provide only synced campaigns for homepage
 
-  // Sync internal list when server-provided campaigns change (e.g., leaving search or clicking back)
+  // Sync internal list when server-provided campaigns change
   useEffect(() => {
     setCampaigns(initialCampaigns)
     setExpanded(false)
-    initialRef.current = initialCampaigns
   }, [initialCampaigns])
 
-  const list = campaigns ?? initialRef.current
-  // Feature flag: enable dynamic layout only when env is active.
-  // NOTE: In Next.js client components, only NEXT_PUBLIC_* env vars are exposed.
-  const layoutDEnv = (process.env.NEXT_PUBLIC_layoutD ?? process.env.NEXT_PUBLIC_LAYOUTD ?? '').toString().trim().toLowerCase()
-  const isLayoutD = ['1', 'true', 'yes', 'on'].includes(layoutDEnv)
-  // Column logic by total count: <4 => 1 col, 4-8 => 2 cols, >8 => 3 cols
-  const desiredCols = useMemo(() => {
-    const n = list.length
-    if (n < 4) return 1
-    if (n <= 8) return 2
-    return 3
-  }, [list.length])
-  // Gate when more than 2 rows would be shown (pre-expansion)
-  const visibleCount = useMemo(() => desiredCols * 2, [desiredCols])
-  const clearVisible = useMemo(() => list.slice(0, visibleCount), [list, visibleCount])
-  const afterVisible = useMemo(() => list.slice(visibleCount), [list, visibleCount])
-  const shouldGate = !expanded && list.length > visibleCount
+  // Use live status hook only if enabled
+  const { liveStatus: liveStatusHook, isLoading: liveStatusLoading } = useCampaignLiveStatus(
+    campaigns, 
+    { enabled: enableLiveStatus }
+  )
 
-  const gridColsClasses = useMemo(() => {
-    const md = desiredCols >= 2 ? 'md:grid-cols-2' : 'md:grid-cols-1'
-    const lg = desiredCols === 3 ? 'lg:grid-cols-3' : desiredCols === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
-    return `grid grid-cols-1 ${md} ${lg} gap-8`
-  }, [desiredCols])
-
-  const cardScaleClass = useMemo(() => {
-    if (desiredCols === 1) return 'scale-[1.06] sm:scale-[1.08]'
-    if (desiredCols === 2) return 'scale-[1.03]'
-    return ''
-  }, [desiredCols])
-
-  // Original behavior (fallback when layoutD flag is off): fixed 3-per-row grid with 6 visible cards pre-expand
-  const oldClearSix = useMemo(() => list.slice(0, 6), [list])
-  const oldAfterSix = useMemo(() => list.slice(6), [list])
-  const shouldGateOld = !expanded && list.length > 6
-  const gridColsFixed = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'
-
-  // Derived render branches based on flag
-  const gridClass = isLayoutD ? gridColsClasses : gridColsFixed
-  const visibleCards = isLayoutD ? clearVisible : oldClearSix
-  const extraCards = isLayoutD ? afterVisible : oldAfterSix
-  const skeletonLen = isLayoutD ? visibleCount : 6
-  const gatingActive = isLayoutD ? shouldGate : shouldGateOld
-  const containerPaddingClass = isLayoutD
-    ? (gatingActive ? 'pb-24 md:pb-28 safe-bottom' : '')
-    : (!expanded ? 'pb-24 md:pb-28 safe-bottom' : '')
-
-  // Lock page scroll until user expands
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    const prevBody = document.body.style.overflow
-    const prevHtml = document.documentElement.style.overflow
-    if (gatingActive) {
-      document.body.style.overflow = 'hidden'
-      // Only in dynamic layout mode, also lock the root element to prevent any overscroll
-      if (isLayoutD) document.documentElement.style.overflow = 'hidden'
+  // Filter and sort campaigns based on sync status, mode, and hierarchy
+  const visibleCampaigns = useMemo(() => {
+    let filtered: Campaign[]
+    
+    if (showUnsyncedCampaigns) {
+      // Creator dashboard: show campaigns WITHOUT onChain property (unsynced)
+      filtered = campaigns.filter(campaign => !campaign.onChain)
     } else {
-      document.body.style.overflow = ''
-      if (isLayoutD) document.documentElement.style.overflow = ''
+      // Homepage: trust API to return only synced campaigns
+      filtered = campaigns
     }
-    return () => {
-      document.body.style.overflow = prevBody
-      document.documentElement.style.overflow = prevHtml
-    }
-  }, [gatingActive, isLayoutD])
-
+    
+    // Sort campaigns by hierarchy: most donations/raised amount first
+    return filtered.sort((a, b) => {
+      // First sort by raised amount (total donations)
+      const raisedA = a.raised || 0
+      const raisedB = b.raised || 0
+      if (raisedA !== raisedB) {
+        return raisedB - raisedA // Higher raised amount first
+      }
+      
+      // If raised amounts are equal, sort by goal (higher goals suggest more ambitious/popular campaigns)
+      const goalA = a.goal || 0
+      const goalB = b.goal || 0
+      if (goalA !== goalB) {
+        return goalB - goalA // Higher goals first
+      }
+      
+      // If still equal, sort by creation date (newer first)
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return dateB - dateA
+    })
+  }, [campaigns, showUnsyncedCampaigns])
+  
+  // Simple responsive grid
+  const gridClass = 'grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+  
+  // Show initial campaigns (6 by default)
+  const visibleCount = 6
+  const initialCards = visibleCampaigns.slice(0, visibleCount)
+  const extraCards = visibleCampaigns.slice(visibleCount)
+  
   return (
-    <div className={`space-y-8 ${containerPaddingClass}`}>
-      {/* Grid */}
-      <div className="relative">
-        <div className={gridClass}>
-          {/* First six visible or skeletons */}
-          {loading && (!campaigns || campaigns.length === 0) ? (
-            Array.from({ length: skeletonLen }).map((_, i) => <SkeletonCard key={`sk-${i}`} />)
-          ) : (
-            visibleCards.map((c) => (
-              <div key={c.id} className={`h-full transform-gpu ${isLayoutD ? cardScaleClass : ''}`}>
-                <CampaignCard campaign={c} variant="minimal" />
-              </div>
-            ))
-          )}
-          {/* Always render items after first six so their images/fallbacks mount.
-              When not expanded, visually gate them with blur/opacity and disable interaction. */}
-          {extraCards.map((c) => (
-            <div
-              key={`ex-${c.id}`}
-              className={`h-full transition ${
-                !expanded ? 'pointer-events-none select-none opacity-70 [filter:blur(2px)]' : ''
-              }`}
-              aria-hidden={!expanded}
-            >
-              <CampaignCard campaign={c} variant="minimal" />
-            </div>
-          ))}
-        </div>
-        {/* Bottom overlay: smooth gradient fade (no hard edge) until expanded */}
-        {gatingActive && (
-          <div className="fixed inset-x-0 bottom-0 h-[30svh] pointer-events-none z-20">
-            {/* Theme-aware soft background rise */}
-            <div className={`absolute inset-0 bg-gradient-to-t ${gradientFromClass} via-transparent to-transparent opacity-80`} />
-            {/* Gentle dark veil with gradient so boundary fades smoothly */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/15 to-transparent" />
-          </div>
+    <div className="space-y-6">
+      {/* Section title if provided */}
+      {sectionTitle && (
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{sectionTitle}</h2>
+      )}
+
+      {/* Sync status disclaimer removed: API returns only synced campaigns for homepage */}
+
+      <div className={gridClass}>
+        {/* Show loading skeletons if loading */}
+        {(liveStatusLoading || isLoading) ? (
+          Array(6).fill(0).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))
+        ) : (
+          <>
+            {/* Add Campaign card if requested */}
+            {showAddCampaignCard && (
+              <Link href="/create">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 p-6 shadow-sm hover:shadow-md hover:border-blue-200 dark:hover:border-blue-600 transition-all duration-200 flex flex-col items-center justify-center min-h-[240px]">
+                  <div className="rounded-full bg-blue-50 dark:bg-blue-900/30 p-4 mb-3">
+                    <svg className="w-8 h-8 text-blue-500 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 text-center">Create New Campaign</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-center mt-2">Start fundraising for your cause</p>
+                </div>
+              </Link>
+            )}
+
+            {/* Campaign cards */}
+            {(expanded ? visibleCampaigns : initialCards).map((campaign) => {
+              const isLiveCampaign = enableLiveStatus && liveStatusHook && campaign.id in liveStatusHook && liveStatusHook[campaign.id]
+              
+              return (
+                <div key={campaign.id} className="relative">
+                  <CampaignCard 
+                    campaign={campaign}
+                    isLive={isLiveCampaign}
+                    compact={compactCards}
+                  />
+                  {/* Green sync indicator removed */}
+                </div>
+              )
+            })}
+
+            {/* Blurred cards when not expanded */}
+            {!expanded && extraCards.map((campaign) => {
+              const isLiveCampaign = enableLiveStatus && liveStatusHook && campaign.id in liveStatusHook && liveStatusHook[campaign.id]
+              
+              return (
+                <div key={`blur-${campaign.id}`} className="relative">
+                  <CampaignCard 
+                    campaign={campaign}
+                    isLive={isLiveCampaign}
+                    compact={compactCards}
+                    className="opacity-60 blur-[2px] pointer-events-none"
+                  />
+                  {/* Green sync indicator for blurred cards removed */}
+                </div>
+              )
+            })}
+          </>
         )}
       </div>
-              
-
-
-      {/* See more button (fixed to viewport bottom, above content) */}
-      {!expanded && gatingActive && (
-        <div className="fixed left-0 right-0 bottom-4 md:bottom-6 z-30 flex justify-center pointer-events-none">
+      
+      {/* View All button */}
+      {!expanded && extraCards.length > 0 && (
+        <div className="flex justify-center mt-8">
           <button
-            type="button"
             onClick={() => setExpanded(true)}
-            className="pointer-events-auto inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 text-gray-700 font-medium transition"
+            className="py-2 px-6 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transform transition hover:scale-105 font-semibold"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-              <path fillRule="evenodd" d="M12.53 16.28a.75.75 0 01-1.06 0l-6-6a.75.75 0 111.06-1.06L12 14.69l5.47-5.47a.75.75 0 111.06 1.06l-6 6z" clipRule="evenodd" />
-            </svg>
-            See more
+            View All Campaigns
           </button>
         </div>
       )}
     </div>
   )
 }
-
-export default CampaignsGrid

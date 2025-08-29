@@ -16,9 +16,9 @@
  * - Consider infinite scroll vs pagination UX
  */
 import Link from 'next/link'
-import CampaignsGrid from '../components/campaigns-grid' // Client grid w/ loading and see-more UX
+import { CampaignsGrid } from '../components/campaigns-grid' // Client grid w/ loading and see-more UX
 import ScrollToTopOnMount from '@/components/scroll-to-top-on-mount'
-import { db } from '@/lib/db'
+import ErrorMessage from '@/components/error-message'
 import type { Campaign } from '@/lib/db'
 
 /**
@@ -28,47 +28,55 @@ import type { Campaign } from '@/lib/db'
 export default async function Home({ searchParams }: { searchParams: Promise<{ search?: string; param?: string }> }) {
   // Server-side fetch to avoid client polling and reduce network chatter
   const resolvedSearchParams = await searchParams
-  let campaigns: Campaign[]
   
-  if (resolvedSearchParams.search && resolvedSearchParams.param) {
-    const raw = resolvedSearchParams.search.trim()
-    const searchParameter = resolvedSearchParams.param as 'all' | 'title' | 'creator' | 'category'
-    const rawLower = raw.toLowerCase()
-
-    if (!raw) {
-      const result = await db.searchCampaignsAdvanced({}) as { campaigns: Campaign[], total: number }
-      campaigns = result.campaigns
+  let campaigns: Campaign[] = []
+  let error: string | null = null
+  
+  try {
+    // Use the API route that implements on-chain verification instead of direct DB access
+    // By default, the API will only return campaigns that are verified to exist on-chain
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    
+    const apiUrl = new URL('/api/campaigns', baseUrl)
+    
+    // Add appropriate search parameters if needed
+    if (resolvedSearchParams.search && resolvedSearchParams.param) {
+      const raw = resolvedSearchParams.search.trim()
+      const searchParameter = resolvedSearchParams.param as 'all' | 'title' | 'creator' | 'category'
+      
+      apiUrl.searchParams.append('search', raw)
+      apiUrl.searchParams.append('param', searchParameter)
     } else {
-      if (searchParameter === 'all') {
-        // Broad text search across title, description, category, and creator username
-        const result = await db.searchCampaignsAdvanced({ q: rawLower }) as { campaigns: Campaign[], total: number }
-        campaigns = result.campaigns
-      } else {
-        const query: { [key: string]: { $regex: string; $options: string } } = {} 
-        switch (searchParameter) {
-          case 'title': {
-            query.title = { $regex: rawLower, $options: 'i' }
-            break
-          }
-          case 'creator': {
-            query['creator.username'] = { $regex: rawLower, $options: 'i' }
-            break
-          }
-          case 'category': {
-            query.category = { $regex: rawLower, $options: 'i' }
-            break
-          }
-          default: {
-            query.title = { $regex: rawLower, $options: 'i' }
-          }
-        }
-        const result = await db.searchCampaignsAdvanced(query) as { campaigns: Campaign[], total: number }
-        campaigns = result.campaigns
-      }
     }
-  } else {
-    const result = await db.searchCampaignsAdvanced({}) as { campaigns: Campaign[], total: number }
-    campaigns = result.campaigns
+    
+    // Let the API perform on-chain verification using contract view
+    
+    // Add a cache-busting parameter to avoid stale data during development
+    apiUrl.searchParams.append('_t', Date.now().toString())
+    
+    const response = await fetch(apiUrl.toString(), {
+      next: { revalidate: 0 }, // Disable caching for server component
+      cache: 'no-store'
+    })
+    
+    if (!response.ok) {
+      throw new Error(`API responded with status ${response.status}: ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Unknown API error')
+    }
+    
+    campaigns = Array.isArray(data.campaigns) ? data.campaigns : []
+  } catch (err) {
+    // Log error only in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[Home Page] Error fetching campaigns:', err)
+    }
+    error = err instanceof Error ? err.message : 'Unknown error fetching campaigns'
+    campaigns = []
   }
   return (
     <div className="min-h-screen bg-gray-50">
@@ -76,6 +84,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
       <main className="max-w-7xl mx-auto px-6 py-12">
         {/* Ensure we start at the top when landing on homepage */}
         <ScrollToTopOnMount behavior="auto" />
+        
+        {/* Error message display - using client component for onClick handler */}
+        {error && <ErrorMessage message={error} />}
+        
         {/* Header section - page introduction */}
         <div className="text-center mb-12">
           <h1 className={`${resolvedSearchParams.search ? 'text-3xl md:text-4xl' : 'text-4xl'} font-bold text-gray-900 mb-2`}>
@@ -109,8 +121,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
             </div>
           )}
         </div>
-        {/* REGION: Campaign grid rendering with progressive reveal */}
-        <CampaignsGrid initialCampaigns={campaigns} />
+        
+        
+        {/* Campaign grid - only synced campaigns on home */}
+        <CampaignsGrid 
+          initialCampaigns={campaigns} 
+          showUnsyncedCampaigns={false}
+          enableLiveStatus={false}
+          isLoading={false}
+        />
       </main>
     </div>
   )

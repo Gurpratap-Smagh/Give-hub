@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import type { Campaign } from "@/lib/db";
 import { processDonation } from "@/lib/payments"; // ZEVM direct path
-import { connectWallet, ensureWalletOnChain } from "@/lib/web3/client";
+import { connectWallet } from "@/lib/web3/client";
 import { useAvailableTokens, type Token } from "@/lib/hooks/useAvailableTokens";
 import TokenPicker from "@/components/TokenPicker";
 import { formatCurrency } from "@/lib/utils/format";
+import { notify } from "@/lib/utils/notify"; // Add the notify import
 
 // Cross-chain helpers (Sepolia → ZEVM)
 import { ethers } from "ethers";
@@ -17,7 +18,7 @@ import {
   ensureChain,
   CHAIN_HEX,
 } from "@/lib/payments/crosschain";
-import { extractRpcError } from "@/lib/payments";
+import { extractRawErrorString } from "@/lib/utils/blockchain-errors";
 
 const PAYMENT_PROVIDER = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || "local").toLowerCase();
 
@@ -110,7 +111,7 @@ export default function PaymentModal({
   // Tokens (for Zeta + cross-chain)
   const { byChain, getNativeToken, getTokenByAddress } = useAvailableTokens();
   const [picked, setPicked] = useState<
-    { chain: string; symbol: string; address: string } | undefined
+    { chain: string; symbol: string; address: string; isNative?: boolean } | undefined
   >(undefined);
   // Enforce wallet network to match UI-selected chain
   const [networkSwitching, setNetworkSwitching] = useState(false);
@@ -145,36 +146,11 @@ export default function PaymentModal({
       try {
         validateEnv();
       } catch (error) {
-        console.error("Environment validation error:", error);
-        // Show error to user
-        setWalletError(error instanceof Error ? error.message : "Missing required environment variables");
+        // Show error to user with toast instead of console.error
+        const errorMsg = error instanceof Error ? error.message : "Missing required environment variables";
+        setWalletError(errorMsg);
+        notify(errorMsg, 'error');
       }
-    }
-
-    if (PAYMENT_PROVIDER === "local") {
-      let mounted = true;
-      (async () => {
-        setWalletConnecting(true);
-        setWalletError(null);
-        try {
-          const { address } = await connectWallet();
-          // best-effort switch to Zeta
-          try {
-            await ensureWalletOnChain(parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || "7001"));
-          } catch {}
-          if (!mounted) return;
-          setWalletAddress(address);
-        } catch (e) {
-          if (!mounted) return;
-          const msg = e instanceof Error ? e.message : "Failed to connect wallet";
-          setWalletError(msg);
-        } finally {
-          if (mounted) setWalletConnecting(false);
-        }
-      })();
-      return () => {
-        mounted = false;
-      };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -239,16 +215,17 @@ export default function PaymentModal({
             const net = await provider.getNetwork();
             const expected = parseInt(toHex, 16);
             if (mounted && Number(net.chainId) !== expected) {
-              setNetworkError(
-                `Wallet is on chainId ${net.chainId.toString()} but expected ${expected}. Please approve the network switch in your wallet.`,
-              );
+              const errorMsg = `Wallet is on chainId ${net.chainId.toString()} but expected ${expected}. Please approve the network switch in your wallet.`;
+              setNetworkError(errorMsg);
+              notify(errorMsg, 'error');
             }
           }
         }
       } catch (e) {
         if (!mounted) return;
-        const msg = extractRpcError(e);
+        const msg = extractRawErrorString(e);
         setNetworkError(msg || 'Failed to switch network');
+        notify(msg || 'Failed to switch network', 'error');
       } finally {
         if (mounted) setNetworkSwitching(false);
       }
@@ -309,7 +286,10 @@ export default function PaymentModal({
 
   const handlePayment = async () => {
     const raw = (amount || "").trim().replace(/,/g, ".");
-    if (!raw || Number.isNaN(Number(raw)) || Number(raw) <= 0) return;
+    if (!raw || Number.isNaN(Number(raw)) || Number(raw) <= 0) {
+      notify("Please enter a valid donation amount", "error");
+      return;
+    }
 
     setIsProcessing(true);
     try {
@@ -346,6 +326,7 @@ export default function PaymentModal({
       
       // Validate token selection
       if (!picked?.address) {
+        notify("Please select a token to use for donation", "error");
         throw new Error("Please select a token to use for donation");
       }
 
@@ -363,7 +344,9 @@ export default function PaymentModal({
             const net = await provider.getNetwork();
             const expected = parseInt(CHAIN_HEX.SEPOLIA, 16);
             if (Number(net.chainId) !== expected) {
-              throw new Error('Wallet did not switch to Ethereum Sepolia. Please approve the network switch in your wallet.');
+              const errorMsg = 'Wallet did not switch to Ethereum Sepolia. Please approve the network switch in your wallet.';
+              notify(errorMsg, 'error');
+              throw new Error(errorMsg);
             }
           }
         }
@@ -412,7 +395,8 @@ export default function PaymentModal({
         // Create a consistent status update function
         const updateStatus = (status: string) => {
           if (!status) return;
-          console.log('Cross-chain status:', status);
+          // Show toast for status updates instead of console logging
+          notify(status, 'info');
           if (onStatusUpdate) try { onStatusUpdate(status); } catch {}
           if (typeof window !== "undefined") {
             const el = document.createElement("div");
@@ -468,7 +452,9 @@ export default function PaymentModal({
           const net = await provider.getNetwork();
           const expected = parseInt(CHAIN_HEX.ZETA, 16);
           if (Number(net.chainId) !== expected) {
-            throw new Error('Wallet did not switch to ZetaChain. Please approve the network switch in your wallet.');
+            const errorMsg = 'Wallet did not switch to ZetaChain. Please approve the network switch in your wallet.';
+            notify(errorMsg, 'error');
+            throw new Error(errorMsg);
           }
         }
       }
@@ -476,34 +462,71 @@ export default function PaymentModal({
       // Use the exact token picked in the UI to avoid any fallback/mismatch
       const tokenAddr = picked?.address;
       if (!tokenAddr) {
-        throw new Error('Please select a token to use for donation');
+        const errorMsg = 'Please select a token to use for donation';
+        notify(errorMsg, 'error');
+        throw new Error(errorMsg);
       }
       
       // Prepare common params
       const donorDisplayName = (donorName || "").trim() || (user && hasUsername(user) ? user.username : "Anonymous");
       const donorNote = (note || "").trim();
       
-      await processDonation({
-        campaignId: Number(onChainCampaignId),
-        amount: raw, // <- exact string, user's raw input
-        tokenAddress: tokenAddr,
-        donorName: donorDisplayName,
-        note: donorNote,
-      });
+      // Handle ZETA->WZETA deposit if native ZETA is selected
+      if (picked?.isNative && picked.symbol === 'ZETA') {
+        // Import the WZETA deposit function
+        const { depositZETAToWZETA } = await import('@/lib/web3/admin');
+        const amountWei = ethers.parseEther(raw);
+        
+        try {
+          notify('Converting ZETA to WZETA...', 'info');
+          await depositZETAToWZETA(amountWei);
+          notify('ZETA converted to WZETA successfully', 'success');
+          
+          // Now proceed with WZETA donation - use WZETA address instead
+          const wzetaAddress = process.env.NEXT_PUBLIC_WZETA_ADDRESS;
+          if (!wzetaAddress) {
+            throw new Error('WZETA address not configured');
+          }
+          
+          await processDonation({
+            campaignId: Number(onChainCampaignId),
+            amount: raw,
+            tokenAddress: wzetaAddress, // Use WZETA address after conversion
+            donorName: donorDisplayName,
+            note: donorNote,
+            isNative: false, // Now it's WZETA, not native
+          });
+        } catch (depositError) {
+          notify('Failed to convert ZETA to WZETA. Please try again.', 'error');
+          throw depositError;
+        }
+      } else {
+        // Standard token donation flow (handles WZETA and other ZRC tokens)
+        await processDonation({
+          campaignId: Number(onChainCampaignId),
+          amount: raw, // <- exact string, user's raw input
+          tokenAddress: tokenAddr,
+          donorName: donorDisplayName,
+          note: donorNote,
+          isNative: picked?.isNative,
+        });
+      }
 
 
       onPaymentSuccess(parseFloat(raw), chainLabel);
+      notify(`Thank you for donating ${raw} ${displaySymbol}!`, 'success');
       onClose();
       setAmount(""); setDonorName(""); setNote("");
       return;
     } catch (error) {
-      console.error("Payment error:", error);
-      const msg = extractRpcError(error);
+      const msg = extractRawErrorString(error);
       if (/user (rejected|denied|canceled|cancelled)/i.test(msg)) {
+        notify("Transaction was cancelled", "info");
         if (onCancel) onCancel();
       } else {
         if (onPaymentError) onPaymentError(error as Error);
         setPaymentError(msg || "Payment failed. Please try again.");
+        notify(msg || "Payment failed. Please try again.", "error");
       }
     } finally {
       setIsProcessing(false);
@@ -532,7 +555,7 @@ export default function PaymentModal({
           </button>
 
         {paymentError && (
-          <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md p-2">
+          <div className="mb-4 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md p-2">
             {paymentError}
           </div>
         )}
@@ -656,7 +679,15 @@ export default function PaymentModal({
             type="text"
             inputMode="decimal"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              // Allow only numbers and a single decimal point with up to 18 decimal places
+              const value = e.target.value;
+              // Regex to match numbers with at most one decimal point and up to 18 decimal places
+              const regex = /^\d*\.?\d{0,18}$/;
+              if (value === '' || regex.test(value)) {
+                setAmount(value);
+              }
+            }}
             placeholder={onZeta ? "0.0001" : "10"}
             className="gh-input"
           />

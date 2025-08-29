@@ -158,8 +158,7 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
       }
 
       if (isBTC(chain)) {
-        // Placeholder: BTC testnet needs a deposit address from Zeta helper/SaaS you use.
-        // Show "Generate address", then poll ZEVM for Donation event similarly to Sepolia path.
+        // BTC testnet integration requires deposit address generation
         setStatus('BTC deposit flow not wired: generate a testnet BTC deposit address and poll ZEVM for credit.');
         return;
       }

@@ -48,7 +48,10 @@ function toCampaign(doc: any | null): Campaign | null {
     creatorId: doc.creatorId,
     creatorAddress: doc.creatorAddress,
     image: doc.image,
-    contractOwnership: doc.contractOwnership,
+    // Normalize to array of ownership records for unified type
+    contractOwnership: Array.isArray(doc.contractOwnership)
+      ? doc.contractOwnership
+      : (doc.contractOwnership ? [doc.contractOwnership] : []),
     active: doc.active,
     // Ensure on-chain mapping is surfaced in responses
     onChain: doc.onChain ? {
@@ -59,6 +62,11 @@ function toCampaign(doc: any | null): Campaign | null {
     verified: !!doc.verified,
     contractAddress: doc.contractAddress,
     blockchainProof: doc.blockchainProof,
+    // Required timestamps as ISO strings
+    createdAt: (doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt) || new Date().toISOString(),
+    updatedAt: (doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt) || new Date().toISOString(),
+    // Donations array (schema stores embedded donations)
+    donations: Array.isArray(doc.donations) ? doc.donations : [],
   } as Campaign;
 }
 
@@ -122,7 +130,22 @@ export const mongoDb = {
   },
   async createCampaign(campaignData: Omit<Campaign, 'id'>): Promise<Campaign> {
     await connectMongo();
-    const doc = await CampaignModel.create({ ...campaignData, id: newId('campaign') });
+    // Normalize fields from unified type to Mongo schema expectations
+    const { createdAt, updatedAt, donations, contractOwnership, ...rest } = (campaignData as unknown) as {
+      createdAt?: string;
+      updatedAt?: string;
+      donations?: unknown;
+      contractOwnership?: unknown;
+      [k: string]: unknown;
+    };
+    const ownership = Array.isArray(contractOwnership)
+      ? (contractOwnership[0] || undefined)
+      : (contractOwnership as unknown | undefined);
+    const doc = await CampaignModel.create({
+      ...(rest as Record<string, unknown>),
+      ...(ownership !== undefined ? { contractOwnership: ownership } : {}),
+      id: newId('campaign'),
+    });
     return toCampaign(doc.toObject()) as Campaign;
   },
   async updateCampaign(id: string, updateData: Partial<Campaign>): Promise<Campaign | null> {
