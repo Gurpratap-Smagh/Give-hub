@@ -142,13 +142,16 @@ export const POST = authMiddleware(async (req: AuthedRequest) => {
       description: String(description ?? ''),
       category: String(category),
       creatorId: req.user.id,
-      // Optional/extra fields
-      image: imgSrc ? String(imgSrc) : undefined,
-      active: true,
-      verified: false,
+      // Ensure required string field
+      image: String(imgSrc ?? ''),
+      // Core arrays
       chains: [],
-      // Leave uuid/contract fields undefined; DB layer/schema will ignore extras
-    } as Omit<Campaign, 'id'>
+      donations: [],
+      contractOwnership: [],
+      // Timestamps
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
 
     // Optionally attach on-chain mapping if provided (validated)
     if (onChain !== undefined) {

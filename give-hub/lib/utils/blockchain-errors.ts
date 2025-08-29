@@ -40,23 +40,25 @@ function collectMessages(e: unknown): string[] {
   let depth = 0;
   while (cur && !seen.has(cur) && depth < 6) {
     seen.add(cur);
+    // cast current object to any for tolerant property probing
+    const o = cur as any;
     const parts = [
-      cur?.shortMessage,
-      cur?.details,
-      cur?.reason,
-      cur?.message,
-      cur?.error?.reason,
-      cur?.error?.message,
-      cur?.data?.message,
+      o?.shortMessage,
+      o?.details,
+      o?.reason,
+      o?.message,
+      o?.error?.reason,
+      o?.error?.message,
+      o?.data?.message,
     ]
       .filter(isPrintable)
       .map(String);
 
-    if (Array.isArray(cur?.metaMessages)) {
-      parts.push(cur.metaMessages.join(' | '));
+    if (Array.isArray(o?.metaMessages)) {
+      parts.push(o.metaMessages.join(' | '));
     }
     parts.forEach((p) => isPrintable(p) && msgs.push(p));
-    cur = cur?.cause as Record<string, unknown>;
+    cur = o?.cause as Record<string, unknown>;
     depth++;
   }
 

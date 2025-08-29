@@ -28,7 +28,11 @@ export interface Campaign {
   updatedAt: string;
   donations: Donation[];
   chains: string[];
-  contractOwnership: { chain: string; address: string }[];
+  contractOwnership: {
+    verified: boolean;
+    contractAddress?: string;
+    blockchainProof?: string;
+  }[];
   onChain?: {
     chainId: number;
     contract: string;

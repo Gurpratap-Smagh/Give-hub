@@ -2,7 +2,10 @@
 // Exports `db` and re-exports common types
 // By default uses the mock JSON DB; set USE_MONGODB=true (or use_mongodb / NEXT_PUBLIC_USE_MONGODB) to switch to Mongo adapter
 
-import type { User, Creator, Campaign, Donation } from '@/_dev/mock-db/database';
+// IMPORTANT: Use the unified Campaign type from '@/lib/utils/types' across the app
+import type { Campaign } from '@/lib/utils/types';
+// Keep User/Creator/Donation (and UserRole) aligned with the mock DB for now
+import type { User, Creator, Donation } from '@/_dev/mock-db/database';
 
 function envTrue(v?: string) {
   if (!v) return false;
@@ -63,4 +66,6 @@ export const db: DBAdapter = (
     : (await import('@/_dev/mock-db/database')).db
 ) as unknown as DBAdapter;
 
-export type { UserRole, User, Creator, Campaign, Donation } from '@/_dev/mock-db/database';
+// Re-export types: Campaign from unified utils, others from mock DB for compatibility
+export type { UserRole, User, Creator, Donation } from '@/_dev/mock-db/database';
+export type { Campaign } from '@/lib/utils/types';

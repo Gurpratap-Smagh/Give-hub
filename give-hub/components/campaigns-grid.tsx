@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { CampaignCard } from '@/components/campaign-card'
-import type { Campaign } from '@/lib/db'
+import type { Campaign } from '@/lib/utils/types';
 import { useCampaignLiveStatus } from '@/lib/hooks/useCampaignLiveStatus'
 import { SkeletonCard } from '@/components/skeleton-loader'
 import Link from 'next/link'
@@ -85,8 +85,8 @@ export function CampaignsGrid({
       }
       
       // If still equal, sort by creation date (newer first)
-      const dateA = new Date(a.createdAt || 0).getTime()
-      const dateB = new Date(b.createdAt || 0).getTime()
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
       return dateB - dateA
     })
   }, [campaigns, showUnsyncedCampaigns])

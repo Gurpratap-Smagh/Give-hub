@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth/auth-context'
 import Spinner from '@/components/spinner'
-import type { Campaign } from '@/lib/db';
+import type { Campaign } from '@/lib/utils/types';
 import { CampaignsGrid } from '@/components/campaigns-grid'
 import CampaignEditForm from '@/components/campaign-edit-form'
 import { UnsyncedCampaignCard } from '@/components/unsynced-campaign-card'
@@ -77,6 +77,10 @@ export default function CreatorStudioPage() {
       chains: c.chains,
       category: c.category,
       onChain: c.onChain,
+      createdAt: c.createdAt || new Date().toISOString(),
+      updatedAt: c.updatedAt || new Date().toISOString(),
+      donations: c.donations || [],
+      contractOwnership: c.contractOwnership || [],
     }))
   }, [syncedCampaigns]);
 
@@ -91,6 +95,10 @@ export default function CreatorStudioPage() {
       creatorId: c.creatorId,
       chains: c.chains,
       category: c.category,
+      createdAt: c.createdAt || new Date().toISOString(),
+      updatedAt: c.updatedAt || new Date().toISOString(),
+      donations: c.donations || [],
+      contractOwnership: c.contractOwnership || [],
     }));
   }, [unsyncedCampaigns]);
 
