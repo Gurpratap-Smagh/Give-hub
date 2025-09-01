@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import type { Campaign } from '@/lib/db';
+import { NextRequest } from 'next/server';
 
 function normalizeCampaign(campaign: Campaign) {
   const goal = Number(campaign.goal || 0);
@@ -11,7 +12,7 @@ function normalizeCampaign(campaign: Campaign) {
 }
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -66,7 +67,9 @@ export async function POST(
     });
 
   } catch (error) {
-    console.error('Error updating campaign donation:', error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error updating campaign donation:', error);
+    }
     return NextResponse.json({ 
       success: false, 
       error: 'Internal server error' 
