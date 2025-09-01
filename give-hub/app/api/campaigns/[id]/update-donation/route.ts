@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import type { Campaign } from '@/lib/db';
-import { NextRequest } from 'next/server';
 
 function normalizeCampaign(campaign: Campaign) {
   const goal = Number(campaign.goal || 0);
@@ -11,10 +10,8 @@ function normalizeCampaign(campaign: Campaign) {
   return { ...campaign, goal, raised, progressPct, donors };
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: Request, context: { params: { id: string } }) {
+  const { params } = context;
   try {
     const { id } = params;
     const body = await request.json();
