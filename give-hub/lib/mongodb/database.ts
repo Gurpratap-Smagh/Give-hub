@@ -8,65 +8,85 @@ import type { User, Creator, Campaign, Donation } from '@/lib/db';
 
 function toUser(doc: Record<string, unknown> | null): (User | Creator) | null {
   if (!doc) return null;
+  const idRaw = doc['id'] ?? doc['_id'];
+  const createdAtRaw = doc['createdAt'];
+  const updatedAtRaw = doc['updatedAt'];
+  const roleRaw = doc['role'];
   const base: Record<string, unknown> = {
-    id: doc.id || String(doc._id),
-    username: doc.username,
-    email: doc.email,
-    password: doc.password,
-    role: doc.role,
-    createdAt: (doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt) || new Date().toISOString(),
-    updatedAt: (doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt) || new Date().toISOString(),
-    profilePicture: doc.profilePicture,
-    bio: doc.bio,
-    location: doc.location,
-    website: doc.website,
-    walletAddresses: doc.walletAddresses,
-    donatedCampaigns: doc.donatedCampaigns || [],
-    totalDonated: doc.totalDonated || 0,
-    preferredChains: doc.preferredChains || [],
+    id: typeof idRaw === 'string' ? idRaw : String(idRaw),
+    username: doc['username'] as string | undefined,
+    email: typeof doc['email'] === 'string' ? doc['email'] : String(doc['email'] ?? ''),
+    password: doc['password'] as string | undefined,
+    role: typeof roleRaw === 'string' ? roleRaw : String(roleRaw ?? ''),
+    createdAt: createdAtRaw instanceof Date
+      ? createdAtRaw.toISOString()
+      : (typeof createdAtRaw === 'string' ? createdAtRaw : new Date().toISOString()),
+    updatedAt: updatedAtRaw instanceof Date
+      ? updatedAtRaw.toISOString()
+      : (typeof updatedAtRaw === 'string' ? updatedAtRaw : new Date().toISOString()),
+    profilePicture: doc['profilePicture'] as string | undefined,
+    bio: doc['bio'] as string | undefined,
+    location: doc['location'] as string | undefined,
+    website: doc['website'] as string | undefined,
+    walletAddresses: doc['walletAddresses'] as unknown,
+    donatedCampaigns: Array.isArray(doc['donatedCampaigns']) ? (doc['donatedCampaigns'] as string[]) : [],
+    totalDonated: typeof doc['totalDonated'] === 'number' ? (doc['totalDonated'] as number) : 0,
+    preferredChains: Array.isArray(doc['preferredChains']) ? (doc['preferredChains'] as string[]) : [],
   };
-  if (doc.role === 'creator') {
-    base.createdCampaigns = doc.createdCampaigns || [];
-    base.totalRaised = doc.totalRaised || 0;
-    base.verificationStatus = doc.verificationStatus || 'pending';
-    base.socialLinks = doc.socialLinks || {};
+  if (base.role === 'creator') {
+    base.createdCampaigns = Array.isArray(doc['createdCampaigns']) ? (doc['createdCampaigns'] as string[]) : [];
+    base.totalRaised = typeof doc['totalRaised'] === 'number' ? (doc['totalRaised'] as number) : 0;
+    base.verificationStatus = typeof doc['verificationStatus'] === 'string' ? (doc['verificationStatus'] as string) : 'pending';
+    base.socialLinks = (typeof doc['socialLinks'] === 'object' && doc['socialLinks'] !== null)
+      ? (doc['socialLinks'] as Record<string, string>)
+      : {};
   }
   return base as User | Creator;
 }
 
 function toCampaign(doc: Record<string, unknown> | null): Campaign | null {
   if (!doc) return null;
+  const idRaw = doc['id'] ?? doc['_id'];
+  const createdAtRaw = doc['createdAt'];
+  const updatedAtRaw = doc['updatedAt'];
+  const onChainRaw = doc['onChain'];
+  const ownershipRaw = doc['contractOwnership'];
+  const donationsRaw = doc['donations'];
   return {
-    id: doc.id || String(doc._id),
-    uuid: doc.uuid,
-    title: doc.title,
-    goal: doc.goal,
-    raised: doc.raised || 0,
-    chains: doc.chains || [],
-    description: doc.description,
-    category: doc.category,
-    creatorId: doc.creatorId,
-    creatorAddress: doc.creatorAddress,
-    image: doc.image,
+    id: typeof idRaw === 'string' ? idRaw : String(idRaw),
+    uuid: doc['uuid'] as string | undefined,
+    title: doc['title'] as string,
+    goal: typeof doc['goal'] === 'number' ? (doc['goal'] as number) : Number(doc['goal'] ?? 0),
+    raised: typeof doc['raised'] === 'number' ? (doc['raised'] as number) : Number(doc['raised'] ?? 0),
+    chains: Array.isArray(doc['chains']) ? (doc['chains'] as string[]) : [],
+    description: doc['description'] as string,
+    category: doc['category'] as string | undefined,
+    creatorId: doc['creatorId'] as string,
+    creatorAddress: doc['creatorAddress'] as string | undefined,
+    image: doc['image'] as string,
     // Normalize to array of ownership records for unified type
-    contractOwnership: Array.isArray(doc.contractOwnership)
-      ? doc.contractOwnership
-      : (doc.contractOwnership ? [doc.contractOwnership] : []),
-    active: doc.active,
+    contractOwnership: Array.isArray(ownershipRaw)
+      ? (ownershipRaw as unknown[])
+      : (ownershipRaw ? [ownershipRaw] : []),
+    active: Boolean(doc['active']),
     // Ensure on-chain mapping is surfaced in responses
-    onChain: doc.onChain ? {
-      chainId: Number(doc.onChain.chainId),
-      contract: String(doc.onChain.contract),
-      campaignId: String(doc.onChain.campaignId),
+    onChain: (onChainRaw && typeof onChainRaw === 'object') ? {
+      chainId: Number((onChainRaw as Record<string, unknown>)['chainId']),
+      contract: String((onChainRaw as Record<string, unknown>)['contract']),
+      campaignId: String((onChainRaw as Record<string, unknown>)['campaignId']),
     } : undefined,
-    verified: !!doc.verified,
-    contractAddress: doc.contractAddress,
-    blockchainProof: doc.blockchainProof,
+    verified: Boolean(doc['verified']),
+    contractAddress: doc['contractAddress'] as string | undefined,
+    blockchainProof: doc['blockchainProof'] as string | undefined,
     // Required timestamps as ISO strings
-    createdAt: (doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt) || new Date().toISOString(),
-    updatedAt: (doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt) || new Date().toISOString(),
+    createdAt: createdAtRaw instanceof Date
+      ? createdAtRaw.toISOString()
+      : (typeof createdAtRaw === 'string' ? createdAtRaw : new Date().toISOString()),
+    updatedAt: updatedAtRaw instanceof Date
+      ? updatedAtRaw.toISOString()
+      : (typeof updatedAtRaw === 'string' ? updatedAtRaw : new Date().toISOString()),
     // Donations array (schema stores embedded donations)
-    donations: Array.isArray(doc.donations) ? doc.donations : [],
+    donations: Array.isArray(donationsRaw) ? (donationsRaw as unknown[]) : [],
   } as Campaign;
 }
 
