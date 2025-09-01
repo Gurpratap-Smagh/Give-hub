@@ -91,7 +91,7 @@ function toCampaign(doc: Record<string, unknown> | null): Campaign | null {
 }
 
 // Donations are embedded on Campaign; construct DTOs inline when needed
-type DonationEmbedded = { name: string; amount: number; chain: string; timestamp?: Date };
+type DonationEmbedded = { name: string; amount: number; chain: string; timestamp?: Date; txHash?: string };
 
 function newId(prefix: string) {
   return `${prefix}_${Date.now()}`;
@@ -239,6 +239,7 @@ export const mongoDb = {
         amount: d.amount,
         chain: d.chain,
         timestamp: new Date(d.timestamp ?? Date.now()),
+        txHash: d.txHash,
       } as Donation))
       .sort((a, b) => (b.timestamp as Date).getTime() - (a.timestamp as Date).getTime());
   },
@@ -256,20 +257,23 @@ export const mongoDb = {
           amount: d.amount,
           chain: d.chain,
           timestamp: new Date(d.timestamp ?? Date.now()),
+          txHash: (d as DonationEmbedded).txHash,
         } as Donation);
       }
     }
+
     // newest first
     out.sort((a, b) => (b.timestamp as Date).getTime() - (a.timestamp as Date).getTime());
     return out;
   },
   async createDonation(donationData: Omit<Donation, 'timestamp'> & { timestamp?: Date }): Promise<Donation> {
     await connectMongo();
-    const donation = {
+    const donation: DonationEmbedded = {
       name: donationData.name,
       amount: donationData.amount,
       chain: donationData.chain,
       timestamp: donationData.timestamp ?? new Date(),
+      txHash: donationData.txHash,
     };
     await CampaignModel.updateOne(
       { id: donationData.campaignId },
