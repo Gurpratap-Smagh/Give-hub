@@ -10,10 +10,21 @@ function normalizeCampaign(campaign: Campaign) {
   return { ...campaign, goal, raised, progressPct, donors };
 }
 
-export async function POST(request: Request, context: { params: { id: string } }) {
-  const { params } = context;
+// Define the route handler for POST requests
+export async function POST(request: Request) {
+  // Extract the campaign ID from the URL
+  const url = new URL(request.url);
+  const pathSegments = url.pathname.split('/');
+  const id = pathSegments[pathSegments.indexOf('campaigns') + 1];
+  
+  if (!id) {
+    return NextResponse.json({ 
+      success: false, 
+      message: 'Campaign ID not found in URL' 
+    }, { status: 400 });
+  }
+  
   try {
-    const { id } = params;
     const body = await request.json();
     const { 
       amount, 
@@ -25,51 +36,59 @@ export async function POST(request: Request, context: { params: { id: string } }
     if (!amount || !donor || !txHash) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Missing required donation data' 
+        message: 'Missing required fields' 
       }, { status: 400 });
     }
 
-    // Find the campaign
-    const campaign = await db.findCampaignById(id);
+    // Get the campaign
+    const campaign = await db.getCampaign(id);
     if (!campaign) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Campaign not found' 
+        message: 'Campaign not found' 
       }, { status: 404 });
     }
 
-    // Convert amount from Wei/blockchain units to cents for storage
-    // Assuming amount comes in as a decimal string (e.g., "1.5" for 1.5 ZETA)
-    const amountInCents = Math.round(parseFloat(amount) * 100);
+    // Update the campaign with the new donation
+    const donation = {
+      amount: Number(amount),
+      donor,
+      txHash,
+      timestamp: new Date().toISOString()
+    };
 
-    // Update campaign raised amount
-    const newRaised = (campaign.raised || 0) + amountInCents;
-    
-    // Update campaign raised amount only for now
-    const updatedCampaign = await db.updateCampaign(id, {
-      raised: newRaised
+    // Add donation to campaign
+    const donations = Array.isArray(campaign.donations) ? campaign.donations : [];
+    donations.push(donation);
+
+    // Update raised amount
+    const raised = Number(campaign.raised || 0) + Number(amount);
+
+    // Save to database
+    await db.updateCampaign(id, {
+      donations,
+      raised
     });
 
+    // Get updated campaign
+    const updatedCampaign = await db.getCampaign(id);
     if (!updatedCampaign) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Failed to update campaign' 
+        message: 'Failed to retrieve updated campaign' 
       }, { status: 500 });
     }
 
+    // Return normalized campaign data
     return NextResponse.json({ 
       success: true, 
-      campaign: normalizeCampaign(updatedCampaign),
-      newRaised
+      campaign: normalizeCampaign(updatedCampaign)
     });
-
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error updating campaign donation:', error);
-    }
+    console.error('Error updating donation:', error);
     return NextResponse.json({ 
       success: false, 
-      error: 'Internal server error' 
+      message: 'Internal server error' 
     }, { status: 500 });
   }
 }
