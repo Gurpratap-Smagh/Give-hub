@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import TokenPicker from '@/components/TokenPicker';
 import { makePayment } from '@/lib/payments/zetachain-gateway';
 
-type Picked = { chain: string; symbol: string; address: string };
+type Picked = { chain: string; symbol: string; address?: string; isNative?: boolean };
 
 export default function DonationForm({ campaign }: { campaign: { id: string | number, title?: string } }) {
   const [amount, setAmount] = useState('');
@@ -109,7 +109,7 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
         <label className="text-sm font-semibold">Token</label>
         <TokenPicker
           value={selectedToken ?? undefined}
-          onChange={setSelectedToken}
+          onChange={(token: Picked) => setSelectedToken(token)}
           className="w-full"
           // Donation form must ignore the Sepolia ETH ERC-20 from env, but keep native ETH and all other tokens
           excludeSepoliaEthContract
