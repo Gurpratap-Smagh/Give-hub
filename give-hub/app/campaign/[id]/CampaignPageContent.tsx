@@ -141,8 +141,10 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
       if (campaign.onChain?.campaignId) {
         try {
           const campaignId = BigInt(campaign.onChain.campaignId)
-          const campaignInfo = await getCampaignInfo(campaignId)
-          setOnChainActive(campaignInfo.active)
+          const campaignInfo = await getCampaignInfo(campaignId.toString())
+          if (campaignInfo) {
+            setOnChainActive(campaignInfo.isActive)
+          }
         } catch {
           showError('Failed to check contract status', 'Unable to query on-chain status.')
         }
