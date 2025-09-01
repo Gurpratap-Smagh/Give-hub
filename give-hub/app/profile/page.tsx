@@ -36,8 +36,8 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       const newData = {
-        name: user.username,
-        email: user.email,
+        name: user.username || '',
+        email: user.email || '',
         bio: 'Passionate about making a difference through blockchain technology and charitable giving.',
         location: 'San Francisco, CA',
         website: 'https://johndoe.com',
@@ -258,7 +258,7 @@ export default function ProfilePage() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl card-shadow border border-gray-100 p-6 text-center">
               <ProfilePictureUpload
-                currentUser={user as any}
+                currentUser={user}
                 currentPicture={profileData.profilePicture}
                 onPictureChange={(newPicture) => setProfileData(prev => ({ ...prev, profilePicture: newPicture }))}
                 isEditing={isEditing}
