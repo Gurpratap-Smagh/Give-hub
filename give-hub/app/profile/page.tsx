@@ -36,8 +36,8 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       const newData = {
-        name: user.username,
-        email: user.email,
+        name: user.username || '',
+        email: user.email || '',
         bio: 'Passionate about making a difference through blockchain technology and charitable giving.',
         location: 'San Francisco, CA',
         website: 'https://johndoe.com',
