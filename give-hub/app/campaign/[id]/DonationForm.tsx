@@ -107,7 +107,13 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
     <form onSubmit={onSubmit} className="flex flex-col gap-4 max-w-full">
       <div className="flex flex-col gap-2">
         <label className="text-sm font-semibold">Token</label>
-        <TokenPicker value={selectedToken ?? undefined} onChange={setSelectedToken} className="w-full" />
+        <TokenPicker
+          value={selectedToken ?? undefined}
+          onChange={setSelectedToken}
+          className="w-full"
+          // Donation form must ignore the Sepolia ETH ERC-20 from env, but keep native ETH and all other tokens
+          excludeSepoliaEthContract
+        />
         {selectedToken && (
           <div className="text-xs text-white/60 break-words">
             Selected: <span className="font-mono">{tokenLabel}</span> @ <span className="font-mono">{selectedToken.address}</span>

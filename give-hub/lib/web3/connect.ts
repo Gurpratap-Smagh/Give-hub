@@ -12,7 +12,9 @@ let connecting = false;
  */
 export async function connectWallet() {
   if (connecting) {
-    console.log('🔌 Wallet connection already in progress, skipping duplicate request');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔌 Wallet connection already in progress, skipping duplicate request');
+    }
     return null;
   }
   
@@ -32,7 +34,7 @@ export async function connectWallet() {
     
     return { provider, signer };
   } catch (error: any) {
-    if (error.code === -32002) {
+    if (error.code === -32002 && process.env.NODE_ENV === 'development') {
       console.warn('Wallet connection already in progress in another context');
     }
     throw error;
@@ -56,7 +58,9 @@ export function isConnecting() {
  */
 export async function ensureWalletOnChain(chainId: number): Promise<boolean> {
   if (connecting) {
-    console.log('🔌 Wallet connection already in progress, skipping chain switch');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔌 Wallet connection already in progress, skipping chain switch');
+    }
     return false;
   }
   

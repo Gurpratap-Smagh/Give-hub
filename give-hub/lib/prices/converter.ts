@@ -1,8 +1,12 @@
 // lib/prices/converter.ts
+// Demo/fake price table used for quick USD estimates in UI
+// Keep in sync with .env token metadata when possible
 export const TO_USD: Record<string, number> = {
-  zETH: 3200,
+  ETH: 5000,
+  zETH: 5000, // alias
   USDC: 1,
-  WZETA: 0.2,
+  ZETA: 10,
+  WZETA: 10,
   sBTC: 60000,
 };
 

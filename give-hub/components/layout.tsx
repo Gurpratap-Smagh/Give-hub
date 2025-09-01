@@ -24,6 +24,7 @@ import GlobalLoading from '@/components/global-loading'
 import { AuthProvider } from '@/lib/auth/auth-context'
 import AILauncher from '@/components/ai-launcher'
 import { GlobalDonationLoading } from '@/components/global-donation-loading'
+import { NotificationContainer } from '@/components/notification-container'
 
 // SEO metadata for all pages (can be overridden in individual pages)
 export const metadata: Metadata = {
@@ -51,7 +52,7 @@ export default function RootLayout({
         {/* Set theme ASAP to avoid flicker */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(() => { try { const saved = localStorage.getItem('theme'); const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; const theme = saved || (prefersDark ? 'dark' : 'light'); document.documentElement.dataset.theme = theme; } catch(_) {} })();`,
+            __html: `(() => { try { const saved = localStorage.getItem('theme'); const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; const theme = saved || (prefersDark ? 'dark' : 'light'); document.documentElement.dataset.theme = theme; if (theme === 'dark') { document.documentElement.classList.add('dark'); } else { document.documentElement.classList.remove('dark'); } } catch(_) {} })();`,
           }}
         />
         {/* Global image error fallback script */}
@@ -72,6 +73,8 @@ export default function RootLayout({
           </main>
           {/* Global AI assistant launcher */}
           <AILauncher />
+          {/* Global notification system */}
+          <NotificationContainer />
         </AuthProvider>
       </body>
     </html>

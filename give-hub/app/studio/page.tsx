@@ -8,7 +8,7 @@ import type { Campaign } from '@/lib/utils/types';
 import { CampaignsGrid } from '@/components/campaigns-grid'
 import CampaignEditForm from '@/components/campaign-edit-form'
 import { UnsyncedCampaignCard } from '@/components/unsynced-campaign-card'
-import { notify } from '@/lib/utils/notify'
+import { showError, showSuccess } from '@/components/notification-manager'
 import { formatCurrency } from '@/lib/utils/format'
 // No-escrow: withdrawals disabled, so web3 withdraw actions are removed from UI
 
@@ -19,6 +19,7 @@ export default function CreatorStudioPage() {
   const [syncedCampaigns, setSyncedCampaigns] = useState<Campaign[]>([])
   const [unsyncedCampaigns, setUnsyncedCampaigns] = useState<Campaign[]>([])
   const [loadingCampaigns, setLoadingCampaigns] = useState(true)
+  const [showFundsNotice, setShowFundsNotice] = useState(true)
 
   // Edit state
   const [editing, setEditing] = useState<Campaign | null>(null)
@@ -125,10 +126,10 @@ export default function CreatorStudioPage() {
       setSyncedCampaigns((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...update } as Campaign : c)))
       setUnsyncedCampaigns((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...update } as Campaign : c)))
       setEditing(null)
-      notify('Campaign updated successfully', 'success')
+      showSuccess('Campaign updated successfully', 'Update Complete')
     } catch (e) {
       console.error(e)
-      notify('Failed to update campaign', 'error')
+      showError('Failed to update campaign', 'Update Failed')
       setError('Failed to update campaign')
     } finally {
       setSaving(false)
@@ -179,9 +180,36 @@ export default function CreatorStudioPage() {
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       {/* Header */}
-      <div className="mb-2 flex items-center">
+      <div className="mb-2 flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Creator Panel</h1>
+        {loadingCampaigns && (
+          <div className="flex items-center">
+            <Spinner size={18} />
+          </div>
+        )}
       </div>
+
+      {/* Creator disclaimer: requires ZetaChain Athens testnet funds */}
+      {showFundsNotice && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-xl p-4 flex items-start gap-3">
+          <div className="mt-0.5">ℹ️</div>
+          <div className="flex-1 text-sm">
+            <p className="font-semibold">Creators: ensure you have ZetaChain testnet funds</p>
+            <p className="mt-1 text-blue-800">
+              To create or sync campaigns, your connected wallet must be on <span className="font-medium">ZetaChain Athens Testnet (chainId 7001)</span> with
+              <span className="font-medium"> ZETA</span> for gas. Preferred token is <span className="font-medium">WZETA</span>.
+              Without funds, wallet calls can fail with generic errors like &quot;Unexpected error&quot;.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowFundsNotice(false)}
+            className="text-blue-700 hover:text-blue-900 text-sm font-semibold"
+            aria-label="Dismiss notice"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Financial Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

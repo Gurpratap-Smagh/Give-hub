@@ -27,13 +27,17 @@ interface TokenPickerProps {
   onChange: (value: Picked) => void;
   className?: string;
   creatorMode?: boolean; // WZETA-only mode for campaign creators
+  // When true, exclude the Sepolia ETH contract token coming from env for the donation flow
+  // (keep native ETH and all other tokens intact). This avoids changing .env for other uses.
+  excludeSepoliaEthContract?: boolean;
 }
 
 export default function TokenPicker({
   value,
   onChange,
   className = '',
-  creatorMode = false
+  creatorMode = false,
+  excludeSepoliaEthContract = false
 }: TokenPickerProps) {
   const [data, setData] = useState<ByChain>({});
   const [chain, setChain] = useState<string>('');
@@ -59,11 +63,23 @@ export default function TokenPicker({
             ...newData.ZETA
           ];
         }
+
+        // Optionally exclude the Sepolia ETH ERC-20 from env (keep native ETH).
+        // This is needed only for the donation form and should not touch .env.
+        if (excludeSepoliaEthContract && newData.SEPOLIA) {
+          // Remove ANY ERC-20 entry labeled ETH on Sepolia, regardless of address casing,
+          // while keeping the injected native ETH option (which has no address).
+          newData.SEPOLIA = (newData.SEPOLIA || []).filter(t => {
+            const isEth = t.symbol?.toUpperCase?.() === 'ETH';
+            const hasAddress = !!t.address && t.address.trim() !== '';
+            return !(isEth && hasAddress);
+          });
+        }
         
         setData(newData);
       })
       .catch(() => setData({}));
-  }, []);
+  }, [excludeSepoliaEthContract]);
 
   // For creatorMode, set chain to ZETA and default to WZETA for campaign creation
   useEffect(() => {
@@ -90,8 +106,8 @@ export default function TokenPicker({
 
   const chainList = useMemo(() => {
     const availableChains = Object.keys(data).filter(c => data[c].length > 0);
-    // Enforce desired order regardless of how envs are declared
-    const desiredOrder = ['ZETA', 'SEPOLIA', 'SOLANA', 'BTC'];
+    // Enforce desired order regardless of how envs are declared - removed BTC
+    const desiredOrder = ['ZETA', 'SEPOLIA'];
     return desiredOrder.filter(c => availableChains.includes(c));
   }, [data]);
 
@@ -104,8 +120,8 @@ export default function TokenPicker({
 
   const tokens = useMemo(() => {
     if (chain === 'SEPOLIA') {
-      // Include native ETH (no address) + ERC-20s from API except zETH
-      const erc20s = (data['SEPOLIA'] || []).filter(t => t.symbol.toUpperCase() !== 'ZETH');
+      // On Sepolia, include native ETH and filter out incompatible entries like zETH.
+      const erc20s = (data['SEPOLIA'] || []).filter(t => t.symbol?.toUpperCase?.() !== 'ZETH');
       return [{ symbol: 'ETH' }, ...erc20s];
     }
     return data[chain] ?? [];
@@ -135,12 +151,15 @@ export default function TokenPicker({
     if (!hasTokens) return [];
     const items: FancyItem[] = [];
     for (const t of tokens) {
-      const isSepoliaNative = chain === 'SEPOLIA' && t.symbol === 'ETH';
+      const isSepoliaNative = chain === 'SEPOLIA' && t.symbol === 'ETH' && t.address === undefined;
+      const isZetaNative = chain === 'ZETA' && t.symbol === 'ZETA' && t.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+      const addrKey = (isSepoliaNative || isZetaNative) ? 'native' : (t.address ? t.address.toLowerCase() : 'native');
+      const id = `${t.symbol}:${addrKey}`;
       items.push({ 
         kind: 'option', 
-        key: t.symbol, 
-        label: isSepoliaNative ? 'ETH (native)' : t.symbol,
-        value: t.symbol 
+        key: id, 
+        label: isSepoliaNative ? 'ETH (native)' : (isZetaNative ? 'ZETA (native)' : t.symbol),
+        value: id,
       });
     }
     return items;
@@ -253,10 +272,15 @@ export default function TokenPicker({
           if (v !== chain) {
             setChain(v);
             if (!creatorMode) {
-              const list = data[v] ?? [];
-              if (list.length > 0) {
-                const firstToken = list[0];
-                const isNative = firstToken.symbol === 'ZETA' && firstToken.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+              // Use the same logic as tokens useMemo for the newly selected chain
+              const newTokens = v === 'SEPOLIA' 
+                ? ([{ symbol: 'ETH' }, ...((data[v] ?? []).filter(t => t.symbol?.toUpperCase?.() !== 'ZETH'))])
+                : (data[v] ?? []);
+              if (newTokens.length > 0) {
+                const firstToken = newTokens[0] as { symbol: string; address?: string };
+                const isSepoliaNative = v === 'SEPOLIA' && firstToken.symbol === 'ETH' && firstToken.address === undefined;
+                const isZetaNative = firstToken.symbol === 'ZETA' && firstToken.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+                const isNative = isSepoliaNative || isZetaNative;
                 onChange({ chain: v, symbol: firstToken.symbol, address: isNative ? undefined : firstToken.address, isNative });
               }
               else onChange({ chain: v, symbol: '', address: '' });
@@ -272,22 +296,33 @@ export default function TokenPicker({
       <label className="text-sm font-semibold force-header opacity-100">Token</label>
       <FancySelect
         items={tokenItems}
-        value={value?.symbol ?? ''}
-        onChange={(symbol) => {
-          const handleTokenSelect = (symbol: string) => {
-            const token = tokens.find((t) => t.symbol === symbol);
+        value={value ? `${value.symbol}:${(value.address ? value.address.toLowerCase() : 'native')}` : ''}
+        onChange={(id) => {
+          const handleTokenSelect = (id: string) => {
+            const [sym, addrKey] = id.split(':');
+            const token = tokens.find((t) => {
+              if (addrKey === 'native') {
+                if (chain === 'SEPOLIA') {
+                  return t.symbol === 'ETH' && t.address === undefined;
+                }
+                if (chain === 'ZETA') {
+                  return t.symbol === 'ZETA' && t.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+                }
+              }
+              return t.symbol === sym && (t.address?.toLowerCase() === addrKey);
+            });
             if (!token) return;
-            const isSepoliaNative = chain === 'SEPOLIA' && token.symbol === 'ETH' && token.address === undefined;
-            const isZetaNative = token.symbol === 'ZETA' && token.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+            const isSepoliaNative = chain === 'SEPOLIA' && sym === 'ETH' && addrKey === 'native';
+            const isZetaNative = chain === 'ZETA' && sym === 'ZETA' && (addrKey === 'native' || token.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE');
             const isNative = isSepoliaNative || isZetaNative;
             onChange({ 
               chain, 
-              symbol: token.symbol, 
+              symbol: sym, 
               address: isNative ? undefined : token.address,
-              isNative
+              isNative,
             });
           }
-          handleTokenSelect(symbol);
+          handleTokenSelect(id);
         }}
         disabled={!hasTokens || creatorMode}
         placeholder={hasTokens ? 'Select token' : 'No tokens available'}

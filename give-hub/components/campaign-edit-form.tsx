@@ -2,7 +2,7 @@
 
 import React, { useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import type { Campaign } from '@/lib/db'
-import { notify } from '@/lib/utils/notify'
+import { showError } from '@/components/notification-manager'
 
 interface CampaignEditFormProps {
   campaign: Campaign
@@ -11,6 +11,7 @@ interface CampaignEditFormProps {
   lockGoalAndChains?: boolean
   onChange?: (partial: Partial<Campaign>) => void
   hasDonations?: boolean
+  isSaving?: boolean
 }
 
 const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
@@ -18,7 +19,8 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
     campaign, 
     onSave, 
     lockGoalAndChains = false,
-    onChange
+    onChange,
+    isSaving = false
   }, 
   ref
 ) => {
@@ -44,6 +46,7 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
       ? campaign.category
       : ''
   )
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
 
   useImperativeHandle(ref, () => {
@@ -76,16 +79,21 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
   // Store token changes to be applied on form submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.title.trim()) return notify('Campaign title is required', 'error')
-    if (!formData.description.trim()) return notify('Campaign description is required', 'error')
-    if (formData.goal <= 0) return notify('Funding goal must be positive', 'error')
+    if (isSubmitting || isSaving) return
+    
+    if (!formData.title.trim()) return showError('Campaign title is required', 'Validation Error')
+    if (!formData.description.trim()) return showError('Campaign description is required', 'Validation Error')
+    if (formData.goal <= 0) return showError('Funding goal must be greater than $0', 'Validation Error')
 
     const finalCategory = formData.category === 'other' ? otherCategory : formData.category
-    if (!finalCategory.trim()) return notify('Category is required', 'error')
+    if (!finalCategory.trim()) return showError('Category is required', 'Validation Error')
     
-    // No token updates - removed token editing functionality
-    
-    await onSave({ ...formData, category: finalCategory })
+    setIsSubmitting(true)
+    try {
+      await onSave({ ...formData, category: finalCategory })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -97,8 +105,9 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
           name="title"
           value={formData.title}
           onChange={handleInputChange}
-          className="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+          className="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed"
           placeholder="Enter a compelling title for your campaign"
+          disabled={isSubmitting || isSaving}
           required
         />
       </div>
@@ -110,8 +119,9 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
           value={formData.description}
           onChange={handleInputChange}
           rows={4}
-          className="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 resize-none"
+          className="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 resize-none disabled:bg-gray-50 disabled:cursor-not-allowed"
           placeholder="Describe your campaign..."
+          disabled={isSubmitting || isSaving}
           required
         />
       </div>
@@ -126,8 +136,8 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
             onChange={handleInputChange}
             min="1"
             step="0.01"
-            className={`w-full p-3 border-2 rounded-lg focus:outline-none ${lockGoalAndChains ? 'border-gray-200 bg-gray-50 cursor-not-allowed' : 'border-gray-200 focus:border-blue-500'}`}
-            disabled={lockGoalAndChains}
+            className={`w-full p-3 border-2 rounded-lg focus:outline-none ${lockGoalAndChains || isSubmitting || isSaving ? 'border-gray-200 bg-gray-50 cursor-not-allowed' : 'border-gray-200 focus:border-blue-500'}`}
+            disabled={lockGoalAndChains || isSubmitting || isSaving}
             placeholder="0.00"
             required
           />
@@ -139,7 +149,8 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
             name="category"
             value={formData.category}
             onChange={handleInputChange}
-            className="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed"
+            disabled={isSubmitting || isSaving}
           >
             <option value="">Select a category</option>
             {presetCategories.map((c) => (
@@ -153,7 +164,8 @@ const CampaignEditForm = forwardRef<HTMLFormElement, CampaignEditFormProps>((
               value={otherCategory}
               onChange={(e) => { setOtherCategory(e.target.value) }}
               placeholder="Specify your category"
-              className="mt-2 w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+              className="mt-2 w-full p-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting || isSaving}
             />
           )}
         </div>

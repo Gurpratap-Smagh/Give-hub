@@ -165,7 +165,7 @@ export function CampaignCard({ campaign, variant = 'minimal', compact = false, c
               <div className="mt-auto">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-lg font-semibold text-gray-900">
-                    {formatCurrency(campaign.raised, 'USD', true)}
+                    {formatCurrency(campaign.raised, 'USD', false)}
                   </span>
                   <span className="text-sm text-gray-500 font-medium">
                     {progressPercentage}% funded
@@ -179,7 +179,7 @@ export function CampaignCard({ campaign, variant = 'minimal', compact = false, c
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Goal: {formatCurrency(campaign.goal, 'USD', true)}
+                  Goal: {formatCurrency(campaign.goal, 'USD', false)}
                 </p>
               </div>
             </>
@@ -208,7 +208,7 @@ export function CampaignCard({ campaign, variant = 'minimal', compact = false, c
       <div className="mb-8 p-6 bg-gray-50 rounded-xl shadow-inner">
         <div className="flex justify-between items-center mb-3">
           <span className="text-2xl font-semibold text-gray-900">
-            {formatCurrency(campaign.raised, 'USD', true)}
+            {formatCurrency(campaign.raised, 'USD', false)}
           </span>
           <span className="text-sm font-semibold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full shadow-sm">
             {progressPercentage}% funded

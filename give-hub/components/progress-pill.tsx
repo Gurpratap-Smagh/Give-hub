@@ -5,11 +5,11 @@ interface ProgressPillProps {
   raised: number
   goal: number
   size?: 'sm' | 'md' | 'lg'
-  // Whether amounts are stored as cents in MongoDB
+  // Whether amounts are provided in cents; default false (treat as dollars)
   isCents?: boolean
 }
 
-export function ProgressPill({ raised, goal, size = 'lg', isCents = true }: ProgressPillProps) {
+export function ProgressPill({ raised, goal, size = 'lg', isCents = false }: ProgressPillProps) {
   const rawPercentage = goal > 0 ? (raised / goal) * 100 : 0
   const barPercentage = Math.min(rawPercentage, 100)
   

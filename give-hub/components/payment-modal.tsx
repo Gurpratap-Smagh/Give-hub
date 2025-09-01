@@ -7,8 +7,10 @@ import { connectWallet } from "@/lib/web3/client";
 import { useAvailableTokens, type Token } from "@/lib/hooks/useAvailableTokens";
 import TokenPicker from "@/components/TokenPicker";
 import { formatCurrency } from "@/lib/utils/format";
-import { notify } from "@/lib/utils/notify";
+import { showError, showSuccess, showInfo } from "@/components/notification-manager";
 import { makePayment } from "@/lib/payments/zetachain-gateway";
+import { useDonationFlow } from "@/lib/hooks/useDonationFlow";
+import { DonationToast } from "@/components/donation-toast";
 
 // Payment provider mode
 const PAYMENT_PROVIDER = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || "local").toLowerCase();
@@ -57,9 +59,11 @@ export default function PaymentModal({
   const [donorName, setDonorName] = useState("");
   const [note, setNote] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<string>("");
   const { user } = useAuth();
 
   const onChainCampaignId = campaign.onChain?.campaignId;
+  const { showToast, lastDonation, startDonation, hideToast } = useDonationFlow(campaign.id);
   const onZeta = PAYMENT_PROVIDER === "zetachain";
   const missingOnChainMapping = onZeta && !onChainCampaignId;
 
@@ -73,7 +77,16 @@ export default function PaymentModal({
   const nativeToken = getNativeToken();
 
   const fallbackNativeSymbol = process.env.NEXT_PUBLIC_ZETA_NATIVE_SYMBOL || "ZETA";
-  const displaySymbol = onZeta ? (selectedToken?.symbol ?? nativeToken?.symbol ?? fallbackNativeSymbol) : "$";
+  // Decide the unit label based on the selected token/chain
+  const displaySymbol = !onZeta
+    ? "$"
+    : (picked?.isNative
+        ? (((picked?.chain || '').toUpperCase().includes('SEPOLIA'))
+            ? 'ETH'
+            : (nativeToken?.symbol ?? fallbackNativeSymbol)
+          )
+        : (selectedToken?.symbol ?? nativeToken?.symbol ?? fallbackNativeSymbol)
+      );
 
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletConnecting, setWalletConnecting] = useState(false);
@@ -90,6 +103,7 @@ export default function PaymentModal({
       setAmount(String(initialAmount));
     }
     setSelectedChain(initialChain || effectiveChains[0]);
+    setProcessingStatus(""); // Reset processing status when modal opens
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
@@ -102,7 +116,14 @@ export default function PaymentModal({
     const list = byChain[key] || [];
     const match = list.find(t => t.symbol.toLowerCase() === sym.toLowerCase());
     if (match) {
-      setPicked({ chain: key, symbol: match.symbol, address: match.address });
+      const isSepolia = key === 'SEPOLIA';
+      const isEth = match.symbol.toUpperCase() === 'ETH';
+      setPicked({ 
+        chain: key, 
+        symbol: match.symbol, 
+        address: isSepolia && isEth ? '' : match.address,
+        isNative: isSepolia && isEth ? true : undefined,
+      });
     }
   }, [isOpen, initialToken, initialChain, byChain]);
 
@@ -114,7 +135,12 @@ export default function PaymentModal({
     const key = ch.toUpperCase();
     const list = byChain[key] || [];
     if (list.length > 0) {
-      setPicked({ chain: key, ...list[0] });
+      if (key === 'SEPOLIA') {
+        // Force native ETH on Sepolia to avoid ZRC20 addresses
+        setPicked({ chain: key, symbol: 'ETH', address: '', isNative: true });
+      } else {
+        setPicked({ chain: key, ...list[0] });
+      }
     } else {
       setPicked({ chain: key, symbol: '', address: '' });
     }
@@ -126,7 +152,7 @@ export default function PaymentModal({
     const amt = parseFloat((amount || "").replace(/,/g, "."));
     if (!amt || !(amt > 0)) return;
     if (!selectedChain) return;
-    if (onZeta && !picked?.address) return;
+    if (onZeta && !picked?.isNative && !picked?.address) return;
     if (onZeta && missingOnChainMapping) return;
     const t = setTimeout(() => {
       void handlePayment();
@@ -140,7 +166,7 @@ export default function PaymentModal({
     const amountValue = parseFloat(raw);
 
     if (!amountValue || amountValue <= 0) {
-      notify("Please enter a valid amount", 'error');
+      showError("Please enter a valid amount");
       return;
     }
 
@@ -170,24 +196,31 @@ export default function PaymentModal({
           tokenAddress: picked?.isNative ? undefined : (picked?.address && picked.address !== '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' ? picked.address.trim() : undefined),
           onStatusUpdate: (status: string) => {
             if (!status) return;
-            notify(status, 'info');
+            setProcessingStatus(status);
+            showInfo(status);
             if (onStatusUpdate) {
               try { 
                 onStatusUpdate(status); 
               } catch (e) {
-                console.warn('Status update callback failed:', e);
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn('Status update callback failed:', e);
+                }
               }
             }
           },
         });
 
+        // Start donation flow tracking with additional params
         const chainName = isZetaChainPicked ? 'ZetaChain' : 'Ethereum Sepolia';
+        startDonation(txHash, raw, campaign.id, donorDisplayName, chainName);
         onPaymentSuccess(amountValue, chainName);
-        notify(`Thank you for donating ${raw} ${displaySymbol}! Transaction: ${txHash.slice(0, 10)}...`, 'success');
+        
+        // Close modal immediately but let donation flow handle success notification
         onClose();
         setAmount("");
         setDonorName("");
         setNote("");
+        setProcessingStatus("");
         return;
       }
 
@@ -203,7 +236,7 @@ export default function PaymentModal({
         }
 
         onPaymentSuccess(amountValue, selectedChain);
-        notify(`Mock payment of $${raw} completed!`, 'success');
+        showSuccess(`Mock payment of $${raw} completed!`);
         onClose();
         setAmount("");
         setDonorName("");
@@ -213,7 +246,7 @@ export default function PaymentModal({
     } catch (error) {
       console.error('Payment failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Payment failed';
-      notify(`Payment failed: ${errorMessage}`, 'error');
+      showError(`Payment failed: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }
@@ -228,8 +261,30 @@ export default function PaymentModal({
       : selectedChain || "Local";
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-      <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl" ref={modalRef}>
+    <>
+      {/* Donation Success Toast */}
+      {showToast && lastDonation && (
+        <DonationToast
+          isVisible={showToast}
+          amount={lastDonation.amount}
+          onHide={hideToast}
+        />
+      )}
+
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-md flex items-center justify-center z-50 p-4"
+        role="dialog"
+        aria-modal="true"
+        onClick={() => {
+          if (onCancel) onCancel();
+          onClose();
+        }}
+      >
+        <div
+          className="bg-white/90 backdrop-blur-md border border-blue-600 rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 shadow-xl mx-auto"
+          ref={modalRef}
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-900">Support This Campaign</h2>
           <button
@@ -289,8 +344,8 @@ export default function PaymentModal({
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
           <h3 className="font-medium text-gray-900 mb-2">{campaign.title}</h3>
           <div className="flex justify-between text-sm text-gray-600">
-            <span>Raised: {formatCurrency(campaign.raised, 'USD', true)}</span>
-            <span>Goal: {formatCurrency(campaign.goal, 'USD', true)}</span>
+            <span>Raised: {formatCurrency(campaign.raised, 'USD', false)}</span>
+            <span>Goal: {formatCurrency(campaign.goal, 'USD', false)}</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2 mt-2 overflow-visible">
             <div
@@ -344,6 +399,8 @@ export default function PaymentModal({
               value={picked}
               onChange={setPicked}
               className="w-full"
+              // Hide Sepolia ERC-20 ETH but keep native ETH visible for donations
+              excludeSepoliaEthContract
             />
             <br />
           </div>
@@ -394,7 +451,7 @@ export default function PaymentModal({
           {isProcessing ? (
             <div className="flex items-center justify-center gap-2">
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Processing...
+              {processingStatus || "Processing..."}
             </div>
           ) : PAYMENT_PROVIDER === "zetachain" ? (
             networkSwitching ? 'Switching network…' : `Donate ${amount || "0"} ${displaySymbol} via ${chainBadge}`
@@ -418,5 +475,6 @@ export default function PaymentModal({
         )}
       </div>
     </div>
+    </>
   );
 }

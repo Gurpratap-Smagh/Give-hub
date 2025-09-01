@@ -7,6 +7,17 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import type { Campaign } from '@/lib/db'
+
+// Ensure consistent computed fields
+type CampaignDTO = Campaign & { progressPct: number; donors: number }
+function normalizeCampaign(campaign: Campaign): CampaignDTO {
+  const goal = Number(campaign.goal || 0)
+  const raised = Number(campaign.raised || 0)
+  const progressPct = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0
+  const donors = Array.isArray(campaign.donations) ? campaign.donations.length : 0
+  return { ...campaign, goal, raised, progressPct, donors }
+}
 
 export async function GET(
   _req: NextRequest,
@@ -23,7 +34,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      campaign,
+      campaign: normalizeCampaign(campaign),
       donations
     })
   } catch (error) {

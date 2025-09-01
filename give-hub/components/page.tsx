@@ -114,7 +114,7 @@ export default function CreateCampaignPage() {
         }
       } catch (e) {
         console.error('Failed to fetch ZRC-20 options:', e)
-        showError('Could not load token options.', 'Loading Failed')
+        showError('Failed to fetch ZRC-20 options', 'Could not load token options.')
       }
     }
     fetchTokens()
@@ -137,7 +137,7 @@ export default function CreateCampaignPage() {
 
         // Additional validation for zBTC
         if (preferredToken.includes('zBTC')) {
-          showError('zBTC is currently not supported for campaigns', 'Token Not Supported')
+          showError('Please select a different token', 'zBTC is currently not supported for campaigns')
           setIsTokenValid(false)
           return
         }
@@ -146,7 +146,7 @@ export default function CreateCampaignPage() {
         setIsTokenValid(isAddress(preferredToken))
       } catch (e) {
         console.error('Token validation failed:', e)
-        showError('Token validation failed. Please try another token.', 'Validation Failed')
+        showError('Invalid token address', 'Token validation failed. Please try another token.')
         setIsTokenValid(false)
       }
     }
@@ -183,11 +183,11 @@ export default function CreateCampaignPage() {
 
   const handleImageSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      showError('Please select an image file', 'Invalid File')
+      showError('Invalid file type', 'Please select an image file')
       return
     }
     if (file.size > 5 * 1024 * 1024) {
-      showError('Image size must be less than 5MB', 'File Too Large')
+      showError('File too large', 'Image size must be less than 5MB')
       return
     }
     const base64 = await convertToBase64(file)
@@ -197,7 +197,7 @@ export default function CreateCampaignPage() {
   // Generate an image from current description using Gemini (creator-only)
   const generateImageFromDescription = async () => {
     if (!user || user.role !== 'creator') {
-      return showError('Only creators can generate images.', 'Access Denied')
+      return showError('Permission denied', 'Only creators can generate images.')
     }
     try {
       setImageGenLoading(true)
@@ -212,21 +212,21 @@ export default function CreateCampaignPage() {
       const data: { imageBase64?: string; mime?: string; error?: string; message?: string; details?: string } = await res.json().catch(() => ({}))
       if (!res.ok) {
         const msg = data.error || data.details || data.message || 'Failed to generate image.'
-        showError(msg, 'Generation Failed')
+        showError('Image generation failed', msg)
         return
       }
       const base64 = data.imageBase64
       if (!base64) {
-        return showError('The AI did not return an image. Try refining the description.', 'No Image Generated')
+        return showError('No image generated', 'The AI did not return an image. Try refining the description.')
       }
       const dataUrl = `data:${data.mime || 'image/png'};base64,${base64}`
       setImage(dataUrl)
-      showSuccess('Generated image applied', 'Image Generated')
+      showSuccess('AI image generation completed', 'Generated image applied')
     } catch (e) {
       console.error(e)
       const msg = parseRpcError(e)
-      setTxPhase('error')
-      showError(msg, 'Generation Error')
+      showError('AI request failed', msg)
+      showError('Generation failed', msg)
     } finally {
       setImageGenLoading(false)
     }
@@ -240,7 +240,7 @@ export default function CreateCampaignPage() {
     e.preventDefault()
     
     if (!user) {
-      showError('Please sign in to create a campaign', 'Authentication Required')
+      showError('Authentication required', 'Please sign in to create a campaign')
       router.push('/auth?next=/create')
       return
     }
@@ -248,13 +248,13 @@ export default function CreateCampaignPage() {
     setSubmitLoading(true)
     setSubmitMessage('Validating campaign data...')
     if (!formData.title || !formData.description || !formData.goal || !formData.category) {
-      showError('Please fill in all required fields', 'Validation Error')
+      showError('Missing information', 'Please fill in all required fields')
       setSubmitLoading(false)
       setSubmitMessage('')
       return
     }
     if (formData.category === 'other' && !otherCategory.trim()) {
-      showError('Please specify your category', 'Validation Error')
+      showError('Category required', 'Please specify your category')
       return
     }
 
@@ -267,29 +267,29 @@ export default function CreateCampaignPage() {
       
       if (requiresOnChain) {
         setSubmitMessage('Creating on-chain campaign...')
-        showInfo('Creating on-chain campaign…', 'Blockchain Integration')
+        showInfo('Blockchain processing', 'Creating on-chain campaign…')
         // Step 3: Connect wallet (will trigger metamask if not connected)
         setSubmitMessage('Connecting wallet...')
-        showInfo('Connecting wallet…', 'Wallet Connection')
+        showInfo('Wallet connection', 'Connecting wallet…')
         
         // Step 2: Connect wallet and ensure correct network
         const { address, chainId } = await connectWallet()
         const targetChainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
         
         if (chainId !== targetChainId) {
-          showInfo(`Switching to ZetaChain network...`, 'Network Switch')
+          showInfo('Network switch required', `Switching to ZetaChain network...`)
           await ensureWalletOnChain(targetChainId)
         }
         
         // Step 3: Check if creator already exists on-chain
         const creatorExists = await isCreator(address)
         if (!creatorExists) {
-          showInfo('Registering as creator on-chain...', 'Creator Registration')
+          showInfo('Creator registration', 'Registering as creator on-chain...')
         }
         
         // Step 4: Create campaign on-chain
         setTxPhase('confirming')
-        showInfo('Confirm in MetaMask…', 'Transaction Confirmation')
+        showInfo('Transaction approval', 'Confirm in MetaMask…')
         const res = await createCampaignOnChain({
           preferredZRC20: preferredToken,
           onSent: (hash) => {
@@ -297,9 +297,9 @@ export default function CreateCampaignPage() {
             setTxHash(hash)
             const base = process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL
             if (base) {
-              showSuccess(`Transaction sent: ${base}/tx/${hash}`, 'Transaction Sent')
+              showSuccess('Transaction submitted', `Transaction sent: ${base}/tx/${hash}`)
             } else {
-              showSuccess(`Transaction sent: ${hash}`, 'Transaction Sent')
+              showSuccess('Transaction submitted', `Transaction sent: ${hash}`)
             }
           }
         })
@@ -332,7 +332,7 @@ export default function CreateCampaignPage() {
           console.debug('[create] Attaching onChain mapping to payload:', campaignData.onChain)
         } else {
           console.error('[create] Missing or invalid NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS; on-chain mapping will NOT be persisted.', { contract })
-          showError('On-chain campaign created, but missing contract env to save mapping. Please set NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS.', 'Configuration Error')
+          showError('On-chain campaign created, but missing contract env to save mapping. Please set NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS.', 'Configuration error')
         }
       } else if (requiresOnChain) {
         console.warn('[create] Expected on-chain campaign ID but did not obtain one; saving off-chain only.')
@@ -349,7 +349,7 @@ export default function CreateCampaignPage() {
       
       if (!response.ok) {
         if (response.status === 401) {
-          showError('Something went wrong. Please try again.', 'Campaign Creation Error')
+          showError('Session expired', 'Your session has expired. Please sign in again.')
           router.push('/auth?next=/create')
           return
         }
@@ -362,7 +362,7 @@ export default function CreateCampaignPage() {
       }
       
       const result = await response.json()
-      showSuccess('Campaign created successfully!', 'Campaign Created')
+      showSuccess('Campaign saved', 'Campaign created successfully!')
       console.debug('[create] API response:', result)
       const persistedOnChain = Boolean(result?.campaign?.onChain || result?.onChain)
       if (persistedOnChain) {
@@ -374,7 +374,7 @@ export default function CreateCampaignPage() {
       if (requiresOnChain) {
         try {
           setSubmitMessage('Syncing on-chain data...')
-          showInfo('Creating Stripe setup intent...', 'Payment Setup')
+          showInfo('Data synchronization', 'Syncing on-chain data…')
           const syncRes = await fetch(`/api/sync?range=2000`, { method: 'GET' })
           const syncJson = await syncRes.json().catch(() => null)
           if (syncRes.ok && (syncJson?.success ?? false)) {
@@ -384,8 +384,6 @@ export default function CreateCampaignPage() {
           }
         } catch (e) {
           console.error('[create] Sync call failed:', e)
-          const errorMsg = e instanceof Error ? e.message : 'Unknown error'
-          showError('Sync failed: ' + errorMsg, 'Sync Error')
         }
       }
 
@@ -393,7 +391,7 @@ export default function CreateCampaignPage() {
       const newId = result?.campaign?.id || result?.id
       if (!newId) {
         console.error('[create] Missing campaign id in response, cannot navigate. Result:', result)
-        showError('Campaign saved but navigation failed: missing id.', 'Navigation Error')
+        showError('Navigation error', 'Campaign saved but navigation failed: missing id.')
       } else {
         const path = `/campaign/${newId}`
         console.debug('[create] Navigating to', path)
@@ -402,7 +400,7 @@ export default function CreateCampaignPage() {
       
     } catch (error) {
       const errorMsg = (error as Error).message || 'An error occurred'
-      showError(errorMsg, 'Campaign Creation Error')
+      showError('Campaign creation failed', errorMsg)
       // Show modal for wallet/testnet errors in on-chain mode
       if (requiresOnChain) {
         const hint = `Creators must have ZetaChain Athens testnet funds (ZETA for gas and WZETA as preferred token).\n\nDetails: ${errorMsg}`
@@ -413,7 +411,7 @@ export default function CreateCampaignPage() {
       
       // If on-chain creation succeeded but off-chain failed, show different message
       if (onChainCampaignId) {
-        showError(`Campaign created on blockchain (ID: ${onChainCampaignId}) but failed to save locally. Please contact support.`, 'Database Save Error')
+        showError('Sync error', `Campaign created on blockchain (ID: ${onChainCampaignId}) but failed to save locally. Please contact support.`)
       }
     } finally {
       setIsSubmitting(false)
@@ -447,7 +445,7 @@ export default function CreateCampaignPage() {
         const errData: unknown = await res.json().catch(() => ({}))
         const errObj = (typeof errData === 'object' && errData) ? errData as { error?: string; message?: string } : {}
         const msg = errObj.error || errObj.message || 'AI request failed.'
-        showError(msg, 'AI Generation Error')
+        showError('AI request failed', msg)
         return
       }
       const data = await res.json().catch(() => ({})) as { text?: string }
@@ -479,10 +477,10 @@ export default function CreateCampaignPage() {
         description: typeof update?.description === 'string' && update.description.trim() ? update.description : prev.description
       }))
       console.debug('[Create] handleAiEdit: applied update', update)
-      showSuccess('Saving to database...', 'Database Save')
+      showSuccess('AI enhancement completed', 'Applied AI suggestions')
     } catch (error) {
       console.error('Error creating campaign:', error)
-      showError(error instanceof Error ? error.message : 'Failed to create campaign', 'AI Edit Error')
+      showError('Campaign creation failed', error instanceof Error ? error.message : 'Failed to create campaign')
     } finally {
       setTxPhase('idle')
       setSubmitLoading(false)

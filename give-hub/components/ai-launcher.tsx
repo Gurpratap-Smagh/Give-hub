@@ -34,13 +34,13 @@ export default function AILauncher() {
       <button
         type="button"
         onClick={() => setOpen(prev => !prev)}
-        className="fixed bottom-[25px] right-[25px] h-9 w-9 rounded-full bg-blue-600 bg-opacity-5 text-white shadow-lg hover:bg-blue-700 hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-blue-500 z-[80] inline-flex items-center justify-center"
+        className="fixed bottom-[25px] right-[25px] h-12 w-12 rounded-full bg-transparent border border-blue-600 text-blue-600 text-[25px] shadow-lg hover:bg-blue-600/10 focus:outline-none focus:ring-2 focus:ring-blue-500 z-[80] inline-flex items-center justify-center transition-colors"
         data-testid="ai-launcher-button"
         aria-label={open ? "Close GiveHub AI" : "Open GiveHub AI"}
         aria-pressed={open}
         title="Open GiveHub AI"
       >
-        <span className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${theme === 'dark' ? 'bg-black' : 'bg-white'} text-xl text-blue-500 ring-1 ring-blue-500 shadow-sm`}>✦</span>
+        ✦
       </button>
 
       {/* Overlay (mount only when open) */}
@@ -72,7 +72,9 @@ export default function AILauncher() {
             setPayAutoSubmit(Boolean(action.confirm))
             setPayOpen(true)
           } catch (e) {
-            console.error("[AI] open_payment wiring failed:", e)
+            if (process.env.NODE_ENV === 'development') {
+              console.error("[AI] open_payment wiring failed:", e)
+            }
           }
           }}
         />
@@ -85,7 +87,6 @@ export default function AILauncher() {
           isOpen={payOpen}
           onClose={() => { setPayOpen(false); setPayCampaign(null); setPayAutoSubmit(false) }}
           onPaymentSuccess={() => { /* optionally toast */ setPayOpen(false); setPayCampaign(null); setPayAutoSubmit(false) }}
-          onPaymentError={() => { /* optionally toast */ }}
           initialAmount={payInitialAmount}
           initialChain={payInitialChain}
           initialToken={payInitialToken}

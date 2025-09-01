@@ -11,6 +11,7 @@ import { formatCurrency } from '@/lib/utils/format'
 import type { Campaign } from '@/lib/db'
 import { getContract } from '@/lib/web3/client'
 import { notify } from '@/lib/utils/notify'
+import ErrorModal from '@/components/error-modal'
 
 const CARD_PLACEHOLDER_2x1 = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
   <svg xmlns="http://www.w3.org/2000/svg" width="800" height="400" viewBox="0 0 800 400">
@@ -36,6 +37,9 @@ interface UnsyncedCampaignCardProps {
 export function UnsyncedCampaignCard({ campaign, onSynced }: UnsyncedCampaignCardProps) {
   const [imgSrc, setImgSrc] = useState<string>(campaign.image || CARD_PLACEHOLDER_2x1)
   const [syncing, setSyncing] = useState(false)
+  const [errorOpen, setErrorOpen] = useState(false)
+  const [errorText, setErrorText] = useState('')
+  const [errorDetails, setErrorDetails] = useState<unknown>(null)
   
   // Calculate funding progress percentage
   const progressPercentage = Math.round((campaign.raised / campaign.goal) * 100)
@@ -156,18 +160,23 @@ export function UnsyncedCampaignCard({ campaign, onSynced }: UnsyncedCampaignCar
       
       const updateJson = await updateRes.json()
       if (!updateRes.ok || !updateJson?.success) {
-        // Even if API fails, we already updated the UI
-        // Just show an error that backend sync failed
-        console.error('API update failed but UI was updated')
-        throw new Error(updateJson?.error || 'Failed to update campaign with on-chain data')
+        // Even if API fails, we already updated the UI and contract sync succeeded
+        // Just log the backend sync failure but don't throw error
+        console.error('API update failed but UI was updated and contract sync succeeded')
+        notify('Campaign synced to contract successfully! (Backend update pending)', 'success')
+      } else {
+        notify('Campaign synced successfully!', 'success')
       }
-      
-      notify('Campaign synced successfully!', 'success')
       
     } catch (error: Error | unknown) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to sync campaign:', error)
       notify(errorMsg || 'Failed to sync campaign', 'error')
+      // Also show a modal to make the error prominent, with testnet funds hint
+      const hint = `Creators must have ZetaChain Athens testnet funds (ZETA for gas and WZETA as preferred token).\n\nDetails: ${errorMsg}`
+      setErrorText(hint)
+      setErrorDetails(error)
+      setErrorOpen(true)
     } finally {
       setSyncing(false)
     }
@@ -221,7 +230,7 @@ export function UnsyncedCampaignCard({ campaign, onSynced }: UnsyncedCampaignCar
       <div className="mt-auto">
         <div className="flex justify-between items-center mb-2">
           <span className="text-lg font-semibold text-gray-900">
-            {formatCurrency(campaign.raised, 'USD', true)}
+            {formatCurrency(campaign.raised, 'USD', false)}
           </span>
           <span className="text-sm text-gray-500 font-medium">
             {progressPercentage}% funded
@@ -235,7 +244,7 @@ export function UnsyncedCampaignCard({ campaign, onSynced }: UnsyncedCampaignCar
           />
         </div>
         <p className="text-xs text-gray-500 mb-3">
-          Goal: {formatCurrency(campaign.goal, 'USD', true)}
+          Goal: {formatCurrency(campaign.goal, 'USD', false)}
         </p>
         
         {/* Sync Button */}
@@ -259,6 +268,13 @@ export function UnsyncedCampaignCard({ campaign, onSynced }: UnsyncedCampaignCar
           )}
         </button>
       </div>
+      <ErrorModal
+        isOpen={errorOpen}
+        title="Wallet issue or missing testnet funds"
+        message={errorText}
+        details={errorDetails}
+        onClose={() => { setErrorOpen(false); setErrorDetails(null) }}
+      />
     </div>
   )
 }

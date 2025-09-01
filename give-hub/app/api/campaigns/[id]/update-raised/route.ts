@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { mongoDb as db } from '../../../../../lib/mongodb/database'
+import type { Campaign } from '@/lib/db'
+
+function normalizeCampaign(campaign: Campaign) {
+  const goal = Number(campaign.goal || 0)
+  const raised = Number(campaign.raised || 0)
+  const progressPct = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0
+  const donors = Array.isArray(campaign.donations) ? campaign.donations.length : 0
+  return { ...campaign, goal, raised, progressPct, donors }
+}
 
 export async function POST(
   request: NextRequest,
@@ -32,7 +41,7 @@ export async function POST(
     // Return campaign data
     return NextResponse.json({
       success: true,
-      campaign: updatedCampaign,
+      campaign: normalizeCampaign(updatedCampaign),
       newTotal: updatedCampaign.raised,
       newTotalDisplay: updatedCampaign.raised,
     })

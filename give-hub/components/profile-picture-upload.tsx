@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import type { User, Creator } from '@/lib/db'
-import { notify } from '@/lib/utils/notify'
+import { showError } from '@/components/notification-manager'
 
 interface ProfilePictureUploadProps {
   currentUser: User | Creator
@@ -49,12 +49,12 @@ export default function ProfilePictureUpload({
   // Handle file selection
   const handleFileSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      notify('Please select an image file', 'error')
+      showError('Please select an image file')
       return
     }
 
     if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      notify('Image size must be less than 5MB', 'error')
+      showError('Image size must be less than 5MB')
       return
     }
 
@@ -64,7 +64,7 @@ export default function ProfilePictureUpload({
       onPictureChange(base64)
     } catch (error) {
       console.error('Error converting image:', error)
-      notify('Error processing image. Please try again.', 'error')
+      showError('Error processing image. Please try again.')
     } finally {
       setIsUploading(false)
     }

@@ -20,10 +20,10 @@
 
 import { useState } from 'react'
 import { useAuth } from '@/lib/auth/auth-context'
-import { Card } from './card' // ACCESS: Base card component for consistent styling
+// Removed Card import - using consistent modal styling
 import { ChainChips } from './chain-chips' // ACCESS: Blockchain selection component
 import { formatCurrency } from '@/lib/utils/format' // ACCESS: Currency formatting utilities
-import { notify } from '@/lib/utils/notify'
+import { showError } from '@/components/notification-manager'
 import type { Campaign } from '@/lib/db'
 
 /**
@@ -64,7 +64,7 @@ export function DonateDialog({ isOpen, onClose, campaign, selectedChain }: Donat
     // Require a valid amount; name is optional and auto-resolved
     const parsed = parseFloat((amount || '').replace(/,/g, '.'))
     if (isNaN(parsed) || parsed <= 0) {
-      notify('Please enter a positive amount to donate.', 'error')
+      showError('Invalid amount', 'Please enter a positive amount to donate.')
       return
     }
 
@@ -72,13 +72,13 @@ export function DonateDialog({ isOpen, onClose, campaign, selectedChain }: Donat
     try {
       // This dialog is deprecated; donation flow is handled by the real payment modal.
       // Removed mock contract call. Prevent false success and guide developers.
-      notify('DonateDialog is deprecated. Use the Payment Modal flow.', 'error')
+      showError('Component deprecated', 'DonateDialog is deprecated. Use the Payment Modal flow.')
       
       // Optional: keep UI state unchanged since no donation occurs
     } catch (error) {
       console.error('Donation failed:', error)
       const message = error instanceof Error ? error.message : 'Donation failed. Please try again.'
-      notify(message, 'error')
+      showError('Donation failed', message)
     } finally {
       setIsLoading(false)
     }
@@ -92,13 +92,12 @@ export function DonateDialog({ isOpen, onClose, campaign, selectedChain }: Donat
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-md"
         onClick={onClose}
       />
       
       {/* Dialog */}
-      <Card className="relative w-full max-w-md">
-        <div className="p-6">
+      <div className="relative w-full max-w-md bg-white/90 backdrop-blur-md border border-blue-600 rounded-xl shadow-xl p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">Make a Donation</h2>
@@ -116,7 +115,7 @@ export function DonateDialog({ isOpen, onClose, campaign, selectedChain }: Donat
           <div className="mb-6 p-4 bg-[color:var(--panel-2)] rounded-lg">
             <h3 className="font-semibold mb-2">{campaign.title}</h3>
             <div className="text-sm text-[color:var(--muted)]">
-              {formatCurrency(campaign.raised)} raised of {formatCurrency(campaign.goal)} goal
+              {formatCurrency(campaign.raised, 'USD', false)} raised of {formatCurrency(campaign.goal, 'USD', false)} goal
             </div>
           </div>
 
@@ -212,8 +211,7 @@ export function DonateDialog({ isOpen, onClose, campaign, selectedChain }: Donat
               {isLoading ? 'Processing...' : `Donate $${amount || '0'}`}
             </button>
           </div>
-        </div>
-      </Card>
+      </div>
     </div>
   )
 }

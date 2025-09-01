@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useDonationEvents } from '@/lib/hooks/useDonationEvents';
 import { formatDonationEvents } from '@/lib/donations/formatter';
+import Spinner from '@/components/spinner';
 
 interface DonationsLivePaneProps {
   campaignId: string | number;
@@ -16,7 +17,7 @@ export default function DonationsLivePane({ campaignId, isActive = true }: Donat
     const s = String(campaignId).trim();
     return /^\d+$/.test(s) ? s : undefined;
   }, [campaignId]);
-  const { events } = useDonationEvents(numericCampaignId);
+  const { events, isLoading } = useDonationEvents(numericCampaignId);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [fullyExpanded, setFullyExpanded] = useState<Record<string, boolean>>({});
   const noteRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -92,13 +93,18 @@ export default function DonationsLivePane({ campaignId, isActive = true }: Donat
 
       {/* Donation List - allow growth up to a max then scroll */}
       <div className="p-3 min-h-[280px] max-h-[420px] overflow-y-auto space-y-2 custom-scrollbar">
-        {donations.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center p-8">
+            <Spinner />
+            <p className="text-sm text-gray-500 mt-2">Loading donations...</p>
+          </div>
+        ) : donations.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400 text-center p-4">
             No donations yet. Be the first to contribute!
           </p>
         ) : (
           donations.map((donation) => (
-            <div key={donation.id} className="relative overflow-hidden rounded-lg gradient-border-soft-only">
+            <div key={donation.id} className="relative overflow-hidden rounded-lg gradient-border-soft-only animate-in slide-in-from-top-2 duration-300">
               {/* Corner fill patch to remove gap and keep corner curved */}
               <div
                 className="absolute -top-[1px] -left-[1px] w-8 h-8 rounded-tr-full rounded-bl-full bg-[var(--surface)] z-0 pointer-events-none"

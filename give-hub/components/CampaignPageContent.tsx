@@ -47,7 +47,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { formatCurrency } from '@/lib/utils/format'
 import { useAuth } from '@/lib/auth/auth-context'
-import { showError, showSuccess, showInfo } from '@/components/notification-manager'
+import { showError, showSuccess, showInfo } from '@/lib/utils/notification-manager'
 import { getCampaignInfo } from '@/lib/web3/client'
 
 import CampaignEditForm from '@/components/campaign-edit-form'
@@ -144,7 +144,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
           const campaignInfo = await getCampaignInfo(campaignId)
           setOnChainActive(campaignInfo.active)
         } catch {
-          showError('Failed to check contract status', 'Unable to query on-chain status.')
+          showError('Failed to check contract status', 'Contract connection error')
         }
       }
     }
@@ -163,11 +163,11 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
 
   const handleImageSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      showError('Please select an image file', 'Invalid File')
+      showError('Please select an image file', 'Invalid file type')
       return
     }
     if (file.size > 5 * 1024 * 1024) {
-      showError('Image size must be less than 5MB', 'File Too Large')
+      showError('Image size must be less than 5MB', 'File too large')
       return
     }
     const base64 = await convertToBase64(file)
@@ -177,7 +177,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   // Generate image using description/title context
   const generateImageFromDescription = async () => {
     if (!user || user.role !== 'creator') {
-      return showError('Only creators can generate images.', 'Access Denied')
+      return showError('Only creators can generate images.', 'Permission denied')
     }
     try {
       setImageGenLoading(true)
@@ -195,18 +195,18 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
       const data: { imageBase64?: string; mime?: string; error?: string; message?: string; details?: string } = await res.json().catch(() => ({}))
       if (!res.ok) {
         const msg = data.error || data.details || data.message || 'Failed to generate image.'
-        showError('Image generation failed', msg)
+        showError(msg, 'Image generation failed')
         return
       }
       const base64 = data.imageBase64
       if (!base64) {
-        return showError('No image received', 'The AI did not return an image. Try refining the description.')
+        return showError('The AI did not return an image. Try refining the description.', 'No image generated')
       }
       const dataUrl = `data:${data.mime || 'image/png'};base64,${base64}`
       setEditImage(dataUrl)
-      showSuccess('Generated image applied', 'The new image has been set.')
+      showSuccess('Generated image applied', 'AI image generation completed')
     } catch {
-      showError('Failed to upload image', 'Upload Failed')
+      showError('Failed to generate image.', 'Generation failed')
     } finally {
       setImageGenLoading(false)
     }
@@ -234,7 +234,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
         const errData: unknown = await res.json().catch(() => ({}))
         const errObj = (typeof errData === 'object' && errData) ? errData as { error?: string; message?: string } : {}
         const msg = errObj.error || errObj.message || 'AI request failed.'
-        showError('AI request failed', msg)
+        showError(msg, 'Image generation failed')
         return
       }
       const data = await res.json().catch(() => ({})) as { text?: string }
@@ -265,9 +265,9 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
         title: typeof update?.title === 'string' && update.title.trim() ? update.title : prev.title,
         description: typeof update?.description === 'string' && update.description.trim() ? update.description : prev.description,
       }))
-      showSuccess('Applied AI suggestions', 'Your title and description were updated.')
+      showSuccess('Applied AI suggestions', 'AI enhancement completed')
     } catch {
-      showError('AI apply failed', 'Failed to apply AI suggestions.')
+      showError('Failed to apply AI suggestions.', 'AI enhancement failed')
     } finally {
       setIsAiEditing(false)
     }
@@ -352,12 +352,12 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
               ...(data.campaign.progress !== undefined && { progress: data.campaign.progress })
             }))
           }
-          showSuccess('Donation successful', 'Thank you for your support!')
+          showSuccess('Donation successful. Thank you for your support!', 'Payment completed')
         } else {
-          showError('Server save failed', 'Donation saved locally, but failed to save on server.')
+          showError('Donation saved locally, but failed to save on server', 'Server sync failed')
         }
       } catch {
-        showInfo('Sync delayed', 'Donation processed, but failed to update server total. It will sync later.')
+        showInfo('Donation processed, but failed to update server total. It will sync later.', 'Sync pending')
       } finally {
         setShowPaymentModal(false)
       }
@@ -390,9 +390,9 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
       setCampaign(updatedCampaign)
       setEditPreview(updatedCampaign)
       setIsEditing(false)
-      showSuccess('Campaign synced successfully', 'Sync Complete')
+      showSuccess('Campaign updated successfully', 'Changes saved')
     } catch {
-      showError('Failed to sync campaign', 'Sync Failed')
+      showError('Failed to update campaign', 'Update failed')
     } finally {
       setIsSaving(false)
     }

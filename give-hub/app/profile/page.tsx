@@ -6,13 +6,14 @@ import Link from 'next/link'
 import { useAuth } from '@/lib/auth/auth-context'
 import Spinner from '@/components/spinner'
 import ProfilePictureUpload from '@/components/profile-picture-upload'
-import { notify } from '@/lib/utils/notify'
+import { showError, showSuccess } from '@/components/notification-manager'
 
 export default function ProfilePage() {
   const { user, isLoading } = useAuth()
   // const router = useRouter() // Unused for now
   const [isEditing, setIsEditing] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
+  const [saveLoading, setSaveLoading] = useState(false)
   const [newSignup, setNewSignup] = useState(false)
   const [profileData, setProfileData] = useState({
     name: user?.username || '',
@@ -111,6 +112,7 @@ export default function ProfilePage() {
   }
 
   const handleSave = async () => {
+    setSaveLoading(true)
     try {
       const response = await fetch('/api/profile', {
         method: 'PUT',
@@ -128,16 +130,18 @@ export default function ProfilePage() {
       })
 
       if (response.ok) {
-        notify('Profile updated successfully!', 'success')
+        showSuccess('Profile updated successfully!', 'Profile Saved')
         setIsEditing(false)
         // Update original data to reflect saved changes
         setOriginalData(profileData)
       } else {
-        notify('Failed to update profile. Please try again.', 'error')
+        showError('Failed to update profile. Please try again.', 'Update Failed')
       }
     } catch (error) {
       console.error('Error updating profile:', error)
-      notify('Error updating profile. Please try again.', 'error')
+      showError('Error updating profile. Please try again.', 'Update Error')
+    } finally {
+      setSaveLoading(false)
     }
   }
 
@@ -185,7 +189,7 @@ export default function ProfilePage() {
           location: data.profileUpdate.location || prev.location,
           website: data.profileUpdate.website || prev.website
         }))
-        notify('Profile improved with AI suggestions', 'success')
+        showSuccess('Profile improved with AI suggestions', 'AI Enhancement')
       } 
       // Fallback to text extraction if needed
       else if (data.text) {
@@ -197,17 +201,17 @@ export default function ProfilePage() {
             location: parsed.location || prev.location,
             website: parsed.website || prev.website
           }))
-          notify('Profile improved with AI suggestions', 'success')
+          showSuccess('Profile improved with AI suggestions', 'AI Enhancement')
         } catch {
           setProfileData(prev => ({ ...prev, bio: data.text }))
-          notify('Bio improved with AI suggestions', 'success')
+          showSuccess('Bio improved with AI suggestions', 'Bio Enhanced')
         }
       } else {
         throw new Error('No valid response from AI')
       }
     } catch (e) {
       console.error(e)
-      notify('Failed to get AI suggestions. Please try again.', 'error')
+      showError('Failed to get AI suggestions. Please try again.', 'AI Error')
     } finally {
       setAiLoading(false)
     }
@@ -289,13 +293,21 @@ export default function ProfilePage() {
                   <div className="flex gap-3">
                     <button
                       onClick={handleSave}
-                      className="bg-white text-blue-600 border border-blue-600 hover:bg-blue-50 px-6 py-2 rounded-full font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={saveLoading || aiLoading}
+                      className="bg-white text-blue-600 border border-blue-600 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-2 rounded-full font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 inline-flex items-center gap-2"
                     >
-                      Save Changes
+                      {saveLoading && (
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      )}
+                      {saveLoading ? 'Saving...' : 'Save Changes'}
                     </button>
                     <button
                       onClick={handleCancel}
-                      className="bg-white text-gray-700 border border-gray-300 hover:bg-gray-100 px-6 py-2 rounded-full font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={saveLoading || aiLoading}
+                      className="bg-white text-gray-700 border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-2 rounded-full font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       Cancel
                     </button>
@@ -328,7 +340,7 @@ export default function ProfilePage() {
                       name="name"
                       value={profileData.name}
                       onChange={handleInputChange}
-                      disabled={!isEditing}
+                      disabled={!isEditing || saveLoading || aiLoading}
                       className={`w-full p-3 border-2 rounded-lg focus:outline-none ${
                         isEditing 
                           ? 'border-gray-200 focus:border-blue-500' 
@@ -346,7 +358,7 @@ export default function ProfilePage() {
                       name="email"
                       value={profileData.email}
                       onChange={handleInputChange}
-                      disabled={!isEditing}
+                      disabled={!isEditing || saveLoading || aiLoading}
                       className={`w-full p-3 border-2 rounded-lg focus:outline-none ${
                         isEditing 
                           ? 'border-gray-200 focus:border-blue-500' 
@@ -364,7 +376,7 @@ export default function ProfilePage() {
                     name="bio"
                     value={profileData.bio}
                     onChange={handleInputChange}
-                    disabled={!isEditing}
+                    disabled={!isEditing || saveLoading || aiLoading}
                     rows={3}
                     className={`w-full p-3 border-2 rounded-lg focus:outline-none resize-none ${
                       isEditing 
@@ -384,7 +396,7 @@ export default function ProfilePage() {
                       name="location"
                       value={profileData.location}
                       onChange={handleInputChange}
-                      disabled={!isEditing}
+                      disabled={!isEditing || saveLoading || aiLoading}
                       className={`w-full p-3 border-2 rounded-lg focus:outline-none ${
                         isEditing 
                           ? 'border-gray-200 focus:border-blue-500' 
@@ -402,7 +414,7 @@ export default function ProfilePage() {
                       name="website"
                       value={profileData.website}
                       onChange={handleInputChange}
-                      disabled={!isEditing}
+                      disabled={!isEditing || saveLoading || aiLoading}
                       className={`w-full p-3 border-2 rounded-lg focus:outline-none ${
                         isEditing 
                           ? 'border-gray-200 focus:border-blue-500' 
@@ -425,7 +437,7 @@ export default function ProfilePage() {
                         name="wallet_ethereum"
                         value={profileData.walletAddresses.ethereum}
                         onChange={handleInputChange}
-                        disabled={!isEditing}
+                        disabled={!isEditing || saveLoading || aiLoading}
                         className={`w-full p-3 border-2 rounded-lg focus:outline-none font-mono text-sm ${
                           isEditing 
                             ? 'border-gray-200 focus:border-blue-500' 
@@ -444,7 +456,7 @@ export default function ProfilePage() {
                         name="wallet_solana"
                         value={profileData.walletAddresses.solana}
                         onChange={handleInputChange}
-                        disabled={!isEditing}
+                        disabled={!isEditing || saveLoading || aiLoading}
                         className={`w-full p-3 border-2 rounded-lg focus:outline-none font-mono text-sm ${
                           isEditing 
                             ? 'border-gray-200 focus:border-blue-500' 
@@ -463,7 +475,7 @@ export default function ProfilePage() {
                         name="wallet_bitcoin"
                         value={profileData.walletAddresses.bitcoin}
                         onChange={handleInputChange}
-                        disabled={!isEditing}
+                        disabled={!isEditing || saveLoading || aiLoading}
                         className={`w-full p-3 border-2 rounded-lg focus:outline-none font-mono text-sm ${
                           isEditing 
                             ? 'border-gray-200 focus:border-blue-500' 

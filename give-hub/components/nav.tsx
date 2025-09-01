@@ -202,7 +202,7 @@ export function Nav() {
                 </button>
                 
                 {showSearchDropdown && (
-                  <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[120px]">
+                  <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[120px] max-w-[200px]">
                     {Object.entries(searchParamLabels).map(([key, label]) => (
                       <button
                         key={key}
@@ -289,7 +289,7 @@ export function Nav() {
                 </button>
                 
                 {showProfileDropdown && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 max-w-[90vw]">
                     {user?.role === 'creator' && (
                       <Link 
                         href="/studio" 
@@ -365,7 +365,7 @@ export function Nav() {
                   </svg>
                 </button>
                 {showProfileDropdown && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50 max-w-[90vw]">
                     <div className="px-4 py-2 text-xs text-gray-500">Signed out • Anonymous</div>
                     <Link 
                       href="/auth?mode=signin" 
@@ -409,7 +409,7 @@ export function Nav() {
       {/* REGION: Mobile Menu (Dropdown) */}
       {/* This menu appears when the hamburger icon is clicked on smaller screens. */}
       {isMobileMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg rounded-b-lg border-t border-gray-200 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+        <div className="md:hidden absolute top-full left-0 w-full bg-white shadow-lg rounded-b-lg border-t border-gray-200 z-50 animate-in fade-in slide-in-from-top-4 duration-300 max-h-[80vh] overflow-y-auto">
           <div className="flex flex-col p-4 space-y-4">
             {user?.role === 'creator' && (
               <Link href="/studio" onClick={() => { setIsMobileMenuOpen(false) }} className="w-full text-center bg-blue-600 text-white py-2 px-4 rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Creator Studio</Link>

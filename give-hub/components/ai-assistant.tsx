@@ -6,7 +6,7 @@ import { useAssistant } from "@/app/ai/assistant/useAssistant";
 import PaymentModal from "@/components/payment-modal";
 import type { Campaign } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils/format";
-import { notify } from "@/lib/utils/notify"; // Import the notify utility
+import { showError, showSuccess, showInfo } from '@/components/notification-manager';
 
 export default function AIAssistant() {
   const {
@@ -60,13 +60,13 @@ export default function AIAssistant() {
           const res = await fetch(`/api/campaigns/${id}`);
           if (!res.ok) {
             const errorMsg = `Failed to fetch campaign: ${res.status}`;
-            notify(errorMsg, 'error');
+            showError('Campaign fetch failed', errorMsg);
             throw new Error(errorMsg);
           }
           const data = await res.json();
           if (!data?.success || !data?.campaign) {
             const errorMsg = "Campaign not found";
-            notify(errorMsg, 'error');
+            showError('Campaign not found', errorMsg);
             throw new Error(errorMsg);
           }
           setPaymentCampaign(data.campaign as Campaign);
@@ -97,7 +97,9 @@ export default function AIAssistant() {
       <div className="bg-white shadow-xl rounded-xl border border-gray-200 overflow-hidden">
         <div className="flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 border-b">
           <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h6m-9 8l4-4H17a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v9l0 0"/></svg>
+            <svg className="w-6 h-6 text-yellow-400" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+            </svg>
             <span className="text-sm font-medium text-gray-700">Ask Give-Hub Assistant</span>
           </div>
           <button
@@ -148,7 +150,7 @@ export default function AIAssistant() {
               {reply || 
                 (() => {
                   // If we got no content, show a message and notify user with toast
-                  setTimeout(() => notify("No response from assistant. Please try again.", "error"), 100);
+                  setTimeout(() => showError('Assistant error', 'No response from assistant. Please try again.'), 100);
                   return "(No content returned)";
                 })()
               }
@@ -184,21 +186,11 @@ export default function AIAssistant() {
         <PaymentModal
           campaign={paymentCampaign}
           isOpen={showPayment}
-          onClose={() => { setShowPayment(false); setPaymentCampaign(null); }}
+          onClose={() => setShowPayment(false)}
           onPaymentSuccess={(amt, chain) => {
             setReply(`✅ Transaction confirmed! Thank you for donating ${amt}${chain ? ` via ${chain}` : ""}.`);
-            notify(`Thank you for donating ${amt}${chain ? ` via ${chain}` : ""}!`, "success");
             setShowPayment(false);
             setPaymentCampaign(null);
-          }}
-          onPaymentError={(err) => {
-            const msg = err instanceof Error ? err.message : String(err);
-            setReply(`Payment failed: ${msg}`);
-            notify(`Payment failed: ${msg}`, "error");
-          }}
-          onCancel={() => {
-            setReply("Payment canceled.");
-            notify("Payment canceled", "info");
           }}
           initialAmount={initialAmount}
           initialChain={initialChain}

@@ -53,10 +53,20 @@ export async function POST(
     const { id: campaignId } = await params
     const body = await request.json()
     const amount: number = body.amount
-    const chain: string = body.chain
+    const rawChain: string = body.chain
     const donorName: string = body.donorName ?? body.name
     const txId: string | undefined = body.txId
     const timestamp: Date | undefined = body.timestamp ? new Date(body.timestamp) : undefined
+
+    // Normalize chain names for consistency
+    const chainMapping: Record<string, string> = {
+      'ethereum sepolia': 'Ethereum Sepolia',
+      'sepolia': 'Ethereum Sepolia',
+      'zetachain': 'ZetaChain',
+      'zeta': 'ZetaChain',
+      'local': 'Local'
+    }
+    const chain = chainMapping[rawChain.toLowerCase()] || rawChain
 
     // Basic validation
     if (!campaignId) {

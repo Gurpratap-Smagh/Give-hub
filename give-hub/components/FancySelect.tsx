@@ -129,13 +129,13 @@ export default function FancySelect({
       </div>
 
       {open && (
-        <div className="absolute z-50 mt-2 w-full">
-          <div className="rounded-xl border border-transparent ring-1 ring-blue-300 dark:ring-blue-400 select-surface shadow-lg">
+        <div className="absolute z-50 mt-2 w-full left-0 right-0">
+          <div className="rounded-lg border border-gray-200 bg-white shadow-lg">
             <ul
               role="listbox"
               tabIndex={-1}
               onKeyDown={onMenuKeyDown}
-              className="max-h-64 overflow-auto rounded-[11px] bg-transparent text-blue-600"
+              className="max-h-64 overflow-auto rounded-lg bg-white text-gray-700"
             >
               {items.map((item) => {
                 if (item.kind === 'header') {
@@ -165,7 +165,7 @@ export default function FancySelect({
                       }
                     }}
                     className={`flex cursor-pointer items-center gap-2 px-3 py-2 transition-colors select-none
-                      ${selected ? 'bg-blue-50 font-semibold' : 'hover:bg-blue-50'}
+                      ${selected ? 'bg-blue-50 font-semibold' : 'hover:bg-gray-50'}
                     `}
                   >
                     {item.icon ? (

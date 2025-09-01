@@ -13,6 +13,17 @@ import { serverGetAllSyncedCampaignIds } from '@/lib/web3/server'
 
 // Note: authMiddleware reads 'auth-token' cookie, verifies JWT, and attaches request.user
 
+// Normalize campaign payloads so clients get consistent computed fields from the API
+type CampaignDTO = Campaign & { progressPct: number; donors: number }
+function normalizeCampaignForApi(c: Campaign): CampaignDTO {
+  const goal = Number(c.goal || 0)
+  const raised = Number(c.raised || 0)
+  const progressPct = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0
+  const donors = Array.isArray(c.donations) ? c.donations.length : 0
+  // Ensure cents remain numbers and attach computed fields
+  return { ...c, goal, raised, progressPct, donors }
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -23,12 +34,19 @@ export async function GET(request: Request) {
     // Get campaigns based on database config and filter params
     const searchQuery = searchParams.get('search')?.trim();
     const searchParam = searchParams.get('param') as 'all' | 'title' | 'creator' | 'category' || 'all';
+    const creatorId = searchParams.get('creatorId')?.trim() || undefined;
     
-    // Fetch all campaigns (DB adapter will use MongoDB or mock JSON based on environment)
-    const allCampaigns = await db.getAllCampaigns()
+    // Fetch campaigns, optionally filtered by creatorId at the DB level for efficiency
+    const allCampaigns = creatorId
+      ? await db.searchCampaigns({ creatorId })
+      : await db.getAllCampaigns()
     
     // Handle search filtering
     let filteredCampaigns = allCampaigns;
+    // Safety: If creatorId is provided but DB adapter didn't filter (future-proof), ensure filter here
+    if (creatorId) {
+      filteredCampaigns = filteredCampaigns.filter(c => c.creatorId === creatorId)
+    }
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
       filteredCampaigns = allCampaigns.filter(campaign => {
@@ -71,7 +89,7 @@ export async function GET(request: Request) {
       }
       return NextResponse.json({ 
         success: true, 
-        campaigns, 
+        campaigns: campaigns.map(normalizeCampaignForApi), 
         verificationStatus: 'skipped'
       }, { status: 200 })
     }
@@ -85,7 +103,7 @@ export async function GET(request: Request) {
       // Only show campaigns that are not verified on-chain
       campaigns = filteredCampaigns.filter(campaign => {
         const onChainId = campaign.onChain?.campaignId
-        return !onChainId || !syncedOnChainIds.has(String(onChainId))
+        return !onChainId || !syncedOnChainIds.has(onChainId)
       })
     } else if (showUnsynced === 'all') {
       campaigns = filteredCampaigns // All campaigns for studio
@@ -93,13 +111,13 @@ export async function GET(request: Request) {
       // Only show campaigns whose onChain id is present in the view results
       campaigns = filteredCampaigns.filter(campaign => {
         const onChainId = campaign.onChain?.campaignId
-        return !!onChainId && syncedOnChainIds.has(String(onChainId))
+        return !!onChainId && syncedOnChainIds.has(onChainId)
       })
     }
     
     return NextResponse.json({ 
       success: true, 
-      campaigns, 
+      campaigns: campaigns.map(normalizeCampaignForApi), 
       verificationStatus: 'complete' 
     }, { status: 200 })
   } catch (err) {

@@ -35,4 +35,5 @@ export interface Donation {
   amount: number;
   chain: string;
   timestamp: Date;
+  txHash?: string;
 }

@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authService } from '@/lib/auth/auth'
 import { db } from '@/lib/db'
+import type { Campaign } from '@/lib/db'
+
+function normalizeCampaign(campaign: Campaign) {
+  const goal = Number(campaign.goal || 0)
+  const raised = Number(campaign.raised || 0)
+  const progressPct = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0
+  const donors = Array.isArray(campaign.donations) ? campaign.donations.length : 0
+  return { ...campaign, goal, raised, progressPct, donors }
+}
 
 // PUT /api/campaigns/[id]/edit - Update campaign (creator only)
 export async function PUT(
@@ -103,7 +112,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Failed to update campaign' }, { status: 500 })
     }
 
-    return NextResponse.json(updatedCampaign)
+    return NextResponse.json(normalizeCampaign(updatedCampaign))
     
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

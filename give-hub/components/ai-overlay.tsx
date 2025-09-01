@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { notify } from "@/lib/utils/notify"
+import { showError } from '@/components/notification-manager'
 
 interface AIOverlayProps {
   open: boolean
@@ -264,7 +264,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
       });
       if (!res.ok) {
         const errorMsg = `AI request failed (${res.status})`;
-        notify(errorMsg, "error");
+        showError("AI request failed", errorMsg);
         throw new Error(errorMsg);
       }
       const data = (await res.json()) as {
@@ -281,7 +281,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
       
       // If no content was returned, show a toast notification
       if (!text) {
-        notify("Assistant returned an empty response. Please try again.", "error");
+        showError("Empty response", "Assistant returned an empty response. Please try again.");
       }
       
       if (Array.isArray(data.results) && data.results.length) {
@@ -299,7 +299,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to get AI response"
       setError(msg)
-      notify(msg, "error") // Add toast notification for errors
+      showError("Request failed", msg) // Add toast notification for errors
       const reply: ChatMsg = { id: crypto.randomUUID(), role: "assistant", text: "Sorry, I couldn't process that request. Please try again." }
       setMessages((m) => [...m, reply])
     } finally {
@@ -352,7 +352,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
         className="pointer-events-auto absolute"
         style={panelStyle}
       >
-        <div className="relative h-full rounded-2xl shadow-2xl border border-gray-200/70 bg-white/95 backdrop-blur-xl overflow-hidden flex flex-col">
+        <div className="relative h-full rounded-2xl shadow-2xl border border-gray-200/70 bg-white dark:bg-[#0b0f1a] overflow-hidden flex flex-col">
 
           {/* Header */}
           <div 
@@ -363,7 +363,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
               onMouseDown={handleMouseDown}
             >
               <span
-                className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${resolvedTheme === 'dark' ? 'bg-black' : 'bg-white'} text-blue-500 ring-1 ring-blue-500 shadow-sm`}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-transparent text-[14px] text-blue-600 border border-blue-600 shadow-sm hover:bg-blue-600/10 transition-colors"
                 title="Drag"
                 aria-label="Drag GiveHub AI"
               >
@@ -388,14 +388,14 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
               {/* Keep minimal inline errors for accessibility, but use toast for errors */}
               {error && (
                 <div className="flex justify-center">
-                  <div className="px-3 py-2 rounded-2xl bg-red-50 text-red-700 text-xs border border-red-200">
+                  <div className="px-3 py-2 rounded-2xl bg-transparent text-red-700 text-xs border border-red-200">
                     {error}
                   </div>
                 </div>
               )}
               {messages.map((m) => (
                 <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`${m.role === "user" ? "bg-blue-600 text-white" : m.role === "assistant" ? "bg-gray-100 text-gray-900" : "bg-green-50 text-gray-800"} px-3 py-2 rounded-2xl max-w-[85%] shadow-sm`}> 
+                  <div className={`${m.role === "user" ? "bg-transparent border border-blue-600 text-blue-600" : m.role === "assistant" ? "bg-transparent border border-gray-300 text-gray-900" : "bg-transparent border border-green-600/50 text-gray-800"} px-3 py-2 rounded-2xl max-w-[85%] shadow-sm`}> 
                     {m.role === "assistant" ? (
                       (() => {
                         const mdComponents: Components = {
@@ -407,13 +407,13 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
                             </div>
                           ),
                           thead: ({ children, ...props }) => (
-                            <thead {...props} className="bg-gray-50">{children}</thead>
+                            <thead {...props} className="bg-transparent">{children}</thead>
                           ),
                           tbody: ({ children, ...props }) => (
-                            <tbody {...props} className="bg-white">{children}</tbody>
+                            <tbody {...props} className="bg-transparent">{children}</tbody>
                           ),
                           tr: ({ children, ...props }) => (
-                            <tr {...props} className="even:bg-gray-50">{children}</tr>
+                            <tr {...props} className="">{children}</tr>
                           ),
                           th: ({ children, ...props }) => (
                             <th {...props} className="border border-gray-300 px-2 py-1 text-left font-semibold">
@@ -451,7 +451,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="px-3 py-2 rounded-2xl bg-gray-100 text-gray-700 text-sm shadow-sm">
+                  <div className="px-3 py-2 rounded-2xl bg-transparent text-gray-700 text-sm shadow-sm border border-gray-300">
                     <span className="inline-flex gap-1 items-center">
                       <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:-0.2s]" />
                       <span className="h-1.5 w-1.5 rounded-full bg-gray-400 animate-bounce" />
@@ -464,13 +464,13 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
             </div>
 
             {/* Input row */}
-            <form onSubmit={onSubmit} className="border-t border-gray-200 px-3 py-3 bg-white/80 backdrop-blur-md">
+            <form onSubmit={onSubmit} className="border-t border-gray-200 px-3 py-3 bg-transparent">
               <div className="flex items-center gap-2">
                 {/* $ mode toggle */}
                 <button
                   type="button"
                   onClick={() => setPayMode((v) => !v)}
-                  className={`h-9 w-9 rounded-lg border text-sm font-semibold transition-all ${payMode ? 'bg-blue-600 border-blue-600 text-white shadow-[0_0_0_2px_rgba(59,130,246,0.5)]' : 'bg-white border-blue-400 text-blue-600 hover:bg-blue-50'}`}
+                  className={`h-9 w-9 rounded-lg border text-sm font-semibold transition-all ${payMode ? 'bg-transparent border-blue-600 text-blue-600 shadow-[0_0_0_2px_rgba(59,130,246,0.5)]' : 'bg-transparent border-blue-400 text-blue-600 hover:bg-blue-50/30'}`}
                   title="Payment mode"
                   data-testid="ai-pay-toggle"
                   aria-pressed={payMode}
@@ -481,13 +481,13 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask GiveHub AI…"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-transparent"
                   data-testid="ai-input"
                 />
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 rounded-xl bg-white text-blue-600 border border-blue-500 font-medium shadow-sm hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 active:bg-blue-100 disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-transparent text-blue-600 border border-blue-500 font-medium shadow-sm hover:bg-blue-50/30 focus:outline-none focus:ring-2 focus:ring-blue-400 active:bg-blue-100/40 disabled:opacity-50"
                   data-testid="ai-send"
                 >
                   Send

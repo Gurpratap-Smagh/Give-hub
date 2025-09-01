@@ -53,7 +53,9 @@ function loadFromEnv(): { byChain: ByChain; tokens: Token[] } {
     }
     return { byChain: parsed as ByChain, tokens };
   } catch (e) {
-    console.error("Failed to parse NEXT_PUBLIC_ZRC20_TOKENS", e, { preview: (process.env.NEXT_PUBLIC_ZRC20_TOKENS || '').slice(0, 80) });
+    if (process.env.NODE_ENV === 'development') {
+      console.error("Failed to parse NEXT_PUBLIC_ZRC20_TOKENS", e, { preview: (process.env.NEXT_PUBLIC_ZRC20_TOKENS || '').slice(0, 80) });
+    }
     return { byChain: {}, tokens: [] };
   }
 }

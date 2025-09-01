@@ -8,6 +8,7 @@ export type TokenMeta = {
   decimals: number;
   name: string;
   icon?: string;
+  usdValue?: number; // USD value per token for display
 };
 
 let __tokens: TokenMeta[] | null = null;
@@ -56,7 +57,7 @@ function parseEnvTokens(): TokenMeta[] {
     for (const [chain, arr] of Object.entries(parsed)) {
       const items = Array.isArray(arr) ? arr : [];
       for (const it of items) {
-        const item = it as { address?: unknown; symbol?: unknown; decimals?: unknown; icon?: unknown };
+        const item = it as { address?: unknown; symbol?: unknown; decimals?: unknown; icon?: unknown; usdValue?: unknown };
         const address = typeof item.address === 'string' ? item.address.toLowerCase() : '';
         if (!address || address.length !== 42) continue;
         const symbol = typeof item.symbol === 'string' && item.symbol.trim() ? item.symbol.trim() : 'TOKEN';
@@ -65,12 +66,14 @@ function parseEnvTokens(): TokenMeta[] {
           ? Number(decimalsRaw)
           : (/USDC|USDT/i.test(symbol) ? 6 : 18);
         const icon = item.icon as string | undefined;
+        const usdValue = typeof item.usdValue === 'number' ? item.usdValue : undefined;
         list.push({
           address,
           symbol,
           decimals,
           name: `${symbol} (${chain})`,
           icon,
+          usdValue,
         });
       }
     }

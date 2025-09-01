@@ -83,12 +83,6 @@ function buildInnerDonateNative(campaignId: number, donorName: string, note: str
   );
 }
 
-function buildInnerDonateToken(token: string, amount: bigint, campaignId: number, donorName: string, note: string): string {
-  return ethers.AbiCoder.defaultAbiCoder().encode(
-    ['address','uint256','uint256','string','string'],
-    [token, amount, campaignId, donorName, note]
-  );
-}
 
 /** Outer wrapper expected by onCall: (string action, bytes inner) */
 function encodeGatewayMessage(action: 'donate_native' | 'donate_token', inner: string): string {
@@ -153,16 +147,12 @@ async function getWalletProvider(): Promise<{ provider: BrowserProvider; signer:
  */
 export async function payFromSourceChain(params: CrossChainPaymentParams): Promise<string> {
   const { campaignId, donorName, note, amount, sourceChain, tokenAddress, onStatusUpdate } = params;
-
-  // Get environment variables
-  const gatewayAddress = process.env.NEXT_PUBLIC_GATEWAY_SEPOLIA;
-  const receiverAddress = process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT;
-
-  if (!gatewayAddress || !receiverAddress) {
-    throw new Error('Missing gateway or receiver contract address');
-  }
-
+  
   onStatusUpdate?.(`Switching to ${sourceChain === 'sepolia' ? 'Ethereum Sepolia' : sourceChain}...`);
+
+  // Always use Sepolia gateway for cross-chain
+  const gatewayAddress = process.env.NEXT_PUBLIC_GATEWAY_SEPOLIA || '';
+  const receiverAddress = process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT || '';
   
   // Switch to source chain
   if (sourceChain === 'sepolia') {
@@ -222,6 +212,9 @@ export async function payFromSourceChain(params: CrossChainPaymentParams): Promi
       }
       
       onStatusUpdate?.('Confirming ERC-20 payment...');
+      // Build message payload for token donation
+      const inner = buildInnerDonateNative(campaignId, donorName, note);
+      const message = encodeGatewayMessage('donate_token', inner);
       const tx = await gateway.depositAndCall(
         receiverAddress,
         tokenAmount,

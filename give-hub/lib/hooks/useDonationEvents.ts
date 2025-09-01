@@ -90,6 +90,8 @@ export function useDonationEvents(
   const seen = useRef<Set<string>>(new Set());
   const loadingBackfill = useRef(false);
   const lastBlockRef = useRef<number | null>(null);
+  const restartCount = useRef(0);
+  const restartTimer = useRef<NodeJS.Timeout | null>(null);
 
   const iface = useMemo(() => new ethers.Interface(CROWDFUND_ABI), []);
   const topic0 = useMemo(
@@ -164,10 +166,7 @@ export function useDonationEvents(
     let alive = true;
     (async () => {
       if (!enabled) return;
-      // Pause during in-flight donation to avoid getLogs interference
-      try {
-        if (typeof window !== 'undefined' && sessionStorage.getItem('DONATION_INFLIGHT') === '1') return;
-      } catch {}
+      // Always run backfill for consistent websocket behavior
       if (loadingBackfill.current) return;
       loadingBackfill.current = true;
       setIsLoading(true);
@@ -183,10 +182,6 @@ export function useDonationEvents(
         const maxRange = Math.min(step ?? 400, 400);
 
         for (let from = start; from <= latest; from += (maxRange + 1)) {
-          // Re-check in-flight flag between chunks
-          try {
-            if (typeof window !== 'undefined' && sessionStorage.getItem('DONATION_INFLIGHT') === '1') break;
-          } catch {}
           const to = Math.min(latest, from + maxRange);
           let logs: ethers.Log[] = [];
           try {
@@ -248,22 +243,13 @@ export function useDonationEvents(
     async function poll() {
       try {
         if (!mounted || !enabled || !rpcUrl || !contractAddress) return;
-        // Skip polling while a donation tx is in-flight
-        try {
-          if (typeof window !== 'undefined' && sessionStorage.getItem('DONATION_INFLIGHT') === '1') {
-            return;
-          }
-        } catch {}
+        // Always poll for consistent websocket behavior
         const latest = await http.getBlockNumber();
         const maxRange = Math.min(step ?? 400, 400);
         let from = (lastBlockRef.current ?? Math.max(0, latest - maxRange)) + 1;
         if (from > latest) return;
 
         while (from <= latest && mounted) {
-          // Re-check before each chunk
-          try {
-            if (typeof window !== 'undefined' && sessionStorage.getItem('DONATION_INFLIGHT') === '1') return;
-          } catch {}
           const to = Math.min(latest, from + maxRange);
           let logs: ethers.Log[] = [];
           try {
@@ -333,9 +319,46 @@ export function useDonationEvents(
     return () => {
       mounted = false;
       if (currentPollTimer) clearTimeout(currentPollTimer);
+      if (restartTimer.current) clearTimeout(restartTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topic0, topic1, expectedCidStr, enabled, lastBlockRef.current]);
+
+  // Restart mechanism - if no events after 20s, restart up to 3 times
+  useEffect(() => {
+    if (!enabled || events.length > 0) {
+      // Clear restart timer if we have events or disabled
+      if (restartTimer.current) {
+        clearTimeout(restartTimer.current);
+        restartTimer.current = null;
+      }
+      restartCount.current = 0;
+      return;
+    }
+
+    // Start restart timer if no events and haven't exceeded retry limit
+    if (restartCount.current < 3 && !restartTimer.current) {
+      restartTimer.current = setTimeout(() => {
+        restartCount.current++;
+        console.log(`[useDonationEvents] Restarting websocket connection (attempt ${restartCount.current}/3)`);
+        
+        // Reset state to trigger reconnection
+        setIsLoading(true);
+        seen.current.clear();
+        lastBlockRef.current = null;
+        loadingBackfill.current = false;
+        
+        restartTimer.current = null;
+      }, 20000);
+    }
+
+    return () => {
+      if (restartTimer.current) {
+        clearTimeout(restartTimer.current);
+        restartTimer.current = null;
+      }
+    };
+  }, [enabled, events.length]);
 
   return { events, error, isLoading };
 }
