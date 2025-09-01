@@ -117,8 +117,9 @@ export async function ensureChain(chainHex: string) {
 
 /**
  * Sepolia → ZEVM payment: native (zETH) or ERC-20 (USDC) via Gateway.depositAndCall
- * IMPORTANT: `message` must be abi.encode("donate", abi.encode(campaignId, donorName, note))
- * The ZEVM will pass (zrc20, amount) into your onCall; don't include them in `message`.
+ * IMPORTANT: `message` must match the ZEVM receiver contract expectations:
+ *  - Native path:  abi.encode("donate_native", abi.encode(uint256 campaignId, string donorName, string note))
+ *  - ERC-20 path:  abi.encode("donate_token",  abi.encode(address zrc20, uint256 amount, uint256 campaignId, string donorName, string note))
  */
 export async function payFromSepolia(params: {
   receiver: string;            // ZEVM CrossChainCrowdfund

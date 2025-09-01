@@ -6,28 +6,33 @@ export const DONATION_ABI = [
   "event CampaignCreated(uint256 indexed campaignId, address indexed creator, address preferredZRC20)",
   
   // Core donation functions
-  "function donateNative(uint256 campaignId, string calldata donorName, string calldata note) external payable",
-  "function donateZRC20(address token, uint256 amount, uint256 campaignId, string calldata donorName, string calldata note) external",
+  "function donateNative(uint256 campaignId, string donorName, string note) external payable",
+  "function donateZRC20(address token, uint256 amount, uint256 campaignId, string donorName, string note) external",
   
   // Campaign functions  
   "function createCampaign(address preferredZRC20) external returns (uint256 campaignId)",
-  "function pauseCampaign(uint256 campaignId) external",
-  "function resumeCampaign(uint256 campaignId) external",
+  "function updateCampaignPayoutToken(uint256 campaignId, address newToken) external",
   
-  // ZRC20 callback
-  "function onZRC20Received(address zrc20, address from, uint256 amount, bytes calldata data) external returns (bytes4)",
+  // Universal entry (gateway -> contract) exists on the contract but is never called by the frontend.
+  // Intentionally omitted here to avoid brittle tuple type mismatches for MessageContext.
   
   // View functions
   "function campaigns(uint256) external view returns (address creator, address preferredZRC20, bool active)",
-  "function contributions(uint256) external view returns (uint256 campaignId, address donor, address originalToken, address zrc20Received, uint256 originalAmount, uint256 convertedAmount, uint64 originChainId, uint64 timestamp, string memory originChainName)",
+  "function contributions(uint256) external view returns (uint256 campaignId, address donor, address originalToken, address zrc20Received, uint256 originalAmount, uint256 convertedAmount, uint256 originChainId, uint64 timestamp, string originChainName)",
   "function nextCampaignId() external view returns (uint256)",
   "function nextContributionId() external view returns (uint256)",
+  "function getCampaignInfo(uint256 campaignId) external view returns (tuple(uint256 campaignId, address creator, address preferredZRC20, bool active) info)",
+  "function getAllSyncedCampaigns(uint256 startId, uint256 limit) external view returns (tuple(uint256 campaignId, address creator, address preferredZRC20, bool active)[] infos, uint256 nextStart)",
   
   // System contracts
   "function WZETA() external view returns (address)",
   "function ethZRC20() external view returns (address)",
   "function btcZRC20() external view returns (address)", 
-  "function usdcZRC20() external view returns (address)"
+  "function usdcZRC20() external view returns (address)",
+  
+  // Router admin
+  "function setUniswapRouter(address _router) external",
+  "function router() external view returns (address)"
 ] as const;
 
 // Type for the ContributionReceived event

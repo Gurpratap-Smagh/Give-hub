@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { authMiddleware } from '@/lib/auth'
 
 type Token = { symbol: string; address: string }
 type ByChain = Record<string, Token[]>
@@ -75,16 +74,9 @@ function parseZrc20(raw: string | undefined): ByChain {
   return byChain
 }
 
-// Secure token options endpoint - contains contract addresses
-export const GET = authMiddleware(async () => {
+// Public token options endpoint - these addresses are already public on-chain
+export async function GET() {
   const raw = process.env.ZRC20_TOKENS || process.env.NEXT_PUBLIC_ZRC20_TOKENS;
   const byChain = parseZrc20(raw);
-
-  // Inject native zETH for Sepolia cross-chain donations, as it's not a ZRC-20
-  if (!byChain['SEPOLIA']) byChain['SEPOLIA'] = [];
-  if (!byChain['SEPOLIA'].some(t => t.symbol === 'zETH')) {
-    byChain['SEPOLIA'].unshift({ symbol: 'zETH', address: '0x0000000000000000000000000000000000000000' });
-  }
-
   return NextResponse.json({ byChain });
-})
+}

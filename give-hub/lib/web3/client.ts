@@ -103,6 +103,7 @@ export async function getReadOnlyProvider(): Promise<ethers.AbstractProvider> {
       'Missing NEXT_PUBLIC_ZETA_RPC_URL (or NEXT_PUBLIC_ZETA_RPC_HTTP) for read-only provider'
     );
   }
+  try { console.debug('[web3] read-only RPC:', rpcUrl); } catch {}
   return new ethers.JsonRpcProvider(rpcUrl);
 }
 
@@ -300,11 +301,30 @@ export async function getContract(signer?: ethers.Signer, readOnly?: boolean) {
       // non-fatal; we validate code presence below
     }
   }
+  // Log provider network for diagnostics
+  try {
+    const net = await provider.getNetwork();
+    console.debug('[web3] provider chainId:', Number(net.chainId));
+  } catch {}
+
   // Validate there is contract code at the address on the current network
-  const code = await provider.getCode(dep.address);
+  let code = await provider.getCode(dep.address);
+  if (!code || code === "0x" || code === "0x00") {
+    // Fallback: retry using read-only RPC in case the current provider is on the wrong chain
+    console.warn('[web3] No code via current provider. Retrying with read-only RPC…');
+    try {
+      const ro = await getReadOnlyProvider();
+      const roCode = await ro.getCode(dep.address);
+      if (roCode && roCode !== '0x' && roCode !== '0x00') {
+        console.debug('[web3] code found via read-only RPC; proceeding');
+        provider = ro;
+        code = roCode;
+      }
+    } catch {}
+  }
   if (!code || code === "0x" || code === "0x00") {
     throw new Error(
-      `No contract code at ${dep.address} on current network. Check chain switch and address (expected chainId=${dep.chainId}).`
+      `No contract code at ${dep.address} on any provider. Check chain switch and address (expected chainId=${dep.chainId}).`
     );
   }
   console.debug("[web3] using contract address:", dep.address);
@@ -569,13 +589,20 @@ export async function getCampaignsByCreator(
   const topic0 = ethers.id("CampaignCreated(uint256,address,address)");
   const topicCreator = ethers.zeroPadValue(creatorAddress, 32); // creator is the 2nd indexed arg (topic2)
   
-  const logs = await provider.getLogs({ 
-    address: dep.address, 
-    fromBlock, 
-    toBlock: latest, 
-    // topic1 corresponds to campaignId (indexed), which we don't filter by here
-    topics: [topic0, null, topicCreator] 
-  });
+  // Fetch logs in safe chunks of 400 blocks
+  const CHUNK = 400;
+  let logs: ethers.Log[] = [];
+  for (let f = fromBlock; f <= latest; f += CHUNK) {
+    const t = Math.min(latest, f + CHUNK - 1);
+    const part = await provider.getLogs({
+      address: dep.address,
+      fromBlock: f,
+      toBlock: t,
+      // topic1 corresponds to campaignId (indexed), which we don't filter by here
+      topics: [topic0, null, topicCreator],
+    });
+    if (part?.length) logs = logs.concat(part);
+  }
   
   const campaigns: { campaignId: bigint; creator: string; preferredZRC20: string }[] = [];
   
@@ -622,12 +649,19 @@ export async function getCampaignDonations(
   const topic0 = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)");
   const topic1 = ethers.zeroPadValue(ethers.toBeHex(campaignId), 32); // campaignId is indexed
   
-  const logs = await provider.getLogs({ 
-    address: dep.address, 
-    fromBlock, 
-    toBlock: latest, 
-    topics: [topic0, topic1] 
-  });
+  // Fetch logs in safe chunks of 400 blocks
+  const CHUNK = 400;
+  let logs: ethers.Log[] = [];
+  for (let f = fromBlock; f <= latest; f += CHUNK) {
+    const t = Math.min(latest, f + CHUNK - 1);
+    const part = await provider.getLogs({
+      address: dep.address,
+      fromBlock: f,
+      toBlock: t,
+      topics: [topic0, topic1],
+    });
+    if (part?.length) logs = logs.concat(part);
+  }
   
   const donations: {
     contributionId: bigint;
@@ -705,24 +739,29 @@ export async function getCampaignDonationsBetween(
   // Use read-only provider to avoid wallet dependency
   const provider = await getReadOnlyProvider();
   const dep = await fetchDeployment();
-  // Validate and clamp block range to avoid RPC 400 errors
+  // Validate inputs and compute range
   const chainLatest = await provider.getBlockNumber();
   const end = Math.min(toBlock ?? chainLatest, chainLatest);
-  const MAX_RANGE = 5000; // conservative window to limit log scans
-  let start = Math.max(0, Math.min(fromBlock, end));
-  if (end - start > MAX_RANGE) start = end - MAX_RANGE;
+  const start = Math.max(0, Math.min(fromBlock, end));
   const iface = new ethers.Interface(CrossChainCrowdfundABI);
 
   // Filter by ContributionReceived events for this campaign
   const topic0 = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)");
   const topic1 = ethers.zeroPadValue(ethers.toBeHex(campaignId), 32); // campaignId is indexed
 
-  const logs = await provider.getLogs({
-    address: dep.address,
-    fromBlock: start,
-    toBlock: end,
-    topics: [topic0, topic1],
-  });
+  // Fetch logs in safe chunks of 400 blocks
+  const CHUNK = 400;
+  let logs: ethers.Log[] = [];
+  for (let f = start; f <= end; f += CHUNK) {
+    const t = Math.min(end, f + CHUNK - 1);
+    const part = await provider.getLogs({
+      address: dep.address,
+      fromBlock: f,
+      toBlock: t,
+      topics: [topic0, topic1],
+    });
+    if (part?.length) logs = logs.concat(part);
+  }
 
   const donations: {
     contributionId: bigint;

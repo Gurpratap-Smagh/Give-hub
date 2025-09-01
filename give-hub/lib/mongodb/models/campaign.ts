@@ -47,5 +47,7 @@ const CampaignSchema = new Schema({
 }, { collection: 'campaigns', timestamps: true });
 
 CampaignSchema.index({ title: 'text', description: 'text', category: 'text' });
+// Ensure uniqueness for on-chain mapping when present (sparse avoids conflicts when onChain is missing)
+CampaignSchema.index({ 'onChain.chainId': 1, 'onChain.contract': 1, 'onChain.campaignId': 1 }, { unique: true, sparse: true });
 
 export const CampaignModel = models.Campaign || model('Campaign', CampaignSchema);

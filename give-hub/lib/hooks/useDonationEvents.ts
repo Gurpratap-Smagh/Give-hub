@@ -30,6 +30,7 @@ const contractAddress =
   process.env.NEXT_PUBLIC_DONATION_CONTRACT ||
   '';
 const CHAIN_ID = Number(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || 7001);
+const DISABLE_EVENTS = String(process.env.NEXT_PUBLIC_DISABLE_DONATION_EVENTS || '').toLowerCase() === 'true';
 
 // ---------- helpers ----------
 function toTopic1IfNumeric(id: string | number | undefined | null) {
@@ -80,7 +81,7 @@ export type DonationEvent = {
 export function useDonationEvents(
   targetCampaignId?: string | number,
   lookbackBlocks = 20_000,
-  step = 300,
+  step = 400,
   options?: { enabled?: boolean }
 ) {
   const [events, setEvents] = useState<DonationEvent[]>([]);
@@ -97,7 +98,7 @@ export function useDonationEvents(
   );
   const topic1 = useMemo(() => toTopic1IfNumeric(targetCampaignId), [targetCampaignId]);
 
-  const enabled = useMemo(() => options?.enabled !== false, [options?.enabled]);
+  const enabled = useMemo(() => options?.enabled !== false && !DISABLE_EVENTS, [options?.enabled]);
 
   // Only apply in-memory filtering by campaignId when the prop is numeric
   const expectedCidStr = useMemo(() => {
@@ -163,6 +164,10 @@ export function useDonationEvents(
     let alive = true;
     (async () => {
       if (!enabled) return;
+      // Pause during in-flight donation to avoid getLogs interference
+      try {
+        if (typeof window !== 'undefined' && sessionStorage.getItem('DONATION_INFLIGHT') === '1') return;
+      } catch {}
       if (loadingBackfill.current) return;
       loadingBackfill.current = true;
       setIsLoading(true);
@@ -174,10 +179,14 @@ export function useDonationEvents(
         // Use read-only provider to avoid any wallet connection prompts
         const latest = await http.getBlockNumber();
         const start = Math.max(0, latest - lookbackBlocks);
-        // hard-cap the range to stay well below common provider limits (<=500)
-        const maxRange = Math.min(step ?? 300, 300);
+        // hard-cap the range to stay well below common provider limits (<=400)
+        const maxRange = Math.min(step ?? 400, 400);
 
         for (let from = start; from <= latest; from += (maxRange + 1)) {
+          // Re-check in-flight flag between chunks
+          try {
+            if (typeof window !== 'undefined' && sessionStorage.getItem('DONATION_INFLIGHT') === '1') break;
+          } catch {}
           const to = Math.min(latest, from + maxRange);
           let logs: ethers.Log[] = [];
           try {
@@ -239,12 +248,22 @@ export function useDonationEvents(
     async function poll() {
       try {
         if (!mounted || !enabled || !rpcUrl || !contractAddress) return;
+        // Skip polling while a donation tx is in-flight
+        try {
+          if (typeof window !== 'undefined' && sessionStorage.getItem('DONATION_INFLIGHT') === '1') {
+            return;
+          }
+        } catch {}
         const latest = await http.getBlockNumber();
-        const maxRange = Math.min(step ?? 300, 300);
+        const maxRange = Math.min(step ?? 400, 400);
         let from = (lastBlockRef.current ?? Math.max(0, latest - maxRange)) + 1;
         if (from > latest) return;
 
         while (from <= latest && mounted) {
+          // Re-check before each chunk
+          try {
+            if (typeof window !== 'undefined' && sessionStorage.getItem('DONATION_INFLIGHT') === '1') return;
+          } catch {}
           const to = Math.min(latest, from + maxRange);
           let logs: ethers.Log[] = [];
           try {

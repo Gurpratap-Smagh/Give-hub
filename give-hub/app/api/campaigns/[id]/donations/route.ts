@@ -93,6 +93,21 @@ export async function POST(
       )
     }
 
+    // Dev logging to surface on-chain mapping and linkage
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[donations] Incoming donation', {
+        campaignId,
+        amount,
+        chain,
+        donorName,
+        hasOnChain: !!campaign.onChain,
+        onchainId: campaign.onChain?.campaignId ?? null,
+      })
+      if (chain.toLowerCase().includes('zeta') && !campaign.onChain) {
+        console.warn('[donations] Donation on Zeta-like chain but campaign lacks onChain mapping. Verify creation persisted onChain.campaignId and onchainId for campaign', campaignId)
+      }
+    }
+
     // Check if campaign supports the selected chain when defined
     const supportedChains: string[] = Array.isArray(campaign.chains) ? campaign.chains : []
     if (supportedChains.length > 0 && !supportedChains.includes(chain)) {

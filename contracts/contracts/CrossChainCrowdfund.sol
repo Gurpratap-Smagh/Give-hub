@@ -2,17 +2,14 @@
 pragma solidity ^0.8.26;
 
 /**
- * CrossChainCrowdfund — Debugged, no OpenZeppelin deps, WZETA-only payouts, NO withdraw
- * Flow:
- *   inbound (ZRC-20/native) -> (optional) swap -> WZETA -> transfer to creator (ZEVM)
- * Notes:
- * - Uses Zeta SystemContract gateway check (msg.sender must be SystemContract).
- * - Detailed Debug* events to trace onCall, decode, router checks, approvals, swap plan/result, transfers, records.
- * - Enforces WZETA-only payout at contract level.
+ * CrossChainCrowdfund — Universal Contract for cross-chain donations
+ * Follows ZetaChain Universal Contract pattern with proper gateway integration
  */
 
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol";
+import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /*//////////////////////////////////////////////////////////////
                     Minimal interfaces / utils
@@ -152,9 +149,8 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
   /*------------------------------ STORAGE ------------------------------*/
 
-  SystemContract public immutable systemContract;
+  address public immutable gateway;
 
-  // creators mapping removed (redundant with campaigns mapping)
   mapping(uint256 => Campaign) public campaigns;
   mapping(uint256 => Contribution) public contributions;
 
@@ -162,7 +158,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   uint256 public nextContributionId;
 
   // Token labeling
-  mapping(address => string) public tokenLabel; // e.g. "zETH.Sepolia", "USDC.Sepolia", "WZETA"
+  mapping(address => string) public tokenLabel;
   
   address public immutable WZETA;
   address public immutable ethZRC20;
@@ -203,24 +199,22 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   }
 
   /*---------------------------- CONSTRUCTOR ----------------------------*/
-
   constructor(
-    address _systemContract,
+    address _gateway,
     address _wzeta,
     address _ethZRC20,
     address _btcZRC20,
     address _usdcZRC20
   ) {
     if (
-      _systemContract == address(0) ||
+      _gateway == address(0) ||
       _wzeta == address(0) ||
       _ethZRC20 == address(0) ||
       _btcZRC20 == address(0)
     ) revert InvalidToken();
 
-    systemContract = SystemContract(_systemContract);
-    WZETA  = _wzeta;
-
+    gateway = _gateway;
+    WZETA = _wzeta;
     ethZRC20 = _ethZRC20;
     btcZRC20 = _btcZRC20;
     usdcZRC20 = _usdcZRC20;
@@ -259,26 +253,67 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   }
 
   /*--------------------------- UNIVERSAL ENTRY --------------------------*/
+  
+  modifier onlyGateway() {
+    require(msg.sender == gateway, "OnlyGateway");
+    _;
+  }
 
-  event debugger(address sender);
+  /**
+   * @notice Universal Contract onCall function - receives cross-chain calls
+   * @param context Message context from the gateway
+   * @param zrc20 The ZRC-20 token address (if any)
+   * @param amount The amount of tokens received
+   * @param message The encoded message data
+   */
   function onCall(
-    MessageContext calldata ctx,
-    address zrc20,
-    uint256 amount,
-    bytes calldata message
-  ) external override {
-    if (msg.sender != address(systemContract)) revert OnlySystem();
-    if (debug) emit DebugOnCallEntered(ctx.sender, ctx.chainID, zrc20, amount);
+      MessageContext calldata context,
+      address zrc20,
+      uint256 amount,
+      bytes calldata message
+  ) external override onlyGateway {
+      (string memory action, bytes memory data) = abi.decode(message, (string, bytes));
 
-    (string memory action, bytes memory data) = abi.decode(message, (string, bytes));
-    if (keccak256(bytes(action)) != keccak256("donate")) revert UnknownAction();
+      if (debug) {
+          emit DebugOnCallEntered(context.sender, context.chainID, zrc20, amount);
+      }
 
-    (uint256 campaignId, string memory donorName, string memory note) =
-      abi.decode(data, (uint256, string, string));
+      if (keccak256(bytes(action)) == keccak256("donate_native")) {
+          // For native deposits: zrc20 is the *wrapped* native (e.g. zETH) contract on ZetaChain.
+          // The gateway already minted zETH to this UC.
+          (uint256 campaignId, string memory donorName, string memory note) =
+              abi.decode(data, (uint256, string, string));
 
-    if (debug) emit DebugDecodedDonate(campaignId, donorName, note);
+          if (debug) emit DebugDecodedDonate(campaignId, donorName, note);
 
-    _handleDonation(ctx, zrc20, amount, campaignId, donorName, note);
+          _handleDonation(
+              context,
+              zrc20,        // zETH address from gateway
+              amount,       // amount of zETH received
+              campaignId,
+              donorName,
+              note
+          );
+
+      } else if (keccak256(bytes(action)) == keccak256("donate_token")) {
+          // For ERC20→ZRC20 deposits
+          (address sourceToken, uint256 sourceAmount, uint256 campaignId, string memory donorName, string memory note) =
+              abi.decode(data, (address, uint256, uint256, string, string));
+
+          if (debug) emit DebugDecodedDonate(campaignId, donorName, note);
+
+          _handleDonation(
+              context,
+              zrc20,        // zUSDC or other ZRC20 minted on ZetaChain
+              amount,       // amount of zToken received
+              campaignId,
+              donorName,
+              note
+          );
+
+      } else {
+          revert UnknownAction();
+      }
   }
 
   /*------------------------- CAMPAIGN MANAGEMENT ------------------------*/
@@ -327,7 +362,6 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     string memory note
   ) internal {
     if (amount == 0) revert AmountZero();
-    if (!allowedInTokens[zrc20In]) revert InvalidToken();
 
     Campaign storage campaign = campaigns[campaignId];
     if (campaign.creator == address(0)) revert InvalidCampaign();
@@ -337,22 +371,30 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
     if (debug) emit DebugDonationBegin(campaignId, campaign.creator, zrc20In, amount);
 
-    // Route to campaign's chosen payout token
-    address tokenOut = campaign.preferredZRC20;
-    uint256 amountOut = _swapExactViaPath(zrc20In, tokenOut, amount);
+    // Handle native coin deposits vs ZRC-20 token deposits
+    uint256 amountOut;
+    address tokenOut;
+    address actualTokenIn;
+
+    if (zrc20In == address(0)) {
+        // This branch is no longer used, but keep for safety
+        revert InvalidToken();
+    } else {
+        actualTokenIn = zrc20In;
+        tokenOut = campaign.preferredZRC20;
+        amountOut = _swapExactViaPath(actualTokenIn, tokenOut, amount);
+    }
 
     if (debug) emit DebugTransferOut(tokenOut, campaign.creator, amountOut);
     IERC20Minimal(tokenOut).safeTransfer(campaign.creator, amountOut);
 
-    string memory chainName = bytes(tokenLabel[zrc20In]).length == 0
-      ? "ZetaChain"
-      : tokenLabel[zrc20In];
+    string memory chainName = _getChainName(ctx.chainID);
 
     uint256 id = ++nextContributionId;
     contributions[id] = Contribution({
       campaignId: campaignId,
       donor: donorAddress,
-      originalToken: zrc20In,
+      originalToken: actualTokenIn,
       zrc20Received: tokenOut,
       originalAmount: amount,
       convertedAmount: amountOut,
@@ -367,7 +409,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
       campaignId,
       donorAddress,
       id,
-      zrc20In,
+      actualTokenIn,
       amount,
       amountOut,
       chainName,
@@ -518,8 +560,8 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
       path[1] = tokenOut;
     }
     
-    uint[] memory amounts = router.getAmountsOut(amountIn, path);
-    uint256 minOut = (amounts[amounts.length - 1] * (10_000 - slippageBps)) / 10_000;
+    uint[] memory quotes = router.getAmountsOut(amountIn, path);
+    uint256 minOut = (quotes[quotes.length - 1] * (10_000 - slippageBps)) / 10_000;
 
     if (debug) emit DebugApproveReset(tokenIn, 0);
     IERC20Minimal(tokenIn).safeApprove(address(router), 0);
@@ -534,8 +576,8 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
       path,
       address(this),
       block.timestamp + 600
-    ) returns (uint[] memory amounts) {
-      amountOut = amounts[amounts.length - 1];
+    ) returns (uint[] memory returnAmounts) {
+      amountOut = returnAmounts[returnAmounts.length - 1];
       if (debug) emit DebugSwapSucceeded(amountOut);
       
       // Clean up approval after swap
@@ -641,6 +683,14 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   function _deriveDonorAddress(MessageContext calldata ctx) internal pure returns (address) {
     // ctx.sender is bytes (origin address payload). Derive a stable pseudo-address for logs/accounting.
     return address(uint160(uint256(keccak256(abi.encodePacked(ctx.sender, ctx.chainID)))));
+  }
+
+  function _getChainName(uint256 chainId) internal pure returns (string memory) {
+    if (chainId == 11155111) return "Ethereum Sepolia";
+    if (chainId == 80001) return "Polygon Mumbai";
+    if (chainId == 97) return "BSC Testnet";
+    if (chainId == 7001) return "ZetaChain Athens";
+    return "Unknown Chain";
   }
 
   /// Reject plain native transfers — must call donateNative()

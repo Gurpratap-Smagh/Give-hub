@@ -1,10 +1,14 @@
 // scripts/deploy-crosschain.ts
-import * as dotenv from "dotenv";
+const dotenv = require('dotenv');
 dotenv.config();
 
-import hardhat from "hardhat";
-const hre: any = hardhat;
-const { ethers, artifacts } = hre;
+console.log('Starting deployment script...');
+
+const hre = require('hardhat');
+console.log('Loaded hardhat runtime:', Object.keys(hre));
+
+const { ethers } = hre;
+console.log('Got ethers from hre:', !!ethers);
 
 function req(name: string): string {
   const v = process.env[name];
@@ -59,8 +63,8 @@ async function main() {
   const BTC_ZRC20 = opt("BTC_ZRC20");
   const USDC_ZRC20 = opt("USDC_ZRC20");
 
-  const provider = new ethers.JsonRpcProvider(RPC);
-  const wallet = new ethers.Wallet(PK, provider);
+  const [deployer] = await ethers.getSigners();
+  const provider = deployer.provider;
   const net = await provider.getNetwork();
 
   console.log(`\nChainId: ${net.chainId}`);
@@ -87,7 +91,7 @@ async function main() {
   }
 
   // --- Inspect constructor to build args dynamically ---
-  const artifact = await artifacts.readArtifact("CrossChainCrowdfund");
+  const artifact = await hre.artifacts.readArtifact("CrossChainCrowdfund");
   const abi = artifact.abi as any[];
 
   const ctor = abi.find((e) => e.type === "constructor");
@@ -147,7 +151,7 @@ async function main() {
       // if constructor param is an address and we still don't have a value, use zero and warn
       if (inp.type === "address") {
         console.warn(`⚠️  No env found for constructor param '${key}', using ZeroAddress`);
-        val = ethers.ZeroAddress;
+        val = "0x0000000000000000000000000000000000000000";
       } else {
         throw new Error(`No value for constructor param '${key}' and cannot default.`);
       }
@@ -156,7 +160,7 @@ async function main() {
   }
 
   // --- Create factory with signer ---
-  const Crowdfund = await ethers.getContractFactory("CrossChainCrowdfund", wallet);
+  const Crowdfund = await ethers.getContractFactory("CrossChainCrowdfund");
 
   // --- Build deploy tx first (so we can send manually and handle flaky receipts) ---
   const deployTxUnsigned = await Crowdfund.getDeployTransaction(...args);
@@ -175,7 +179,7 @@ async function main() {
   }
 
   console.log("\nDeploying CrossChainCrowdfund...");
-  const sent = await wallet.sendTransaction(deployTxUnsigned);
+  const sent = await deployer.sendTransaction(deployTxUnsigned);
   console.log(`tx: ${sent.hash}`);
 
   // --- Robust wait ---

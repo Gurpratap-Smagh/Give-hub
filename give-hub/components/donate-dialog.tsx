@@ -24,7 +24,6 @@ import { Card } from './card' // ACCESS: Base card component for consistent styl
 import { ChainChips } from './chain-chips' // ACCESS: Blockchain selection component
 import { formatCurrency } from '@/lib/utils/format' // ACCESS: Currency formatting utilities
 import { notify } from '@/lib/utils/notify'
-import { makeDonationOnContract } from '@/lib/services/contracts' // ACCESS: Contract interaction functions
 import type { Campaign } from '@/lib/db'
 
 /**
@@ -71,24 +70,11 @@ export function DonateDialog({ isOpen, onClose, campaign, selectedChain }: Donat
 
     setIsLoading(true)
     try {
-      // Resolve donor display name: prefer user input, fallback to logged-in username, then Anonymous
-      const nameToShow = (displayName || '').trim() || (user as UserWithUsername)?.username || 'Anonymous'
-      const finalMemo = memo?.trim()
-        ? `${memo.trim()} — Donor: ${nameToShow}`
-        : `Donor: ${nameToShow}`
-      await makeDonationOnContract({
-        campaignId: campaign.id,
-        amount: parsed,
-        chain: selectedChain,
-        memo: finalMemo,
-      })
-      notify(`Successfully donated $${parsed} via ${selectedChain}!`, 'success')
+      // This dialog is deprecated; donation flow is handled by the real payment modal.
+      // Removed mock contract call. Prevent false success and guide developers.
+      notify('DonateDialog is deprecated. Use the Payment Modal flow.', 'error')
       
-      // Reset form and close dialog
-      setAmount('')
-      setMemo('')
-      setDisplayName('')
-      onClose()
+      // Optional: keep UI state unchanged since no donation occurs
     } catch (error) {
       console.error('Donation failed:', error)
       const message = error instanceof Error ? error.message : 'Donation failed. Please try again.'

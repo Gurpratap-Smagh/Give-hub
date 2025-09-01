@@ -11,7 +11,7 @@ declare global {
   var __mongooseCache: MongooseCache | undefined;
 }
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://gurpratap2007:zjAXp18jZUygmdha@cluster0.josmz1h.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB = process.env.MONGODB_DB || 'givehub';
 
 export async function connectMongo() {
@@ -35,6 +35,17 @@ export async function connectMongo() {
     const socketTimeoutMS = Number(process.env.MONGO_SOCKET_TIMEOUT_MS || '20000');
     const connectTimeoutMS = Number(process.env.MONGO_CONNECT_TIMEOUT_MS || '10000');
     const maxPoolSize = Number(process.env.MONGO_MAX_POOL_SIZE || '10');
+
+    // Safe diagnostics (no credentials)
+    try {
+      if (process.env.NODE_ENV !== 'production' && MONGODB_URI) {
+        const u = new URL(MONGODB_URI);
+        // eslint-disable-next-line no-console
+        console.log(`[Mongo] Connecting to host=${u.host} db=${MONGODB_DB}`);
+      }
+    } catch {
+      // ignore URL parse issues
+    }
 
     global.__mongooseCache.promise = mongoose.connect(MONGODB_URI, {
       dbName: MONGODB_DB,

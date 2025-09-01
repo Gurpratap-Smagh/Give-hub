@@ -30,7 +30,3 @@ export async function editWithAI(input: string, instruction: string): Promise<st
   return data.text ?? "";
 }
 
-// Placeholder: recommendations (keep mock until a real recsys is implemented)
-export async function getPersonalizedRecommendations(_userId: string): Promise<string[]> {
-  return ["1", "3", "5"]; // TODO: replace with real personalization
-}

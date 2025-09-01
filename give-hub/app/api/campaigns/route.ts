@@ -115,6 +115,14 @@ export const POST = authMiddleware(async (req: AuthedRequest) => {
   try {
     const body = await req.json()
     const { title, imgSrc, description, category, goal, onChain, preferredToken } = body || {}
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('POST /api/campaigns received payload', {
+        hasOnChain: !!onChain,
+        title: !!title,
+        category: !!category,
+        hasGoal: goal !== undefined && goal !== null,
+      })
+    }
     if (!title || !category || goal === undefined || goal === null) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
     }
@@ -173,8 +181,22 @@ export const POST = authMiddleware(async (req: AuthedRequest) => {
       campaignData.onChain = { chainId, contract, campaignId }
       // Also persist numeric onchainId so the indexer can upsert to this document
       campaignData.onchainId = Number(campaignId)
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[campaigns] Persisting onChain mapping', {
+          chainId,
+          contract,
+          campaignId,
+          onchainId: campaignData.onchainId,
+        })
+      }
     }
 
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[campaigns] Creating campaign', {
+        hasOnChain: !!campaignData.onChain,
+        onchainId: campaignData.onchainId,
+      })
+    }
     const newCampaign = await db.createCampaign(campaignData)
     return NextResponse.json({ success: true, campaign: newCampaign }, { status: 201 })
   } catch (error) {

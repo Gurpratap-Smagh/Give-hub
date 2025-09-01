@@ -2,10 +2,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import FancySelect, { type FancyItem } from './FancySelect';
 
-type Token = { symbol: string; address: string };
+type Token = { symbol: string; address?: string };
+
 type ByChain = Record<string, Token[]>;
 
-type Picked = { chain: string; symbol: string; address: string; isNative?: boolean };
+type Picked = { chain: string; symbol: string; address?: string; isNative?: boolean };
 
 const CHAIN_LABEL: Record<string, string> = {
   ZETA: 'ZetaChain',
@@ -101,7 +102,14 @@ export default function TokenPicker({
     if (firstAvailable) setChain(firstAvailable);
   }, [chainList, chain, creatorMode]);
 
-  const tokens = useMemo(() => data[chain] ?? [], [data, chain]);
+  const tokens = useMemo(() => {
+    if (chain === 'SEPOLIA') {
+      // Include native ETH (no address) + ERC-20s from API except zETH
+      const erc20s = (data['SEPOLIA'] || []).filter(t => t.symbol.toUpperCase() !== 'ZETH');
+      return [{ symbol: 'ETH' }, ...erc20s];
+    }
+    return data[chain] ?? [];
+  }, [data, chain]);
   const hasTokens = tokens.length > 0;
 
   // Keep internal chain in sync with provided value to avoid overriding preselected tokens
@@ -127,15 +135,27 @@ export default function TokenPicker({
     if (!hasTokens) return [];
     const items: FancyItem[] = [];
     for (const t of tokens) {
-      items.push({ kind: 'option', key: t.symbol, label: t.symbol, value: t.symbol });
+      const isSepoliaNative = chain === 'SEPOLIA' && t.symbol === 'ETH';
+      items.push({ 
+        kind: 'option', 
+        key: t.symbol, 
+        label: isSepoliaNative ? 'ETH (native)' : t.symbol,
+        value: t.symbol 
+      });
     }
     return items;
-  }, [hasTokens, tokens]);
+  }, [hasTokens, tokens, chain]);
 
   // Auto select first token when chain changes and nothing chosen yet
   useEffect(() => {
     if (creatorMode) return; // Skip in creator mode
-    if (!value && chain && hasTokens) onChange({ chain, ...tokens[0] });
+    if (!value && chain && hasTokens) {
+      const firstToken = tokens[0];
+      const isSepoliaNative = chain === 'SEPOLIA' && firstToken.symbol === 'ETH' && firstToken.address === undefined;
+      const isZetaNative = firstToken.symbol === 'ZETA' && firstToken.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+      const isNative = isSepoliaNative || isZetaNative;
+      onChange({ chain, symbol: firstToken.symbol, address: isNative ? undefined : firstToken.address, isNative });
+    }
   }, [chain, hasTokens, tokens, value, onChange, creatorMode]);
 
   // Keep value coherent if chain changes
@@ -207,7 +227,7 @@ export default function TokenPicker({
                 const isNative = isNativeZeta || (
                   tok.symbol === 'ZETA' && tok.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
                 );
-                onChange({ chain: 'ZETA', ...tok, isNative });
+                onChange({ chain: 'ZETA', symbol: tok.symbol, address: isNative ? undefined : tok.address, isNative });
               }
             }}
             placeholder="Select token"
@@ -234,7 +254,11 @@ export default function TokenPicker({
             setChain(v);
             if (!creatorMode) {
               const list = data[v] ?? [];
-              if (list.length > 0) onChange({ chain: v, ...list[0] });
+              if (list.length > 0) {
+                const firstToken = list[0];
+                const isNative = firstToken.symbol === 'ZETA' && firstToken.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+                onChange({ chain: v, symbol: firstToken.symbol, address: isNative ? undefined : firstToken.address, isNative });
+              }
               else onChange({ chain: v, symbol: '', address: '' });
             }
           }
@@ -249,13 +273,21 @@ export default function TokenPicker({
       <FancySelect
         items={tokenItems}
         value={value?.symbol ?? ''}
-        onChange={(sym) => {
-          const tok = tokens.find(t => t.symbol === sym);
-          if (tok) {
-            const isNative = tok.symbol === 'ZETA' && 
-                              tok.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-            onChange({ chain, ...tok, isNative });
+        onChange={(symbol) => {
+          const handleTokenSelect = (symbol: string) => {
+            const token = tokens.find((t) => t.symbol === symbol);
+            if (!token) return;
+            const isSepoliaNative = chain === 'SEPOLIA' && token.symbol === 'ETH' && token.address === undefined;
+            const isZetaNative = token.symbol === 'ZETA' && token.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+            const isNative = isSepoliaNative || isZetaNative;
+            onChange({ 
+              chain, 
+              symbol: token.symbol, 
+              address: isNative ? undefined : token.address,
+              isNative
+            });
           }
+          handleTokenSelect(symbol);
         }}
         disabled={!hasTokens || creatorMode}
         placeholder={hasTokens ? 'Select token' : 'No tokens available'}

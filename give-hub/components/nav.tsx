@@ -1,6 +1,7 @@
 "use client"
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth/auth-context'
@@ -147,7 +148,7 @@ export function Nav() {
         <div className="flex items-center justify-between h-16">
           {/* Logo - Building Block: Brand identity */}
           <div className="flex items-center space-x-8">
-            <Link href="/" className="text-xl font-bold text-gray-900 focus:outline-none focus:ring-0">
+            <Link href="/" className="flex items-center gap-0.5 text-xl font-bold text-gray-900 focus:outline-none focus:ring-0">
               <span className="tracking-tight">Give</span>
               <span className="text-blue-600 tracking-tight">Hub</span>
             </Link>

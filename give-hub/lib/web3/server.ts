@@ -197,7 +197,7 @@ async function getServerCampaignCreatedEvents(
         const topic1 = ethers.zeroPadValue(ethers.toBeHex(BigInt(campaignId)), 32);
         
         // Query in chunks to avoid RPC timeouts (similar to useDonationEvents)
-        const CHUNK_SIZE = 300;
+        const CHUNK_SIZE = 400;
         let logs: ethers.Log[] = [];
         
         for (let chunk = fromBlock; chunk <= latestBlock; chunk += CHUNK_SIZE) {

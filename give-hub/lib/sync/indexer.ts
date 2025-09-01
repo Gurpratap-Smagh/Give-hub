@@ -20,7 +20,7 @@ function asNum18(v: bigint): number {
   return Number(ethers.formatUnits(v, 18))
 }
 
-export async function syncOnce(maxRange = 2_000): Promise<SyncResult> {
+export async function syncOnce(maxRange = 400): Promise<SyncResult> {
   const startedAt = Date.now()
   const syncId = Math.random().toString(36).slice(2, 8)
   const t = () => Date.now() - startedAt
