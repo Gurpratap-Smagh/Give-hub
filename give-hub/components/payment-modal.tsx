@@ -69,7 +69,7 @@ export default function PaymentModal({
 
   const { byChain, getNativeToken, getTokenByAddress } = useAvailableTokens();
   const [picked, setPicked] = useState<
-    { chain: string; symbol: string; address: string; isNative?: boolean } | undefined
+    { chain: string; symbol: string; address?: string; isNative?: boolean } | undefined
   >(undefined);
   const selectedToken: Token | undefined = picked?.isNative
     ? undefined
@@ -397,7 +397,7 @@ export default function PaymentModal({
             <label className="block text-sm font-semibold mb-2">Select token</label>
             <TokenPicker
               value={picked}
-              onChange={setPicked}
+              onChange={(v) => setPicked(v)}
               className="w-full"
               // Hide Sepolia ERC-20 ETH but keep native ETH visible for donations
               excludeSepoliaEthContract

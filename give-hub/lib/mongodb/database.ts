@@ -6,9 +6,9 @@ import { CampaignModel } from './models/campaign';
 // Import types from mock for compatibility
 import type { User, Creator, Campaign, Donation } from '@/lib/db';
 
-function toUser(doc: Record<string, unknown> | null): (User | Creator) | null {
+function toUser(doc: Record<string, any> | null): (User | Creator) | null {
   if (!doc) return null;
-  const base: Record<string, unknown> = {
+  const base: Record<string, any> = {
     id: doc.id || String(doc._id),
     username: doc.username,
     email: doc.email,
@@ -34,7 +34,7 @@ function toUser(doc: Record<string, unknown> | null): (User | Creator) | null {
   return base as User | Creator;
 }
 
-function toCampaign(doc: Record<string, unknown> | null): Campaign | null {
+function toCampaign(doc: Record<string, any> | null): Campaign | null {
   if (!doc) return null;
   return {
     id: doc.id || String(doc._id),

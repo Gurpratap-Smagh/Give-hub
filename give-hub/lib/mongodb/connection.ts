@@ -7,7 +7,7 @@ interface MongooseCache {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __mongooseCache: MongooseCache | undefined;
 }
 
@@ -40,7 +40,7 @@ export async function connectMongo() {
     try {
       if (process.env.NODE_ENV !== 'production' && MONGODB_URI) {
         const u = new URL(MONGODB_URI);
-        // eslint-disable-next-line no-console
+         
         console.log(`[Mongo] Connecting to host=${u.host} db=${MONGODB_DB}`);
       }
     } catch {

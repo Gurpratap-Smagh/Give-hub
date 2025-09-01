@@ -3,7 +3,7 @@
 let isProcessing = false;
 let message = 'Processing donation...';
 let status: 'processing' | 'success' | 'error' = 'processing';
-let listeners: Set<() => void> = new Set();
+const listeners: Set<() => void> = new Set();
 
 export function setDonationProcessing(value: boolean) {
   isProcessing = value;

@@ -47,12 +47,12 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { formatCurrency } from '@/lib/utils/format'
 import { useAuth } from '@/lib/auth/auth-context'
-import { showError, showSuccess, showInfo } from '@/lib/utils/notification-manager'
+import { showError, showSuccess, showInfo } from '@/components/notification-manager'
 import { getCampaignInfo } from '@/lib/web3/client'
 
 import CampaignEditForm from '@/components/campaign-edit-form'
 import PaymentModal from '@/components/payment-modal'
-import DonationsLivePane from './DonationsLivePane'
+import DonationsLivePane from '@/app/campaign/[id]/DonationsLivePane'
 
 // LocalStorage donation entry type to eliminate any[]
 interface LocalDonationEntry {
@@ -140,9 +140,11 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
     const checkContractStatus = async () => {
       if (campaign.onChain?.campaignId) {
         try {
-          const campaignId = BigInt(campaign.onChain.campaignId)
+          const campaignId = campaign.onChain.campaignId
           const campaignInfo = await getCampaignInfo(campaignId)
-          setOnChainActive(campaignInfo.active)
+          if (campaignInfo) {
+            setOnChainActive(campaignInfo.isActive)
+          }
         } catch {
           showError('Failed to check contract status', 'Contract connection error')
         }
