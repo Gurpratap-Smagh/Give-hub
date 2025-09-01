@@ -151,7 +151,7 @@ export const mongoDb = {
   async createCampaign(campaignData: Omit<Campaign, 'id'>): Promise<Campaign> {
     await connectMongo();
     // Normalize fields from unified type to Mongo schema expectations
-    const { createdAt, updatedAt, donations, contractOwnership, ...rest } = (campaignData as unknown) as {
+    const { createdAt: _createdAt, updatedAt: _updatedAt, donations: _donations, contractOwnership, ...rest } = (campaignData as unknown) as {
       createdAt?: string;
       updatedAt?: string;
       donations?: unknown;
@@ -175,22 +175,22 @@ export const mongoDb = {
   },
   async searchCampaigns(query: Partial<Campaign> & { q?: string }): Promise<Campaign[]> {
     await connectMongo();
-    const mongoQuery: any = {};
+    const mongoQuery: Record<string, unknown> = {};
     if (query.q) {
       mongoQuery.$text = { $search: query.q };
     }
     // Map simple equality filters
     const keys: (keyof Campaign)[] = ['title','category','creatorId'];
     for (const k of keys) {
-      const v = (query as any)[k];
-      if (v !== undefined) mongoQuery[k] = v;
+      const v = (query as Record<string, unknown>)[k as string];
+      if (v !== undefined) mongoQuery[k as string] = v;
     }
     // Support numeric range filters
-    if ((query as any).goal !== undefined) {
-      mongoQuery.goal = (query as any).goal;
+    if ((query as Record<string, unknown>).goal !== undefined) {
+      mongoQuery.goal = (query as Record<string, unknown>).goal as unknown;
     }
-    if ((query as any).raised !== undefined) {
-      mongoQuery.raised = (query as any).raised;
+    if ((query as Record<string, unknown>).raised !== undefined) {
+      mongoQuery.raised = (query as Record<string, unknown>).raised as unknown;
     }
     const docs = await CampaignModel.find(mongoQuery).lean();
     return docs.map(toCampaign) as Campaign[];
@@ -200,22 +200,22 @@ export const mongoDb = {
     options?: { limit?: number; skip?: number; sort?: { [key: string]: 1 | -1 } }
   ): Promise<{ campaigns: Campaign[]; total: number }> {
     await connectMongo();
-    const mongoQuery: any = {};
+    const mongoQuery: Record<string, unknown> = {};
     if (query.q) mongoQuery.$text = { $search: query.q };
     const keys: (keyof Campaign)[] = ['title','category','creatorId'];
     for (const k of keys) {
-      const v = (query as any)[k];
-      if (v !== undefined) mongoQuery[k] = v;
+      const v = (query as Record<string, unknown>)[k as string];
+      if (v !== undefined) mongoQuery[k as string] = v;
     }
     // Support numeric range filters
-    if ((query as any).goal !== undefined) {
-      mongoQuery.goal = (query as any).goal;
+    if ((query as Record<string, unknown>).goal !== undefined) {
+      mongoQuery.goal = (query as Record<string, unknown>).goal as unknown;
     }
-    if ((query as any).raised !== undefined) {
-      mongoQuery.raised = (query as any).raised;
+    if ((query as Record<string, unknown>).raised !== undefined) {
+      mongoQuery.raised = (query as Record<string, unknown>).raised as unknown;
     }
     let q = CampaignModel.find(mongoQuery);
-    if (options?.sort) q = q.sort(options.sort as any);
+    if (options?.sort) q = q.sort(options.sort as Record<string, 1 | -1>);
     if (options?.skip) q = q.skip(options.skip);
     if (options?.limit) q = q.limit(options.limit);
     const [docs, total] = await Promise.all([
