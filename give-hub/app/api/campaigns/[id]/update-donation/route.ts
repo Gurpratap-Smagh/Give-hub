@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
 
     // Get the campaign
-    const campaign = await db.getCampaign(id);
+    const campaign = await db.findCampaignById(id);
     if (!campaign) {
       return NextResponse.json({ 
         success: false, 
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     });
 
     // Get updated campaign
-    const updatedCampaign = await db.getCampaign(id);
+    const updatedCampaign = await db.findCampaignById(id);
     if (!updatedCampaign) {
       return NextResponse.json({ 
         success: false, 
