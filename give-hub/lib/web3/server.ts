@@ -6,34 +6,22 @@
 
 import { ethers } from "ethers";
 import CrossChainCrowdfundABI from '@/abis/CrossChainCrowdfund.json';
+import { toBigInt, toAddress } from '@/lib/utils/contract-coercion';
+import { getContractAddress, getChainId, getRpcUrl, getChainName, getServerRpcUrl } from '@/lib/env';
 
 /**
  * Helper to get deployment configuration for contract interaction
  * Uses the same env variables as the donation feature
  */
 function getDeploymentConfig() {
-  const address = (
-    process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT ||
-    process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS ||
-    process.env.NEXT_PUBLIC_DONATION_CONTRACT ||
-    ''
-  );
-  
-  const chainId = (
-    process.env.NEXT_PUBLIC_ZETA_CHAIN_ID ||
-    '7001' // Default to ZetaChain Athens
-  );
-  
-  const rpcUrl = (
-    process.env.NEXT_PUBLIC_ZETA_RPC_URL ||
-    process.env.NEXT_PUBLIC_RPC_URL ||
-    'https://zetachain-athens-evm.blockpi.network/v1/rpc/public'
-  );
-  
-  const chainName = process.env.NEXT_PUBLIC_ZETA_CHAIN_NAME || 'ZetaChain Athens';
+  // Use centralized environment variable parsing
+  const address = getContractAddress();
+  const chainId = getChainId();
+  const rpcUrl = getRpcUrl();
+  const chainName = getChainName();
   
   return {
-    address,
+    address: toAddress(address, ethers.ZeroAddress),
     chainId: Number(chainId),
     rpcUrl,
     chainName
@@ -61,8 +49,8 @@ export async function serverGetAllSyncedCampaignIds(limitPerPage: number = 100):
     const next = result[1] as bigint;
 
     for (const info of infos) {
-      // info.campaignId is BigInt-compatible
-      const id = typeof info.campaignId === 'bigint' ? info.campaignId : BigInt(info.campaignId);
+      // Use coercion utility to safely handle campaign IDs
+      const id = toBigInt(info.campaignId);
       ids.add(id.toString());
     }
 
@@ -78,9 +66,9 @@ export async function serverGetAllSyncedCampaignIds(limitPerPage: number = 100):
  * Uses the same pattern as live donations
  */
 export async function getServerProvider(): Promise<ethers.JsonRpcProvider> {
-  const { rpcUrl } = getDeploymentConfig();
-  
-  // Initialize provider
+  // Use server-side RPC URL from centralized env
+  const rpcUrl = getServerRpcUrl();
+  if (!rpcUrl) throw new Error('Missing RPC URL in environment variables');
   return new ethers.JsonRpcProvider(rpcUrl);
 }
 
@@ -134,7 +122,8 @@ export async function serverCheckCampaignSyncStatus(
       const batch = strIds.slice(i, i + batchSize);
       const promises = batch.map(async (id) => {
         try {
-          const bigintId = BigInt(id);
+          // Use coercion utility to safely convert to BigInt
+          const bigintId = toBigInt(id);
           const campaign = await contract.campaigns(bigintId);
           return { id, synced: campaign.creator !== ethers.ZeroAddress };
         } catch {
@@ -193,8 +182,8 @@ async function getServerCampaignCreatedEvents(
     // For each campaignId, create a specific topic1 and query
     const promises = campaignIds.map(async (campaignId) => {
       try {
-        // Format the campaignId as a topic (32-byte hex)
-        const topic1 = ethers.zeroPadValue(ethers.toBeHex(BigInt(campaignId)), 32);
+        // Format the campaignId as a topic (32-byte hex) using coercion utility
+        const topic1 = ethers.zeroPadValue(ethers.toBeHex(toBigInt(campaignId)), 32);
         
         // Query in chunks to avoid RPC timeouts (similar to useDonationEvents)
         const CHUNK_SIZE = 400;

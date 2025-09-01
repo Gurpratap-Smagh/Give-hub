@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { ethers } from 'ethers'
 import CrossChainCrowdfundABI from '@/abis/CrossChainCrowdfund.json'
 import { getServerDeployment, getServerProvider } from '@/lib/web3/server'
+import { toBigInt, toBoolean } from '@/lib/utils/contract-coercion'
 
 // POST /api/campaigns/[id]/contract-pause
 // Body: { campaignId: string | number, pause: boolean }
@@ -42,19 +43,29 @@ export async function POST(
     // 3) Parse body
     const body = await request.json().catch(() => ({})) as { campaignId?: unknown; pause?: unknown }
     const inputCampaignId = body?.campaignId
-    const pause = body?.pause
-
-    if (typeof pause !== 'boolean') {
-      return NextResponse.json({ success: false, error: 'pause must be a boolean' }, { status: 400 })
+    const pauseInput = body?.pause
+    
+    // Use coercion utility to ensure boolean type
+    const pause = toBoolean(pauseInput)
+    
+    // Still validate the input was provided (not undefined/null)
+    if (pauseInput === undefined || pauseInput === null) {
+      return NextResponse.json({ success: false, error: 'pause must be provided as a boolean' }, { status: 400 })
     }
 
-    // Validate on-chain campaignId
+    // Validate on-chain campaignId using coercion utility
+    if (inputCampaignId === undefined || inputCampaignId === null) {
+      return NextResponse.json({ success: false, error: 'campaignId is required' }, { status: 400 })
+    }
+    
+    // Use coercion utility to safely convert to BigInt
     let onChainCampaignId: bigint
     try {
-      if (typeof inputCampaignId === 'string' || typeof inputCampaignId === 'number' || typeof inputCampaignId === 'bigint') {
-        onChainCampaignId = BigInt(inputCampaignId as string | number | bigint)
-      } else {
-        throw new Error('campaignId is required')
+      // Convert the unknown input to string first to ensure compatibility
+      const campaignIdStr = String(inputCampaignId)
+      onChainCampaignId = toBigInt(campaignIdStr)
+      if (onChainCampaignId === 0n) {
+        throw new Error('Invalid campaign ID')
       }
     } catch {
       return NextResponse.json({ success: false, error: 'campaignId must be a valid integer' }, { status: 400 })
@@ -100,9 +111,10 @@ export async function POST(
         txHash: tx.hash,
         blockNumber: receipt?.blockNumber ?? null,
       })
-    } catch (chainError: any) {
+    } catch (chainError: unknown) {
       // Try to surface a readable error message
-      const message = chainError?.reason || chainError?.error?.message || chainError?.message || 'Blockchain transaction failed'
+      const errorObj = chainError as { reason?: string; error?: { message?: string }; message?: string }
+      const message = errorObj?.reason || errorObj?.error?.message || errorObj?.message || 'Blockchain transaction failed'
       console.error('Contract pause/resume error:', chainError)
       return NextResponse.json({ success: false, error: message }, { status: 500 })
     }

@@ -10,21 +10,12 @@ function normalizeCampaign(campaign: Campaign) {
   return { ...campaign, goal, raised, progressPct, donors };
 }
 
-// Define the route handler for POST requests
-export async function POST(request: Request) {
-  // Extract the campaign ID from the URL
-  const url = new URL(request.url);
-  const pathSegments = url.pathname.split('/');
-  const id = pathSegments[pathSegments.indexOf('campaigns') + 1];
-  
-  if (!id) {
-    return NextResponse.json({ 
-      success: false, 
-      message: 'Campaign ID not found in URL' 
-    }, { status: 400 });
-  }
-  
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { 
       amount, 
@@ -36,54 +27,49 @@ export async function POST(request: Request) {
     if (!amount || !donor || !txHash) {
       return NextResponse.json({ 
         success: false, 
-        message: 'Missing required fields' 
+        error: 'Missing required donation data' 
       }, { status: 400 });
     }
 
-    // Get the campaign
+    // Find the campaign
     const campaign = await db.findCampaignById(id);
     if (!campaign) {
       return NextResponse.json({ 
         success: false, 
-        message: 'Campaign not found' 
+        error: 'Campaign not found' 
       }, { status: 404 });
     }
 
-    // Persist the donation using DB helper (embedded on Campaign)
-    await db.createDonation({
-      campaignId: id,
-      name: String(donor),
-      amount: Number(amount),
-      chain: 'zeta',
-      txHash,
-      timestamp: new Date(),
+    // Convert amount from Wei/blockchain units to cents for storage
+    // Assuming amount comes in as a decimal string (e.g., "1.5" for 1.5 ZETA)
+    const amountInCents = Math.round(parseFloat(amount) * 100);
+
+    // Update campaign raised amount
+    const newRaised = (campaign.raised || 0) + amountInCents;
+    
+    // Update campaign raised amount only for now
+    const updatedCampaign = await db.updateCampaign(id, {
+      raised: newRaised
     });
 
-    // Update raised amount
-    const raised = Number(campaign.raised || 0) + Number(amount);
-
-    // Save to database
-    await db.updateCampaign(id, { raised });
-
-    // Get updated campaign
-    const updatedCampaign = await db.findCampaignById(id);
     if (!updatedCampaign) {
       return NextResponse.json({ 
         success: false, 
-        message: 'Failed to retrieve updated campaign' 
+        error: 'Failed to update campaign' 
       }, { status: 500 });
     }
 
-    // Return normalized campaign data
     return NextResponse.json({ 
       success: true, 
-      campaign: normalizeCampaign(updatedCampaign)
+      campaign: normalizeCampaign(updatedCampaign),
+      newRaised
     });
+
   } catch (error) {
-    console.error('Error updating donation:', error);
+    console.error('Error updating campaign donation:', error);
     return NextResponse.json({ 
       success: false, 
-      message: 'Internal server error' 
+      error: 'Internal server error' 
     }, { status: 500 });
   }
 }
