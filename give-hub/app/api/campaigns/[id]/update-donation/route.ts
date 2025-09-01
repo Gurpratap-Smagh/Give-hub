@@ -49,26 +49,21 @@ export async function POST(request: Request) {
       }, { status: 404 });
     }
 
-    // Update the campaign with the new donation
-    const donation = {
+    // Persist the donation using DB helper (embedded on Campaign)
+    await db.createDonation({
+      campaignId: id,
+      name: String(donor),
       amount: Number(amount),
-      donor,
+      chain: 'zeta',
       txHash,
-      timestamp: new Date().toISOString()
-    };
-
-    // Add donation to campaign
-    const donations = Array.isArray(campaign.donations) ? campaign.donations : [];
-    donations.push(donation);
+      timestamp: new Date(),
+    });
 
     // Update raised amount
     const raised = Number(campaign.raised || 0) + Number(amount);
 
     // Save to database
-    await db.updateCampaign(id, {
-      donations,
-      raised
-    });
+    await db.updateCampaign(id, { raised });
 
     // Get updated campaign
     const updatedCampaign = await db.findCampaignById(id);
