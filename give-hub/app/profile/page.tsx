@@ -258,7 +258,7 @@ export default function ProfilePage() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl card-shadow border border-gray-100 p-6 text-center">
               <ProfilePictureUpload
-                currentUser={user}
+                currentUser={user as any}
                 currentPicture={profileData.profilePicture}
                 onPictureChange={(newPicture) => setProfileData(prev => ({ ...prev, profilePicture: newPicture }))}
                 isEditing={isEditing}

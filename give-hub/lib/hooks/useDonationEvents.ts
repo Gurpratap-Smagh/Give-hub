@@ -87,6 +87,7 @@ export function useDonationEvents(
   const [events, setEvents] = useState<DonationEvent[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
   const seen = useRef<Set<string>>(new Set());
   const loadingBackfill = useRef(false);
   const lastBlockRef = useRef<number | null>(null);
@@ -171,12 +172,14 @@ export function useDonationEvents(
       loadingBackfill.current = true;
       setIsLoading(true);
       setError(null);
+      setConnectionStatus('connecting');
       try {
         if (!rpcUrl || !contractAddress) {
           throw new Error('Missing RPC URL or contract address. Check NEXT_PUBLIC_ZETA_RPC_URL and NEXT_PUBLIC_CROSSCHAIN_CONTRACT');
         }
         // Use read-only provider to avoid any wallet connection prompts
         const latest = await http.getBlockNumber();
+        if (alive) setConnectionStatus('connected');
         const start = Math.max(0, latest - lookbackBlocks);
         // hard-cap the range to stay well below common provider limits (<=400)
         const maxRange = Math.min(step ?? 400, 400);
@@ -225,6 +228,7 @@ export function useDonationEvents(
         lastBlockRef.current = latest;
       } catch (err) {
         if (alive) setError(err);
+        if (alive) setConnectionStatus('disconnected');
       } finally {
         if (alive) setIsLoading(false);
         loadingBackfill.current = false;
@@ -245,6 +249,7 @@ export function useDonationEvents(
         if (!mounted || !enabled || !rpcUrl || !contractAddress) return;
         // Always poll for consistent websocket behavior
         const latest = await http.getBlockNumber();
+        if (mounted) setConnectionStatus('connected');
         const maxRange = Math.min(step ?? 400, 400);
         let from = (lastBlockRef.current ?? Math.max(0, latest - maxRange)) + 1;
         if (from > latest) return;
@@ -303,6 +308,7 @@ export function useDonationEvents(
       } catch (err) {
         console.error('[useDonationEvents] Polling error:', err);
         // Don't set error state for polling failures, just log and continue
+        if (mounted) setConnectionStatus('disconnected');
       }
 
       // Schedule next poll
@@ -360,5 +366,5 @@ export function useDonationEvents(
     };
   }, [enabled, events.length]);
 
-  return { events, error, isLoading };
+  return { events, error, isLoading, connectionStatus, isConnected: connectionStatus === 'connected' };
 }

@@ -33,6 +33,10 @@ function formatUsd(amountHuman: string, symbol: string): { usd: number; usdForma
   const base = (symbol || '').split('.')[0];
   const usd = toUSD(amountHuman, base);
   if (!usd || !Number.isFinite(usd) || usd <= 0) return { usd: 0, usdFormatted: "-" };
+  // Show very small amounts as "<1$" for better UX
+  if (usd > 0 && usd < 1) {
+    return { usd, usdFormatted: "<1$" };
+  }
   const usdFormatted = `$${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
   return { usd, usdFormatted };
 }

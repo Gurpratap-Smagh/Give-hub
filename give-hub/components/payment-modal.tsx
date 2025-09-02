@@ -19,7 +19,7 @@ interface PaymentModalProps {
   campaign: Campaign;
   isOpen: boolean;
   onClose: () => void;
-  onPaymentSuccess: (amount: number, chain: string) => void;
+  onPaymentSuccess: (amount: number, chain: string, tokenSymbol?: string) => void;
   initialAmount?: number;
   initialChain?: string;
   initialToken?: string;
@@ -69,7 +69,7 @@ export default function PaymentModal({
 
   const { byChain, getNativeToken, getTokenByAddress } = useAvailableTokens();
   const [picked, setPicked] = useState<
-    { chain: string; symbol: string; address: string; isNative?: boolean } | undefined
+    { chain: string; symbol: string; address?: string; isNative?: boolean } | undefined
   >(undefined);
   const selectedToken: Token | undefined = picked?.isNative
     ? undefined
@@ -212,8 +212,8 @@ export default function PaymentModal({
 
         // Start donation flow tracking with additional params
         const chainName = isZetaChainPicked ? 'ZetaChain' : 'Ethereum Sepolia';
-        startDonation(txHash, raw, campaign.id, donorDisplayName, chainName);
-        onPaymentSuccess(amountValue, chainName);
+        startDonation(txHash, raw, campaign.id, donorDisplayName, chainName, displaySymbol);
+        onPaymentSuccess(amountValue, chainName, displaySymbol);
         
         // Close modal immediately but let donation flow handle success notification
         onClose();
@@ -235,7 +235,7 @@ export default function PaymentModal({
           }
         }
 
-        onPaymentSuccess(amountValue, selectedChain);
+        onPaymentSuccess(amountValue, selectedChain, 'USD');
         showSuccess(`Mock payment of $${raw} completed!`);
         onClose();
         setAmount("");
@@ -397,7 +397,7 @@ export default function PaymentModal({
             <label className="block text-sm font-semibold mb-2">Select token</label>
             <TokenPicker
               value={picked}
-              onChange={setPicked}
+              onChange={(v) => setPicked(v)}
               className="w-full"
               // Hide Sepolia ERC-20 ETH but keep native ETH visible for donations
               excludeSepoliaEthContract

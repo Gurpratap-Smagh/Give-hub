@@ -82,6 +82,10 @@ export const authService = {
       return { success: false, error: 'Invalid credentials' };
     }
 
+    // Password field may be omitted by some DB adapters/types; guard before comparing
+    if (!user.password) {
+      return { success: false, error: 'Invalid credentials' };
+    }
     const isPasswordValid = await comparePassword(data.password, user.password);
     if (!isPasswordValid) {
       return { success: false, error: 'Invalid credentials' };

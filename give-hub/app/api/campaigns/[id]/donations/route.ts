@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { mongoDb as db } from '../../../../../lib/mongodb/database'
+import { toUSD } from '../../../../../lib/prices/converter'
 
 /**
  * GET /api/campaigns/[id]/donations
@@ -43,7 +44,7 @@ export async function GET(
  * POST /api/campaigns/[id]/donations
  * Record a donation for a specific campaign and update campaign totals
  *
- * Body: { amount: number, chain: string, donorName: string, txId?: string }
+ * Body: { amount: number, chain: string, donorName: string, tokenSymbol?: string, txId?: string }
  */
 export async function POST(
   request: NextRequest,
@@ -55,6 +56,7 @@ export async function POST(
     const amount: number = body.amount
     const rawChain: string = body.chain
     const donorName: string = body.donorName ?? body.name
+    const tokenSymbol: string = body.tokenSymbol || 'USD'
     const txId: string | undefined = body.txId
     const timestamp: Date | undefined = body.timestamp ? new Date(body.timestamp) : undefined
 
@@ -137,8 +139,11 @@ export async function POST(
       timestamp,
     })
 
+    // Convert token amount to USD value using mock price table
+    const usdValue = tokenSymbol === 'USD' ? amount : toUSD(amount, tokenSymbol)
+    
     // Update campaign raised amount (allow exceeding goal)
-    const newTotal = (campaign.raised || 0) + amount
+    const newTotal = (campaign.raised || 0) + usdValue
     const updatedCampaign = await db.updateCampaign(campaignId, { raised: newTotal })
     if (!updatedCampaign) {
       return NextResponse.json(
@@ -153,7 +158,7 @@ export async function POST(
       const currentRaised = ('totalRaised' in creator && typeof creator.totalRaised === 'number')
         ? creator.totalRaised
         : 0
-      await db.updateUser(creator.id, { totalRaised: currentRaised + amount })
+      await db.updateUser(creator.id, { totalRaised: currentRaised + usdValue })
     }
 
     return NextResponse.json({

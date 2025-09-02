@@ -49,6 +49,7 @@ import { formatCurrency } from '@/lib/utils/format'
 import { useAuth } from '@/lib/auth/auth-context'
 import { showError, showSuccess, showInfo } from '@/components/notification-manager'
 import { getCampaignInfo } from '@/lib/web3/client'
+import { isCampaignSynced } from '@/lib/web3/campaignUtils'
 
 import CampaignEditForm from '@/components/campaign-edit-form'
 import PaymentModal from '@/components/payment-modal'
@@ -81,7 +82,7 @@ interface CampaignEditFormRef extends HTMLFormElement {
 }
 
 // Type for payment success handler to match PaymentModal expectations
-type PaymentSuccessHandler = (amount: number, chain: string) => void;
+type PaymentSuccessHandler = (amount: number, chain: string, tokenSymbol?: string) => void;
 
 /**
  * FILE: app/campaign/[id]/CampaignPageContent.tsx
@@ -107,10 +108,10 @@ const CARD_PLACEHOLDER_2x1 = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
 
 // Removed Recent Donations list UI and associated on-chain fetching to prevent RPC errors
 
-export default function CampaignPageContent({ initialCampaign, initialDonations }: { initialCampaign: CampaignWithCreator, initialDonations: Donation[] }) {
+export default function CampaignPageContent({ initialCampaign, initialDonations: _initialDonations }: { initialCampaign: CampaignWithCreator, initialDonations: Donation[] }) {
   const { user } = useAuth()
   const [campaign, setCampaign] = useState(initialCampaign)
-  const [donations, setDonations] = useState<DonationWithAddr[]>(initialDonations as DonationWithAddr[])
+  void _initialDonations;
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [editPreview, setEditPreview] = useState<CampaignWithCreator>(campaign)
@@ -118,6 +119,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   const formRef = useRef<CampaignEditFormRef>(null)
   const [imgSrc, setImgSrc] = useState<string>(campaign.image || CARD_PLACEHOLDER_2x1)
   const [onChainActive, setOnChainActive] = useState(campaign.onChain?.isActive) // Used in sync function
+  const [isSynced, setIsSynced] = useState(false) // Track campaign sync status
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editImage, setEditImage] = useState<string>(campaign.image || '')
   const [imageGenLoading, setImageGenLoading] = useState(false)
@@ -135,16 +137,23 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
     }
   }, [isEditing, campaign.image])
   
-  // Check actual contract pause state on load
+  // Check actual contract pause state and sync status on load
   useEffect(() => {
     const checkContractStatus = async () => {
       if (campaign.onChain?.campaignId) {
         try {
           const campaignId = BigInt(campaign.onChain.campaignId)
-          const campaignInfo = await getCampaignInfo(campaignId)
-          setOnChainActive(campaignInfo.active)
+          const campaignInfo = await getCampaignInfo(campaignId.toString())
+          if (campaignInfo) {
+            setOnChainActive(campaignInfo.isActive)
+          }
+          
+          // Check if campaign is synced to blockchain
+          const synced = await isCampaignSynced(campaign.onChain.campaignId)
+          setIsSynced(synced)
         } catch {
           showError('Failed to check contract status', 'Unable to query on-chain status.')
+          setIsSynced(false)
         }
       }
     }
@@ -290,11 +299,13 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   // Compute progress using MongoDB cents fields directly
   const progressPct = useMemo(() => {
     const goal = campaign.goal || 0
+    const raised = campaign.raised || 0
     if (goal <= 0) return 0
-    return Math.min(100, Math.round(((campaign.raised || 0) / goal) * 100))
+    const percentage = (raised / goal) * 100
+    return Math.min(100, Math.round(percentage * 100) / 100) // Round to 2 decimal places
   }, [campaign.raised, campaign.goal])
 
-  const handlePaymentSuccess: PaymentSuccessHandler = (amount: number, chain: string) => {
+  const handlePaymentSuccess: PaymentSuccessHandler = (amount: number, chain: string, tokenSymbol?: string) => {
     // Create and persist a donation entry (local + server total)
     const entry: DonationWithAddr = {
       amount,
@@ -307,8 +318,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
       name: user?.id || 'Anonymous',
     }
 
-    // Update UI immediately
-    setDonations(prev => [entry, ...prev])
+    // UI list of donors removed; skip local donors state update
 
     // Persist to localStorage for rehydration (align with givehub3 behavior)
     try {
@@ -337,6 +347,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
             donorName: entry.name || 'Anonymous',
             amount,
             chain,
+            tokenSymbol: tokenSymbol || 'USD',
             timestamp: entry.createdAt,
           }),
         })
@@ -583,7 +594,8 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
               <div className="mt-4 lg:mt-8">
                 <DonationsLivePane 
                   campaignId={campaign.onChain?.campaignId || campaign.id} 
-                  isActive={onChainActive !== null ? !!onChainActive : true} 
+                  isActive={onChainActive !== null ? !!onChainActive : true}
+                  isSynced={isSynced}
                 />
               </div>
             </div>
@@ -618,7 +630,6 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
                     <div className="flex justify-between items-center"><span className="text-gray-600">Total Raised</span><span className="font-bold text-gray-900">{formatCurrency(campaign.raised, 'USD', false)}</span></div>
                     <div className="flex justify-between items-center"><span className="text-gray-600">Goal</span><span className="font-bold text-gray-900">{formatCurrency(campaign.goal, 'USD', false)}</span></div>
                     <div className="flex justify-between items-center"><span className="text-gray-600">Progress</span><span className="font-bold text-green-600">{progressPct}%</span></div>
-                    <div className="flex justify-between items-center"><span className="text-gray-600">Donors</span><span className="font-bold text-gray-900">{donations.length}</span></div>
                   </div>
                 </div>
               </div>

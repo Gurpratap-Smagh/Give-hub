@@ -24,8 +24,8 @@ export async function isCampaignSynced(campaignId: string | number): Promise<boo
     const id = BigInt(campaignId);
     
     // First check direct campaign struct data
-    const campaignInfo = await getCampaignInfo(id);
-    if (campaignInfo.creator !== ethers.ZeroAddress) {
+    const campaignInfo = await getCampaignInfo(String(id));
+    if (campaignInfo && campaignInfo.creator !== ethers.ZeroAddress) {
       return true;
     }
     

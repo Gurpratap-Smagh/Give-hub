@@ -6,92 +6,72 @@ import { CampaignModel } from './models/campaign';
 // Import types from mock for compatibility
 import type { User, Creator, Campaign, Donation } from '@/lib/db';
 
-function toUser(doc: Record<string, unknown> | null): (User | Creator) | null {
+function toUser(doc: Record<string, any> | null): (User | Creator) | null {
   if (!doc) return null;
-  const idRaw = doc['id'] ?? doc['_id'];
-  const createdAtRaw = doc['createdAt'];
-  const updatedAtRaw = doc['updatedAt'];
-  const roleRaw = doc['role'];
-  const base: Record<string, unknown> = {
-    id: typeof idRaw === 'string' ? idRaw : String(idRaw),
-    username: doc['username'] as string | undefined,
-    email: typeof doc['email'] === 'string' ? doc['email'] : String(doc['email'] ?? ''),
-    password: doc['password'] as string | undefined,
-    role: typeof roleRaw === 'string' ? roleRaw : String(roleRaw ?? ''),
-    createdAt: createdAtRaw instanceof Date
-      ? createdAtRaw.toISOString()
-      : (typeof createdAtRaw === 'string' ? createdAtRaw : new Date().toISOString()),
-    updatedAt: updatedAtRaw instanceof Date
-      ? updatedAtRaw.toISOString()
-      : (typeof updatedAtRaw === 'string' ? updatedAtRaw : new Date().toISOString()),
-    profilePicture: doc['profilePicture'] as string | undefined,
-    bio: doc['bio'] as string | undefined,
-    location: doc['location'] as string | undefined,
-    website: doc['website'] as string | undefined,
-    walletAddresses: doc['walletAddresses'] as unknown,
-    donatedCampaigns: Array.isArray(doc['donatedCampaigns']) ? (doc['donatedCampaigns'] as string[]) : [],
-    totalDonated: typeof doc['totalDonated'] === 'number' ? (doc['totalDonated'] as number) : 0,
-    preferredChains: Array.isArray(doc['preferredChains']) ? (doc['preferredChains'] as string[]) : [],
+  const base: Record<string, any> = {
+    id: doc.id || String(doc._id),
+    username: doc.username,
+    email: doc.email,
+    password: doc.password,
+    role: doc.role,
+    createdAt: (doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt) || new Date().toISOString(),
+    updatedAt: (doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt) || new Date().toISOString(),
+    profilePicture: doc.profilePicture,
+    bio: doc.bio,
+    location: doc.location,
+    website: doc.website,
+    walletAddresses: doc.walletAddresses,
+    donatedCampaigns: doc.donatedCampaigns || [],
+    totalDonated: doc.totalDonated || 0,
+    preferredChains: doc.preferredChains || [],
   };
-  if (base.role === 'creator') {
-    base.createdCampaigns = Array.isArray(doc['createdCampaigns']) ? (doc['createdCampaigns'] as string[]) : [];
-    base.totalRaised = typeof doc['totalRaised'] === 'number' ? (doc['totalRaised'] as number) : 0;
-    base.verificationStatus = typeof doc['verificationStatus'] === 'string' ? (doc['verificationStatus'] as string) : 'pending';
-    base.socialLinks = (typeof doc['socialLinks'] === 'object' && doc['socialLinks'] !== null)
-      ? (doc['socialLinks'] as Record<string, string>)
-      : {};
+  if (doc.role === 'creator') {
+    base.createdCampaigns = doc.createdCampaigns || [];
+    base.totalRaised = doc.totalRaised || 0;
+    base.verificationStatus = doc.verificationStatus || 'pending';
+    base.socialLinks = doc.socialLinks || {};
   }
   return base as User | Creator;
 }
 
-function toCampaign(doc: Record<string, unknown> | null): Campaign | null {
+function toCampaign(doc: Record<string, any> | null): Campaign | null {
   if (!doc) return null;
-  const idRaw = doc['id'] ?? doc['_id'];
-  const createdAtRaw = doc['createdAt'];
-  const updatedAtRaw = doc['updatedAt'];
-  const onChainRaw = doc['onChain'];
-  const ownershipRaw = doc['contractOwnership'];
-  const donationsRaw = doc['donations'];
   return {
-    id: typeof idRaw === 'string' ? idRaw : String(idRaw),
-    uuid: doc['uuid'] as string | undefined,
-    title: doc['title'] as string,
-    goal: typeof doc['goal'] === 'number' ? (doc['goal'] as number) : Number(doc['goal'] ?? 0),
-    raised: typeof doc['raised'] === 'number' ? (doc['raised'] as number) : Number(doc['raised'] ?? 0),
-    chains: Array.isArray(doc['chains']) ? (doc['chains'] as string[]) : [],
-    description: doc['description'] as string,
-    category: doc['category'] as string | undefined,
-    creatorId: doc['creatorId'] as string,
-    creatorAddress: doc['creatorAddress'] as string | undefined,
-    image: doc['image'] as string,
+    id: doc.id || String(doc._id),
+    uuid: doc.uuid,
+    title: doc.title,
+    goal: doc.goal,
+    raised: doc.raised || 0,
+    chains: doc.chains || [],
+    description: doc.description,
+    category: doc.category,
+    creatorId: doc.creatorId,
+    creatorAddress: doc.creatorAddress,
+    image: doc.image,
     // Normalize to array of ownership records for unified type
-    contractOwnership: Array.isArray(ownershipRaw)
-      ? (ownershipRaw as unknown[])
-      : (ownershipRaw ? [ownershipRaw] : []),
-    active: Boolean(doc['active']),
+    contractOwnership: Array.isArray(doc.contractOwnership)
+      ? doc.contractOwnership
+      : (doc.contractOwnership ? [doc.contractOwnership] : []),
+    active: doc.active,
     // Ensure on-chain mapping is surfaced in responses
-    onChain: (onChainRaw && typeof onChainRaw === 'object') ? {
-      chainId: Number((onChainRaw as Record<string, unknown>)['chainId']),
-      contract: String((onChainRaw as Record<string, unknown>)['contract']),
-      campaignId: String((onChainRaw as Record<string, unknown>)['campaignId']),
+    onChain: doc.onChain ? {
+      chainId: Number(doc.onChain.chainId),
+      contract: String(doc.onChain.contract),
+      campaignId: String(doc.onChain.campaignId),
     } : undefined,
-    verified: Boolean(doc['verified']),
-    contractAddress: doc['contractAddress'] as string | undefined,
-    blockchainProof: doc['blockchainProof'] as string | undefined,
+    verified: !!doc.verified,
+    contractAddress: doc.contractAddress,
+    blockchainProof: doc.blockchainProof,
     // Required timestamps as ISO strings
-    createdAt: createdAtRaw instanceof Date
-      ? createdAtRaw.toISOString()
-      : (typeof createdAtRaw === 'string' ? createdAtRaw : new Date().toISOString()),
-    updatedAt: updatedAtRaw instanceof Date
-      ? updatedAtRaw.toISOString()
-      : (typeof updatedAtRaw === 'string' ? updatedAtRaw : new Date().toISOString()),
+    createdAt: (doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt) || new Date().toISOString(),
+    updatedAt: (doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : doc.updatedAt) || new Date().toISOString(),
     // Donations array (schema stores embedded donations)
-    donations: Array.isArray(donationsRaw) ? (donationsRaw as unknown[]) : [],
+    donations: Array.isArray(doc.donations) ? doc.donations : [],
   } as Campaign;
 }
 
 // Donations are embedded on Campaign; construct DTOs inline when needed
-type DonationEmbedded = { name: string; amount: number; chain: string; timestamp?: Date; txHash?: string };
+type DonationEmbedded = { name: string; amount: number; chain: string; timestamp?: Date };
 
 function newId(prefix: string) {
   return `${prefix}_${Date.now()}`;
@@ -151,7 +131,7 @@ export const mongoDb = {
   async createCampaign(campaignData: Omit<Campaign, 'id'>): Promise<Campaign> {
     await connectMongo();
     // Normalize fields from unified type to Mongo schema expectations
-    const { createdAt: _createdAt, updatedAt: _updatedAt, donations: _donations, contractOwnership, ...rest } = (campaignData as unknown) as {
+    const { createdAt, updatedAt, donations, contractOwnership, ...rest } = (campaignData as unknown) as {
       createdAt?: string;
       updatedAt?: string;
       donations?: unknown;
@@ -175,22 +155,22 @@ export const mongoDb = {
   },
   async searchCampaigns(query: Partial<Campaign> & { q?: string }): Promise<Campaign[]> {
     await connectMongo();
-    const mongoQuery: Record<string, unknown> = {};
+    const mongoQuery: any = {};
     if (query.q) {
       mongoQuery.$text = { $search: query.q };
     }
     // Map simple equality filters
     const keys: (keyof Campaign)[] = ['title','category','creatorId'];
     for (const k of keys) {
-      const v = (query as Record<string, unknown>)[k as string];
-      if (v !== undefined) mongoQuery[k as string] = v;
+      const v = (query as any)[k];
+      if (v !== undefined) mongoQuery[k] = v;
     }
     // Support numeric range filters
-    if ((query as Record<string, unknown>).goal !== undefined) {
-      mongoQuery.goal = (query as Record<string, unknown>).goal as unknown;
+    if ((query as any).goal !== undefined) {
+      mongoQuery.goal = (query as any).goal;
     }
-    if ((query as Record<string, unknown>).raised !== undefined) {
-      mongoQuery.raised = (query as Record<string, unknown>).raised as unknown;
+    if ((query as any).raised !== undefined) {
+      mongoQuery.raised = (query as any).raised;
     }
     const docs = await CampaignModel.find(mongoQuery).lean();
     return docs.map(toCampaign) as Campaign[];
@@ -200,22 +180,22 @@ export const mongoDb = {
     options?: { limit?: number; skip?: number; sort?: { [key: string]: 1 | -1 } }
   ): Promise<{ campaigns: Campaign[]; total: number }> {
     await connectMongo();
-    const mongoQuery: Record<string, unknown> = {};
+    const mongoQuery: any = {};
     if (query.q) mongoQuery.$text = { $search: query.q };
     const keys: (keyof Campaign)[] = ['title','category','creatorId'];
     for (const k of keys) {
-      const v = (query as Record<string, unknown>)[k as string];
-      if (v !== undefined) mongoQuery[k as string] = v;
+      const v = (query as any)[k];
+      if (v !== undefined) mongoQuery[k] = v;
     }
     // Support numeric range filters
-    if ((query as Record<string, unknown>).goal !== undefined) {
-      mongoQuery.goal = (query as Record<string, unknown>).goal as unknown;
+    if ((query as any).goal !== undefined) {
+      mongoQuery.goal = (query as any).goal;
     }
-    if ((query as Record<string, unknown>).raised !== undefined) {
-      mongoQuery.raised = (query as Record<string, unknown>).raised as unknown;
+    if ((query as any).raised !== undefined) {
+      mongoQuery.raised = (query as any).raised;
     }
     let q = CampaignModel.find(mongoQuery);
-    if (options?.sort) q = q.sort(options.sort as Record<string, 1 | -1>);
+    if (options?.sort) q = q.sort(options.sort as any);
     if (options?.skip) q = q.skip(options.skip);
     if (options?.limit) q = q.limit(options.limit);
     const [docs, total] = await Promise.all([
@@ -239,7 +219,6 @@ export const mongoDb = {
         amount: d.amount,
         chain: d.chain,
         timestamp: new Date(d.timestamp ?? Date.now()),
-        txHash: d.txHash,
       } as Donation))
       .sort((a, b) => (b.timestamp as Date).getTime() - (a.timestamp as Date).getTime());
   },
@@ -257,23 +236,20 @@ export const mongoDb = {
           amount: d.amount,
           chain: d.chain,
           timestamp: new Date(d.timestamp ?? Date.now()),
-          txHash: (d as DonationEmbedded).txHash,
         } as Donation);
       }
     }
-
     // newest first
     out.sort((a, b) => (b.timestamp as Date).getTime() - (a.timestamp as Date).getTime());
     return out;
   },
   async createDonation(donationData: Omit<Donation, 'timestamp'> & { timestamp?: Date }): Promise<Donation> {
     await connectMongo();
-    const donation: DonationEmbedded = {
+    const donation = {
       name: donationData.name,
       amount: donationData.amount,
       chain: donationData.chain,
       timestamp: donationData.timestamp ?? new Date(),
-      txHash: donationData.txHash,
     };
     await CampaignModel.updateOne(
       { id: donationData.campaignId },

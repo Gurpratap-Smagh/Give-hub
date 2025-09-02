@@ -1,8 +1,25 @@
 "use client";
 
 import { ethers } from "ethers";
-import { CrossChainCrowdfundABI } from "./abi/GiveHubCrowdfund";
-import { handleBlockchainError } from "@/lib/utils/blockchain-errors";
+import CrossChainCrowdfundABI from '@/abis/CrossChainCrowdfund.json';
+import { toBigInt, toAddress } from '@/lib/utils/contract-coercion';
+import { getContractAddress, getChainId, getRpcUrl, getChainName, getWzetaAddress, getSystemContractAddress, getNativeSymbol, getExplorerUrl } from '@/lib/env';
+import { asAddress, toBig, toWei18, toBool, fromWei18 } from '@/lib/web3/coerce';
+
+// Import blockchain error handler
+import { handleBlockchainError } from '@/lib/utils/blockchain-errors';
+
+// ERC20 ABI - minimal interface for token operations
+const ERC20_ABI = [
+  "function name() view returns (string)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
+  "function balanceOf(address) view returns (uint256)",
+  "function transfer(address to, uint amount) returns (bool)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "event Transfer(address indexed from, address indexed to, uint amount)"
+];
 
 export type DeploymentInfo = {
   address: string;
@@ -19,11 +36,7 @@ type AddEthereumChainParameter = {
   blockExplorerUrls?: string[];
 };
 
-// Minimal ERC20 ABI for approvals and decimals
-const ERC20_ABI = [
-  "function decimals() view returns (uint8)",
-  "function approve(address spender, uint256 amount) returns (bool)",
-];
+// ERC20_ABI is defined at the top of the file
 
 // Module-level cache to avoid repeated /api calls and dedupe concurrent requests
 let __deploymentCache: DeploymentInfo | null = null;
@@ -41,20 +54,17 @@ export async function fetchDeployment(): Promise<DeploymentInfo> {
   if (__deploymentPending) return __deploymentPending;
 
   // Try to resolve from public env (avoids hitting API on every call)
-  const addrFromEnv =
-    process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT ||
-    process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS ||
-    process.env.NEXT_PUBLIC_CROWDFUND_ADDRESS;
-  const chainFromEnv = process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || process.env.NEXT_PUBLIC_CHAIN_ID;
-  const wzetaFromEnv = process.env.NEXT_PUBLIC_WZETA_ADDRESS || process.env.NEXT_PUBLIC_WZETA;
-  const sysFromEnv = process.env.NEXT_PUBLIC_SYSTEM_CONTRACT_ADDRESS;
+  const address = getContractAddress();
+  const chainId = getChainId();
+  const wzeta = getWzetaAddress();
+  const systemContract = getSystemContractAddress();
 
-  if (addrFromEnv && chainFromEnv) {
+  if (address && chainId) {
     const dep: DeploymentInfo = {
-      address: addrFromEnv,
-      chainId: Number(chainFromEnv),
-      wzeta: wzetaFromEnv,
-      systemContract: sysFromEnv,
+      address: toAddress(address),
+      chainId: Number(chainId),
+      wzeta: toAddress(wzeta),
+      systemContract: toAddress(systemContract),
     };
     __deploymentCache = dep;
     console.debug("[web3] deployment (env):", dep);
@@ -94,10 +104,7 @@ export async function getProvider(): Promise<ethers.BrowserProvider> {
 export async function getReadOnlyProvider(): Promise<ethers.AbstractProvider> {
   // Always use a dedicated HTTP RPC for read-only access to avoid
   // injected wallet middlewares (which may create ephemeral filters).
-  const rpcUrl =
-    process.env.NEXT_PUBLIC_ZETA_RPC_URL ||
-    process.env.NEXT_PUBLIC_ZETA_RPC_HTTP ||
-    '';
+  const rpcUrl = getRpcUrl();
   if (!rpcUrl) {
     throw new Error(
       'Missing NEXT_PUBLIC_ZETA_RPC_URL (or NEXT_PUBLIC_ZETA_RPC_HTTP) for read-only provider'
@@ -210,10 +217,10 @@ export async function ensureWalletOnChain(targetChainId: number): Promise<number
     // 4902: Unrecognized chain, try adding
     const e = err as { code?: number; message?: string };
     if (e?.code === 4902 || /Unrecognized chain/i.test(String(e?.message || ""))) {
-      const rpcUrl = process.env.NEXT_PUBLIC_ZETA_RPC_URL || "";
-      const chainName = process.env.NEXT_PUBLIC_ZETA_CHAIN_NAME || `ZetaChain ${targetChainId}`;
-      const symbol = process.env.NEXT_PUBLIC_ZETA_NATIVE_SYMBOL || "ZETA";
-      const explorer = process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL || "";
+      const rpcUrl = getRpcUrl();
+      const chainName = getChainName();
+      const symbol = getNativeSymbol();
+      const explorer = getExplorerUrl();
       if (!rpcUrl) throw new Error("Missing NEXT_PUBLIC_ZETA_RPC_URL to add network");
       const params: AddEthereumChainParameter = {
         chainId: hex,
@@ -356,6 +363,24 @@ export async function getCreatorInfo(address: string): Promise<{exists: boolean,
   }
 }
 
+export async function getCampaignInfo(campaignId: string) {
+  try {
+    const contract = await getContract();
+    const bigintId = toBig(campaignId); // Use new coercion utility
+    const info = await contract.campaigns(bigintId);
+    return {
+      creator: info.creator,
+      payoutToken: info.payoutToken,
+      isActive: toBool(info.isActive), // Use new coercion utility
+      totalRaised: fromWei18(info.totalRaised), // Use new coercion utility
+      exists: info.creator !== ethers.ZeroAddress
+    };
+  } catch (error) {
+    console.error('Error fetching campaign info:', error);
+    return null;
+  }
+}
+
 export type CreateCampaignInput = {
   preferredZRC20?: string; // ZRC20 token address for receiving donations
   // Optional callback invoked immediately after the transaction is sent (before mining)
@@ -395,9 +420,7 @@ export async function createCampaignOnChain(input: CreateCampaignInput = {}): Pr
 
   // Use provided ZRC20 or deployment's wzeta, otherwise fallback constant
   const preferredZRC20 = input.preferredZRC20 || dep.wzeta || DEFAULT_ZETA_TOKEN;
-  if (!preferredZRC20 || !/^0x[a-fA-F0-9]{40}$/.test(preferredZRC20) || /^0x0{40}$/i.test(preferredZRC20)) {
-    throw new Error("Invalid preferredZRC20 address; set NEXT_PUBLIC_WZETA_ADDRESS or ensure deployments latest.json provides systemContracts.wzeta");
-  }
+  const validatedZRC20 = asAddress(preferredZRC20); // Use coercion utility for validation
 
   console.debug("[web3] createCampaign args:", {
     preferredZRC20,
@@ -406,7 +429,7 @@ export async function createCampaignOnChain(input: CreateCampaignInput = {}): Pr
   });
 
   const contract = await getContract(signer);
-  const tx = await contract.createCampaign(preferredZRC20);
+  const tx = await contract.createCampaign(validatedZRC20);
   console.debug("[web3] createCampaign tx:", tx?.hash);
   try { input.onSent?.(tx.hash); } catch {}
   
@@ -457,20 +480,24 @@ export async function createCampaignOnChain(input: CreateCampaignInput = {}): Pr
 }
 
 // Campaign management functions for CrossChainCrowdfund
-export async function pauseCampaignOnChain(campaignId: bigint): Promise<void> {
+export async function pauseCampaignOnChain(campaignId: bigint | string | number): Promise<void> {
   const { signer } = await connectWallet();
   const contract = await getContract(signer);
-  const tx = await contract.pauseCampaign(campaignId);
+  // Use coercion utility to ensure BigInt compatibility
+  const campaignIdBigInt = toBigInt(campaignId);
+  const tx = await contract.pauseCampaign(campaignIdBigInt);
   await tx.wait(1);
-  console.debug("[web3] paused campaign:", campaignId.toString());
+  console.debug("[web3] paused campaign:", campaignIdBigInt.toString());
 }
 
-export async function resumeCampaignOnChain(campaignId: bigint): Promise<void> {
+export async function resumeCampaignOnChain(campaignId: bigint | string | number): Promise<void> {
   const { signer } = await connectWallet();
   const contract = await getContract(signer);
-  const tx = await contract.resumeCampaign(campaignId);
+  // Use coercion utility to ensure BigInt compatibility
+  const campaignIdBigInt = toBigInt(campaignId);
+  const tx = await contract.resumeCampaign(campaignIdBigInt);
   await tx.wait(1);
-  console.debug("[web3] resumed campaign:", campaignId.toString());
+  console.debug("[web3] resumed campaign:", campaignIdBigInt.toString());
 }
 
 export async function withdrawCampaignFunds(campaignId: bigint): Promise<void> {
@@ -487,7 +514,7 @@ export async function withdrawCampaignFunds(campaignId: bigint): Promise<void> {
  * Calls the contract's updateCampaignPayoutToken method
  */
 export async function updateCampaignPayoutToken(
-  campaignId: bigint,
+  campaignId: bigint | string | number,
   newTokenAddress: string,
   chain?: string
 ): Promise<string> {
@@ -504,8 +531,9 @@ export async function updateCampaignPayoutToken(
     throw error;
   }
   
-  // Validate token address format
-  if (!newTokenAddress || !/^0x[a-fA-F0-9]{40}$/.test(newTokenAddress)) {
+  // Validate and normalize token address using coercion utility
+  const normalizedTokenAddress = toAddress(newTokenAddress);
+  if (normalizedTokenAddress === ethers.ZeroAddress) {
     throw new Error("Invalid token address format");
   }
   
@@ -513,17 +541,20 @@ export async function updateCampaignPayoutToken(
   const signer = await prov.getSigner();
   const contract = await getContract(signer);
   
+  // Use coercion utility to ensure BigInt compatibility
+  const campaignIdBigInt = toBigInt(campaignId);
+  
   console.debug("[web3] updateCampaignPayoutToken args:", {
-    campaignId: campaignId.toString(),
-    newTokenAddress,
+    campaignId: campaignIdBigInt.toString(),
+    newTokenAddress: normalizedTokenAddress,
     chain: chain || 'ZETA', // Chain is tracked for UI but not needed for contract call
     chainId: dep.chainId,
     contract: dep.address
   });
   
   try {
-    // Call the contract method with the correct parameters
-    const tx = await contract.updateCampaignPayoutToken(campaignId, newTokenAddress);
+    // Call the contract method with the correct parameters using coerced values
+    const tx = await contract.updateCampaignPayoutToken(campaignIdBigInt, normalizedTokenAddress);
     console.debug("[web3] updateCampaignPayoutToken tx:", tx?.hash);
     
     // Await the receipt; if the RPC says "tx not found", fallback to manual polling
@@ -563,18 +594,6 @@ export async function getCampaignBalance(campaignId: bigint): Promise<string> {
   return "0";
 }
 
-export async function getCampaignInfo(campaignId: bigint): Promise<{creator: string, preferredZRC20: string, active: boolean}> {
-  // Use readOnly=true to avoid unnecessary wallet connection attempts
-  const contract = await getContract(undefined, true);
-  const campaign = await contract.campaigns(campaignId);
-  return {
-    creator: campaign.creator,
-    preferredZRC20: campaign.preferredZRC20,
-    active: campaign.active
-  };
-}
-
-// Get all campaigns created by a specific creator
 export async function getCampaignsByCreator(
   creatorAddress: string,
   lookbackBlocks = 100000,
@@ -821,55 +840,55 @@ export async function getCampaignDonationsBetween(
 
 // Donation function using native ZETA (simplified for direct donations)
 export async function donateToCampaign(
-  campaignId: bigint, 
+  campaignId: bigint | string | number, 
   amountInEther: string,
   donorName?: string,
   memo?: string
 ): Promise<string> {
-  const dep = await fetchDeployment();
-  // Ensure correct network before obtaining signer
   try {
-    await ensureWalletOnChain(Number(dep.chainId));
-  } catch (error) {
-    handleBlockchainError(error, { 
-      showToast: true,
-      toastMessage: "Failed to switch to the correct network",
-      logError: true
-    });
-    throw error;
-  }
-  const prov = await getProvider();
-  const signer = await prov.getSigner();
-  const contract = await getContract(signer);
-  const amount = ethers.parseEther(amountInEther);
-  const note = memo || `Donation from ${donorName || 'anonymous'} via GiveHub`;
-  console.debug("[web3] donateNative args:", {
-    campaignId: campaignId.toString(),
-    amount: amountInEther,
-    chainId: dep.chainId,
-    contract: dep.address
-  });
+    const dep = await fetchDeployment();
+    // Ensure correct network before obtaining signer
+    try {
+      await ensureWalletOnChain(Number(dep.chainId));
+    } catch {}
+    const prov = await getProvider();
+    const signer = await prov.getSigner();
 
-  // No-escrow path: send native ZETA (value) and let contract wrap+forward
-  try {
-    const tx = await contract.donateNative(campaignId, donorName || '', note, { value: amount });
-    console.debug("[web3] donation tx:", tx?.hash);
+    // Use new coercion utility to ensure BigInt compatibility
+    const campaignIdBigInt = toBig(campaignId);
+    const note = memo || `Donation from ${donorName || 'anonymous'} via GiveHub`;
+
+    console.debug("[web3] donateNative args:", {
+      campaignId: campaignIdBigInt.toString(),
+      donorName,
+      note,
+      chainId: dep.chainId,
+      contract: dep.address
+    });
+
+    const contract = await getContract(signer);
+    const tx = await contract.donateNative(campaignIdBigInt, donorName || '', note, {
+      value: toWei18(amountInEther) // Use coercion utility for amount
+    });
+    console.debug("[web3] donateNative tx:", tx?.hash);
+
+    // Await receipt with manual polling fallback for ZetaChain RPC quirks
     try {
       await tx.wait(1);
-    } catch (e) {
-      if (isTxNotFoundError(e)) {
+    } catch (txError) {
+      if (isTxNotFoundError(txError)) {
         const prov = ("provider" in signer ? (signer as ethers.Signer & { provider?: ethers.AbstractProvider | null }).provider : null) || null;
         const useProv = prov ?? (await getProvider());
-        console.warn('[web3] tx.wait (donation) reported tx not found; retrying via manual polling…', { hash: tx.hash, err: e });
+        console.warn('[web3] tx.wait (donation) reported tx not found; retrying via manual polling…', { hash: tx.hash, err: txError });
         await waitForReceiptWithRetries(useProv, tx.hash);
       } else {
         // Use our blockchain error handler but don't throw yet
-        handleBlockchainError(e, {
+        handleBlockchainError(txError, {
           showToast: true,
           toastMessage: "Donation transaction confirmation failed",
           logError: true
         });
-        throw e as Error;
+        throw txError as Error;
       }
     }
     return tx.hash;
@@ -925,7 +944,8 @@ export async function donateZRC20ToCampaign(
       const d: bigint | number = await erc20.decimals();
       const n = Number(d);
       if (Number.isFinite(n) && n > 0 && n <= 36) decimals = n;
-    } catch (error) {
+    } catch (e) {
+      void e; // Explicitly mark as unused
       console.warn("Failed to read token decimals, using default:", decimals);
     }
   }

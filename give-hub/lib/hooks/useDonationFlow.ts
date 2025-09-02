@@ -13,6 +13,7 @@ interface DonationFlowState {
     txHash: string;
     donorName?: string;
     chain?: string;
+    tokenSymbol?: string;
   } | null;
   showToast: boolean;
   timedOut: boolean;
@@ -34,7 +35,7 @@ export function useDonationFlow(campaignId?: string) {
   const { donations, connectionStatus } = useLiveDonations(campaignId, { enabled: true });
 
   // Start donation process - show loading indicator
-  const startDonation = useCallback((txHash: string, amount: string, campaignId: string, donorName?: string, chain?: string) => {
+  const startDonation = useCallback((txHash: string, amount: string, campaignId: string, donorName?: string, chain?: string, tokenSymbol?: string) => {
     // Clear any existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -44,7 +45,7 @@ export function useDonationFlow(campaignId?: string) {
       ...prev,
       isProcessing: true,
       pendingTxHash: txHash,
-      lastDonation: { amount, campaignId, txHash, donorName, chain },
+      lastDonation: { amount, campaignId, txHash, donorName, chain, tokenSymbol },
       showToast: false,
       timedOut: false
     }));
@@ -66,6 +67,7 @@ export function useDonationFlow(campaignId?: string) {
               amount: parseFloat(amount),
               chain: chain || 'zeta',
               donorName: donorName || 'Anonymous',
+              tokenSymbol: state.lastDonation?.tokenSymbol || 'ZETA',
               txId: txHash,
               timestamp: new Date().toISOString(),
               status: 'pending_confirmation'
@@ -137,6 +139,7 @@ export function useDonationFlow(campaignId?: string) {
           amount: parseFloat(state.lastDonation.amount),
           chain: state.lastDonation.chain || 'zeta',
           donorName: state.lastDonation.donorName || 'Anonymous',
+          tokenSymbol: state.lastDonation.tokenSymbol || 'ZETA',
           txId: txHash,
           timestamp: new Date().toISOString(),
           status: 'confirmed'

@@ -21,8 +21,8 @@
 import React, { useRef, useState, useContext, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { AuthContext } from '../../lib/auth/auth-context' // Corrected path
-import type { AuthContextType } from '../../lib/auth/auth-context' // Assume type export if available, otherwise define it
+import { AuthContext } from '../lib/auth/auth-context' // Corrected path
+import type { AuthContextType } from '../lib/auth/auth-context' // Assume type export if available, otherwise define it
 import { showError, showSuccess, showInfo } from '@/components/notification-manager'
 import { 
   connectWallet, 
