@@ -11,14 +11,14 @@ interface DonationsLivePaneProps {
   isSynced?: boolean;
 }
 
-export default function DonationsLivePane({ campaignId, isActive = true, isSynced = false }: DonationsLivePaneProps) {
+export default function DonationsLivePane({ campaignId }: DonationsLivePaneProps) {
   // Only subscribe when campaignId is numeric to avoid aggregating all campaigns
   const numericCampaignId = useMemo(() => {
     if (campaignId == null) return undefined;
     const s = String(campaignId).trim();
     return /^\d+$/.test(s) ? s : undefined;
   }, [campaignId]);
-  const { events, isLoading } = useDonationEvents(numericCampaignId);
+  const { events, isLoading, connectionStatus } = useDonationEvents(numericCampaignId);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [fullyExpanded, setFullyExpanded] = useState<Record<string, boolean>>({});
   const noteRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -84,7 +84,10 @@ export default function DonationsLivePane({ campaignId, isActive = true, isSynce
             <h2 className="text-lg font-bold force-header">
               Live Donations
             </h2>
-            <div className={`w-2 h-2 rounded-full ${isSynced ? 'bg-green-400 animate-pulse' : isActive ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} title={isSynced ? 'Synced to blockchain' : isActive ? 'Active but not synced' : 'Paused'}>
+            <div
+              className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-400 animate-pulse' : connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`}
+              title={connectionStatus === 'connected' ? 'Live connection active' : connectionStatus === 'connecting' ? 'Connecting…' : 'Disconnected'}
+            >
             </div>
           </div>
         </div>

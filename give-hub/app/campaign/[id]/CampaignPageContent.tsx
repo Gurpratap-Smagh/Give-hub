@@ -108,10 +108,10 @@ const CARD_PLACEHOLDER_2x1 = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
 
 // Removed Recent Donations list UI and associated on-chain fetching to prevent RPC errors
 
-export default function CampaignPageContent({ initialCampaign, initialDonations }: { initialCampaign: CampaignWithCreator, initialDonations: Donation[] }) {
+export default function CampaignPageContent({ initialCampaign, initialDonations: _initialDonations }: { initialCampaign: CampaignWithCreator, initialDonations: Donation[] }) {
   const { user } = useAuth()
   const [campaign, setCampaign] = useState(initialCampaign)
-  const [donations, setDonations] = useState<DonationWithAddr[]>(initialDonations as DonationWithAddr[])
+  void _initialDonations;
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [editPreview, setEditPreview] = useState<CampaignWithCreator>(campaign)
@@ -299,8 +299,10 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   // Compute progress using MongoDB cents fields directly
   const progressPct = useMemo(() => {
     const goal = campaign.goal || 0
+    const raised = campaign.raised || 0
     if (goal <= 0) return 0
-    return Math.min(100, Math.round(((campaign.raised || 0) / goal) * 100))
+    const percentage = (raised / goal) * 100
+    return Math.min(100, Math.round(percentage * 100) / 100) // Round to 2 decimal places
   }, [campaign.raised, campaign.goal])
 
   const handlePaymentSuccess: PaymentSuccessHandler = (amount: number, chain: string, tokenSymbol?: string) => {
@@ -316,8 +318,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
       name: user?.id || 'Anonymous',
     }
 
-    // Update UI immediately
-    setDonations(prev => [entry, ...prev])
+    // UI list of donors removed; skip local donors state update
 
     // Persist to localStorage for rehydration (align with givehub3 behavior)
     try {
@@ -629,7 +630,6 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
                     <div className="flex justify-between items-center"><span className="text-gray-600">Total Raised</span><span className="font-bold text-gray-900">{formatCurrency(campaign.raised, 'USD', false)}</span></div>
                     <div className="flex justify-between items-center"><span className="text-gray-600">Goal</span><span className="font-bold text-gray-900">{formatCurrency(campaign.goal, 'USD', false)}</span></div>
                     <div className="flex justify-between items-center"><span className="text-gray-600">Progress</span><span className="font-bold text-green-600">{progressPct}%</span></div>
-                    <div className="flex justify-between items-center"><span className="text-gray-600">Donors</span><span className="font-bold text-gray-900">{donations.length}</span></div>
                   </div>
                 </div>
               </div>
