@@ -19,7 +19,7 @@ interface PaymentModalProps {
   campaign: Campaign;
   isOpen: boolean;
   onClose: () => void;
-  onPaymentSuccess: (amount: number, chain: string) => void;
+  onPaymentSuccess: (amount: number, chain: string, tokenSymbol?: string) => void;
   initialAmount?: number;
   initialChain?: string;
   initialToken?: string;
