@@ -167,87 +167,15 @@ export function useLiveDonations(
     let pollInterval: NodeJS.Timeout | null = null;
     let lastBlockNumber = 0;
 
-    const wsUrl = process.env.NEXT_PUBLIC_ZETA_RPC_WS;
-    const useWebSocket = !!wsUrl && wsUrl.startsWith('wss://'); // Re-enable WebSocket
+    // WebSocket disabled due to BlockPI RPC incompatibility with eth_blockNumber
 
     const setupEventListeners = async () => {
       try {
         if (!isActive) return;
-        
-        setConnectionStatus('connecting');
-        setError(null);
 
-        if (useWebSocket) {
-          // Try WebSocket first
-          console.log('[useLiveDonations] Attempting WebSocket connection:', wsUrl);
-          provider = new ethers.WebSocketProvider(wsUrl!);
-          
-          // Test connection
-          await provider.getBlockNumber();
-          console.log('[useLiveDonations] WebSocket connected successfully');
-          
-          // Set up real-time event listeners
-          const donationFilter = {
-            address: contractAddress,
-            topics: topic1 ? [donationTopic0, topic1] : [donationTopic0]
-          };
-
-          const campaignFilter = {
-            address: contractAddress,
-            topics: [campaignTopic0]
-          };
-
-          provider.on(donationFilter, (log) => {
-            try {
-              console.log('[useLiveDonations] WebSocket donation event received:', log);
-              const decoded = decodeDonationLog(log);
-              if (expectedCidStr && decoded.campaignId !== expectedCidStr) return;
-              if (seenDonations.current.has(decoded.id)) return;
-              
-              seenDonations.current.add(decoded.id);
-              setDonations(prev => {
-                const updated = [decoded, ...prev].slice(0, 100);
-                console.log('[useLiveDonations] Updated donations via WebSocket:', updated.length);
-                return updated;
-              });
-            } catch (err) {
-              console.error('[useLiveDonations] Failed to decode donation event:', err);
-            }
-          });
-
-          provider.on(campaignFilter, (log) => {
-            try {
-              console.log('[useLiveDonations] WebSocket campaign event received:', log);
-              const decoded = decodeCampaignLog(log);
-              
-              // Avoid duplicates
-              if (seenCampaigns.current.has(decoded.id)) return;
-              seenCampaigns.current.add(decoded.id);
-
-              console.log('[useLiveDonations] LIVE campaign received:', decoded);
-              
-              setCampaigns(prev => {
-                const next = [decoded, ...prev];
-                return next.slice(0, 100);
-              });
-            } catch (err) {
-              console.error('[useLiveDonations] Failed to decode live campaign:', err);
-            }
-          });
-
-          // Also do initial historical fetch
-          const currentBlock = await provider.getBlockNumber();
-          if (isActive) {
-            setConnectionStatus('connected');
-            const fromBlock = Math.max(0, currentBlock - 100);
-            await fetchHistoricalEvents(provider, fromBlock, currentBlock);
-          }
-
-        } else {
-          // Fallback to polling with HTTP provider
-          console.log('[useLiveDonations] Using HTTP polling fallback');
-          await setupPolling();
-        }
+        // Always use HTTP polling since WebSocket is disabled
+        console.log('[useLiveDonations] Using HTTP polling');
+        await setupPolling();
 
       } catch (err) {
         console.error('[useLiveDonations] WebSocket setup failed, falling back to polling:', err);

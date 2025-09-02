@@ -81,7 +81,7 @@ interface CampaignEditFormRef extends HTMLFormElement {
 }
 
 // Type for payment success handler to match PaymentModal expectations
-type PaymentSuccessHandler = (amount: number, chain: string) => void;
+type PaymentSuccessHandler = (amount: number, chain: string, tokenSymbol?: string) => void;
 
 /**
  * FILE: app/campaign/[id]/CampaignPageContent.tsx
@@ -296,7 +296,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
     return Math.min(100, Math.round(((campaign.raised || 0) / goal) * 100))
   }, [campaign.raised, campaign.goal])
 
-  const handlePaymentSuccess: PaymentSuccessHandler = (amount: number, chain: string) => {
+  const handlePaymentSuccess: PaymentSuccessHandler = (amount: number, chain: string, tokenSymbol?: string) => {
     // Create and persist a donation entry (local + server total)
     const entry: DonationWithAddr = {
       amount,
@@ -339,6 +339,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
             donorName: entry.name || 'Anonymous',
             amount,
             chain,
+            tokenSymbol: tokenSymbol || 'USD',
             timestamp: entry.createdAt,
           }),
         })

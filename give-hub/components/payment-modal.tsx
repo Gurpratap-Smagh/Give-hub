@@ -212,8 +212,8 @@ export default function PaymentModal({
 
         // Start donation flow tracking with additional params
         const chainName = isZetaChainPicked ? 'ZetaChain' : 'Ethereum Sepolia';
-        startDonation(txHash, raw, campaign.id, donorDisplayName, chainName);
-        onPaymentSuccess(amountValue, chainName);
+        startDonation(txHash, raw, campaign.id, donorDisplayName, chainName, displaySymbol);
+        onPaymentSuccess(amountValue, chainName, displaySymbol);
         
         // Close modal immediately but let donation flow handle success notification
         onClose();
@@ -235,7 +235,7 @@ export default function PaymentModal({
           }
         }
 
-        onPaymentSuccess(amountValue, selectedChain);
+        onPaymentSuccess(amountValue, selectedChain, 'USD');
         showSuccess(`Mock payment of $${raw} completed!`);
         onClose();
         setAmount("");

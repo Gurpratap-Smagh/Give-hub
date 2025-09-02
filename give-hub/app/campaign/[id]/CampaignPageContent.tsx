@@ -49,6 +49,7 @@ import { formatCurrency } from '@/lib/utils/format'
 import { useAuth } from '@/lib/auth/auth-context'
 import { showError, showSuccess, showInfo } from '@/components/notification-manager'
 import { getCampaignInfo } from '@/lib/web3/client'
+import { isCampaignSynced } from '@/lib/web3/campaignUtils'
 
 import CampaignEditForm from '@/components/campaign-edit-form'
 import PaymentModal from '@/components/payment-modal'
@@ -81,7 +82,7 @@ interface CampaignEditFormRef extends HTMLFormElement {
 }
 
 // Type for payment success handler to match PaymentModal expectations
-type PaymentSuccessHandler = (amount: number, chain: string) => void;
+type PaymentSuccessHandler = (amount: number, chain: string, tokenSymbol?: string) => void;
 
 /**
  * FILE: app/campaign/[id]/CampaignPageContent.tsx
@@ -118,6 +119,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   const formRef = useRef<CampaignEditFormRef>(null)
   const [imgSrc, setImgSrc] = useState<string>(campaign.image || CARD_PLACEHOLDER_2x1)
   const [onChainActive, setOnChainActive] = useState(campaign.onChain?.isActive) // Used in sync function
+  const [isSynced, setIsSynced] = useState(false) // Track campaign sync status
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editImage, setEditImage] = useState<string>(campaign.image || '')
   const [imageGenLoading, setImageGenLoading] = useState(false)
@@ -135,7 +137,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
     }
   }, [isEditing, campaign.image])
   
-  // Check actual contract pause state on load
+  // Check actual contract pause state and sync status on load
   useEffect(() => {
     const checkContractStatus = async () => {
       if (campaign.onChain?.campaignId) {
@@ -145,8 +147,13 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
           if (campaignInfo) {
             setOnChainActive(campaignInfo.isActive)
           }
+          
+          // Check if campaign is synced to blockchain
+          const synced = await isCampaignSynced(campaign.onChain.campaignId)
+          setIsSynced(synced)
         } catch {
           showError('Failed to check contract status', 'Unable to query on-chain status.')
+          setIsSynced(false)
         }
       }
     }
@@ -296,7 +303,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
     return Math.min(100, Math.round(((campaign.raised || 0) / goal) * 100))
   }, [campaign.raised, campaign.goal])
 
-  const handlePaymentSuccess: PaymentSuccessHandler = (amount: number, chain: string) => {
+  const handlePaymentSuccess: PaymentSuccessHandler = (amount: number, chain: string, tokenSymbol?: string) => {
     // Create and persist a donation entry (local + server total)
     const entry: DonationWithAddr = {
       amount,
@@ -339,6 +346,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
             donorName: entry.name || 'Anonymous',
             amount,
             chain,
+            tokenSymbol: tokenSymbol || 'USD',
             timestamp: entry.createdAt,
           }),
         })
@@ -585,7 +593,8 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
               <div className="mt-4 lg:mt-8">
                 <DonationsLivePane 
                   campaignId={campaign.onChain?.campaignId || campaign.id} 
-                  isActive={onChainActive !== null ? !!onChainActive : true} 
+                  isActive={onChainActive !== null ? !!onChainActive : true}
+                  isSynced={isSynced}
                 />
               </div>
             </div>

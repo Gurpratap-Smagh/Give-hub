@@ -62,7 +62,10 @@ export const toTokenUnits = (v: string | number | bigint, decimals: number = 18)
 /**
  * Convert wei/token units back to human-readable format
  */
-export const fromWei18 = (v: string | number | bigint): string => {
+export const fromWei18 = (v: string | number | bigint | undefined): string => {
+  if (v === undefined || v === null) {
+    return "0";
+  }
   try {
     return ethers.formatEther(toBig(v));
   } catch {

@@ -8,9 +8,10 @@ import Spinner from '@/components/spinner';
 interface DonationsLivePaneProps {
   campaignId: string | number;
   isActive?: boolean;
+  isSynced?: boolean;
 }
 
-export default function DonationsLivePane({ campaignId, isActive = true }: DonationsLivePaneProps) {
+export default function DonationsLivePane({ campaignId, isActive = true, isSynced = false }: DonationsLivePaneProps) {
   // Only subscribe when campaignId is numeric to avoid aggregating all campaigns
   const numericCampaignId = useMemo(() => {
     if (campaignId == null) return undefined;
@@ -83,7 +84,7 @@ export default function DonationsLivePane({ campaignId, isActive = true }: Donat
             <h2 className="text-lg font-bold force-header">
               Live Donations
             </h2>
-            <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} title={isActive ? 'Active' : 'Paused'}>
+            <div className={`w-2 h-2 rounded-full ${isSynced ? 'bg-green-400 animate-pulse' : isActive ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} title={isSynced ? 'Synced to blockchain' : isActive ? 'Active but not synced' : 'Paused'}>
             </div>
           </div>
         </div>
