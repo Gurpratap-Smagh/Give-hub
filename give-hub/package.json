@@ -10,7 +10,9 @@
     "donate:eth": "tsx ../scripts/donate-from-eth-sepolia.ts",
     "test:events": "node scripts/test-contract-events.js",
     "generate-favicons": "node scripts/generate-favicons.js",
-    "postinstall": "npm run generate-favicons"
+    "postinstall": "npm run generate-favicons",
+    "listen:donations": "node lib/services/donationEventListener.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^1.13.0",

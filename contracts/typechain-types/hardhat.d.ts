@@ -14,10 +14,6 @@ import * as Contracts from ".";
 declare module "hardhat/types/runtime" {
   interface HardhatEthersHelpers extends HardhatEthersHelpersBase {
     getContractFactory(
-      name: "IERC20",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IERC20__factory>;
-    getContractFactory(
       name: "Abortable",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Abortable__factory>;
@@ -58,14 +54,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ZContract__factory>;
     getContractFactory(
-      name: "SystemContract",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.SystemContract__factory>;
-    getContractFactory(
-      name: "SystemContractErrors",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.SystemContractErrors__factory>;
-    getContractFactory(
       name: "CrossChainCrowdfund",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.CrossChainCrowdfund__factory>;
@@ -85,12 +73,11 @@ declare module "hardhat/types/runtime" {
       name: "OwnableLite",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.OwnableLite__factory>;
+    getContractFactory(
+      name: "GiveHubUniversal",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.GiveHubUniversal__factory>;
 
-    getContractAt(
-      name: "IERC20",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.IERC20>;
     getContractAt(
       name: "Abortable",
       address: string | ethers.Addressable,
@@ -142,16 +129,6 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.ZContract>;
     getContractAt(
-      name: "SystemContract",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.SystemContract>;
-    getContractAt(
-      name: "SystemContractErrors",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.SystemContractErrors>;
-    getContractAt(
       name: "CrossChainCrowdfund",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -176,11 +153,12 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.OwnableLite>;
+    getContractAt(
+      name: "GiveHubUniversal",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.GiveHubUniversal>;
 
-    deployContract(
-      name: "IERC20",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20>;
     deployContract(
       name: "Abortable",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -222,14 +200,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ZContract>;
     deployContract(
-      name: "SystemContract",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SystemContract>;
-    deployContract(
-      name: "SystemContractErrors",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SystemContractErrors>;
-    deployContract(
       name: "CrossChainCrowdfund",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.CrossChainCrowdfund>;
@@ -249,12 +219,11 @@ declare module "hardhat/types/runtime" {
       name: "OwnableLite",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.OwnableLite>;
-
     deployContract(
-      name: "IERC20",
-      args: any[],
+      name: "GiveHubUniversal",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20>;
+    ): Promise<Contracts.GiveHubUniversal>;
+
     deployContract(
       name: "Abortable",
       args: any[],
@@ -306,16 +275,6 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ZContract>;
     deployContract(
-      name: "SystemContract",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SystemContract>;
-    deployContract(
-      name: "SystemContractErrors",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.SystemContractErrors>;
-    deployContract(
       name: "CrossChainCrowdfund",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -340,6 +299,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.OwnableLite>;
+    deployContract(
+      name: "GiveHubUniversal",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.GiveHubUniversal>;
 
     // default types
     getContractFactory(

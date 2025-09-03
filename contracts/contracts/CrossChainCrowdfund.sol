@@ -8,8 +8,8 @@ pragma solidity ^0.8.26;
 
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol";
-import "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
+import { RevertContext, RevertOptions } from "@zetachain/protocol-contracts/contracts/Revert.sol";
 
 /*//////////////////////////////////////////////////////////////
                     Minimal interfaces / utils
@@ -29,6 +29,7 @@ interface IUniswapV2Router02 {
     uint deadline
   ) external returns (uint[] memory amounts);
   function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts);
+  function getAmountsIn(uint256 amountOut, address[] calldata path) external view returns (uint256[] memory amounts);
 }
 
 interface IERC20Minimal {
@@ -101,6 +102,11 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     address creator;         // ZEVM address
     address preferredZRC20;  // any whitelisted token
     bool    active;
+    // Optional cross-chain payout configuration
+    address payoutAddress;   // Creator's address on destination chain (EVM). If zero, pay locally on ZEVM
+    uint256 payoutGasLimit;  // Gas limit to use for withdrawAndCall/call. If zero, a sane default is used
+    bool    useArbitraryCall; // If true and callMessage set, use withdrawAndCall with arbitrary payload
+    bytes   callMessage;     // Optional calldata for withdrawAndCall on destination chain
   }
 
   /*------------------------------- EVENTS -------------------------------*/
@@ -134,6 +140,9 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   event DebugSwapFailedBytes(bytes lowLevelData);
   event DebugTransferOut(address token, address to, uint256 amount);
   event DebugContributionRecorded(uint256 id);
+  event DebugGasFee(address token, address gasToken, uint256 gasFee, uint256 gasLimit, uint256 haveBalance);
+  event DebugGatewayWithdraw(address receiverToken, uint256 amount, bool withCall);
+  event DebugOnRevert(address asset, uint256 amount, bytes revertMessage);
 
   /*------------------------------- ERRORS -------------------------------*/
 
@@ -146,6 +155,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   error OnlySystem();
   error UnknownAction();
   error PayoutTokenNotAllowed();
+  error InsufficientForGas();
 
   /*------------------------------ STORAGE ------------------------------*/
 
@@ -271,7 +281,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
       address zrc20,
       uint256 amount,
       bytes calldata message
-  ) external override onlyGateway {
+  ) external override onlyGateway nonReentrant {
       (string memory action, bytes memory data) = abi.decode(message, (string, bytes));
 
       if (debug) {
@@ -297,7 +307,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
       } else if (keccak256(bytes(action)) == keccak256("donate_token")) {
           // For ERC20→ZRC20 deposits
-          (address sourceToken, uint256 sourceAmount, uint256 campaignId, string memory donorName, string memory note) =
+          (, , uint256 campaignId, string memory donorName, string memory note) =
               abi.decode(data, (address, uint256, uint256, string, string));
 
           if (debug) emit DebugDecodedDonate(campaignId, donorName, note);
@@ -330,7 +340,11 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     campaigns[campaignId] = Campaign({
       creator: msg.sender,
       preferredZRC20: preferredZRC20,
-      active: true
+      active: true,
+      payoutAddress: address(0),
+      payoutGasLimit: 0,
+      useArbitraryCall: false,
+      callMessage: new bytes(0)
     });
 
     emit CampaignCreated(campaignId, msg.sender, preferredZRC20);
@@ -347,6 +361,34 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     // No need to update separate creators mapping anymore
 
     emit CampaignCreated(campaignId, msg.sender, newToken); // Reuse event for simplicity
+  }
+
+  /// Configure destination for cross-chain payouts. If not set, payouts remain on ZEVM to creator address.
+  function updateCampaignDestination(
+    uint256 campaignId,
+    address payoutAddress,
+    uint256 payoutGasLimit
+  ) external {
+    Campaign storage campaign = campaigns[campaignId];
+    require(campaign.creator == msg.sender, "NOT_CREATOR");
+    require(campaign.active, "CAMPAIGN_INACTIVE");
+
+    campaign.payoutAddress = payoutAddress; // zero clears cross-chain payout
+    campaign.payoutGasLimit = payoutGasLimit; // zero means use default
+  }
+
+  /// Optional: set arbitrary call message to be used with withdrawAndCall on destination chain.
+  function setCampaignCallMessage(
+    uint256 campaignId,
+    bytes calldata message,
+    bool useArbitrary
+  ) external {
+    Campaign storage campaign = campaigns[campaignId];
+    require(campaign.creator == msg.sender, "NOT_CREATOR");
+    require(campaign.active, "CAMPAIGN_INACTIVE");
+
+    campaign.callMessage = message; // empty clears
+    campaign.useArbitraryCall = useArbitrary;
   }
 
   
@@ -380,13 +422,17 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
         // This branch is no longer used, but keep for safety
         revert InvalidToken();
     } else {
+        // Enforce inbound token allowlist
+        require(allowedInTokens[zrc20In], "TOKEN_IN_NOT_ALLOWED");
         actualTokenIn = zrc20In;
         tokenOut = campaign.preferredZRC20;
+        // Enforce outbound token allowlist (in case owner changed policy after campaign creation)
+        require(allowedOutTokens[tokenOut], "PAYOUT_TOKEN_NOT_ALLOWED");
         amountOut = _swapExactViaPath(actualTokenIn, tokenOut, amount);
     }
 
-    if (debug) emit DebugTransferOut(tokenOut, campaign.creator, amountOut);
-    IERC20Minimal(tokenOut).safeTransfer(campaign.creator, amountOut);
+    // Payout to creator: if cross-chain destination configured, withdraw via Gateway; otherwise transfer locally on ZEVM
+    _payoutCreator(campaignId, campaign, tokenOut, amountOut);
 
     string memory chainName = _getChainName(ctx.chainID);
 
@@ -432,10 +478,13 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
     IWZETA(WZETA).deposit{ value: msg.value }(); // wrap ZETA -> WZETA
 
+    // Enforce allowlists
+    require(allowedInTokens[WZETA], "TOKEN_IN_NOT_ALLOWED");
     address tokenOut = c.preferredZRC20;
+    require(allowedOutTokens[tokenOut], "PAYOUT_TOKEN_NOT_ALLOWED");
     uint256 converted = _swapExactViaPath(WZETA, tokenOut, msg.value);
 
-    IERC20Minimal(tokenOut).safeTransfer(c.creator, converted);
+    _payoutCreator(campaignId, c, tokenOut, converted);
 
     uint256 id = ++nextContributionId;
     contributions[id] = Contribution({
@@ -483,10 +532,10 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     IERC20Minimal(token).safeTransferFrom(msg.sender, address(this), amount);
 
     address tokenOut = c.preferredZRC20;
+    require(allowedOutTokens[tokenOut], "PAYOUT_TOKEN_NOT_ALLOWED");
     uint256 converted = _swapExactViaPath(token, tokenOut, amount);
 
-    if (debug) emit DebugTransferOut(tokenOut, c.creator, converted);
-    IERC20Minimal(tokenOut).safeTransfer(c.creator, converted);
+    _payoutCreator(campaignId, c, tokenOut, converted);
 
     string memory chainName = bytes(tokenLabel[token]).length == 0
       ? "ZetaChain"
@@ -591,6 +640,146 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     }
   }
 
+  /*------------------------------ PAYOUT -------------------------------*/
+
+  function _payoutCreator(
+    uint256 campaignId,
+    Campaign storage campaign,
+    address tokenOut,
+    uint256 amountOut
+  ) internal {
+    if (campaign.payoutAddress == address(0)) {
+      // Local payout on ZEVM
+      IERC20Minimal(tokenOut).safeTransfer(campaign.creator, amountOut);
+      if (debug) emit DebugTransferOut(tokenOut, campaign.creator, amountOut);
+      return;
+    }
+
+    // Cross-chain payout via Gateway
+    uint256 gasLimit = campaign.payoutGasLimit == 0 ? 200_000 : campaign.payoutGasLimit;
+
+    // Quote gas fee and gas ZRC-20 for this withdrawal
+    (address gasZRC20, uint256 gasFee) = IZRC20(tokenOut).withdrawGasFeeWithGasLimit(gasLimit);
+
+    // Ensure we have enough gasZRC20 to cover fee; swap from tokenOut if needed
+    uint256 have = IERC20Minimal(gasZRC20).balanceOf(address(this));
+    if (have < gasFee) {
+      uint256 shortfall = gasFee - have;
+      if (tokenOut == gasZRC20) {
+        // No swap needed; reserve from amountOut directly
+        if (amountOut <= shortfall) revert InsufficientForGas();
+        amountOut -= shortfall;
+      } else {
+        // Swap a portion of tokenOut to gasZRC20 to cover fee
+        uint256 used = _swapToCoverGasFee(tokenOut, gasZRC20, shortfall, amountOut);
+        amountOut -= used;
+      }
+    }
+
+    if (debug) emit DebugGasFee(tokenOut, gasZRC20, gasFee, gasLimit, IERC20Minimal(gasZRC20).balanceOf(address(this)));
+
+    if (amountOut == 0) revert InsufficientForGas();
+
+    // Approvals for gateway
+    if (gasZRC20 == tokenOut) {
+      // Approve once for both withdraw amount and gas fee
+      IERC20Minimal(tokenOut).safeApprove(gateway, 0);
+      IERC20Minimal(tokenOut).safeApprove(gateway, amountOut + gasFee);
+    } else {
+      IERC20Minimal(gasZRC20).safeApprove(gateway, 0);
+      IERC20Minimal(gasZRC20).safeApprove(gateway, gasFee);
+      IERC20Minimal(tokenOut).safeApprove(gateway, 0);
+      IERC20Minimal(tokenOut).safeApprove(gateway, amountOut);
+    }
+
+    bytes memory receiver = abi.encodePacked(campaign.payoutAddress);
+
+    if (campaign.callMessage.length > 0 || campaign.useArbitraryCall) {
+      CallOptions memory co = CallOptions({
+        gasLimit: gasLimit,
+        isArbitraryCall: campaign.useArbitraryCall
+      });
+      RevertOptions memory ro = RevertOptions({
+        revertAddress: address(this),
+        callOnRevert: true,
+        abortAddress: address(0),
+        revertMessage: abi.encode(campaignId, tokenOut, amountOut),
+        onRevertGasLimit: gasLimit
+      });
+      IGatewayZEVM(gateway).withdrawAndCall(
+        receiver,
+        amountOut,
+        tokenOut,
+        campaign.callMessage,
+        co,
+        ro
+      );
+      if (debug) emit DebugGatewayWithdraw(tokenOut, amountOut, true);
+    } else {
+      RevertOptions memory ro2 = RevertOptions({
+        revertAddress: address(this),
+        callOnRevert: true,
+        abortAddress: address(0),
+        revertMessage: abi.encode(campaignId, tokenOut, amountOut),
+        onRevertGasLimit: gasLimit
+      });
+      IGatewayZEVM(gateway).withdraw(
+        receiver,
+        amountOut,
+        tokenOut,
+        ro2
+      );
+      if (debug) emit DebugGatewayWithdraw(tokenOut, amountOut, false);
+    }
+  }
+
+  function _swapToCoverGasFee(
+    address tokenIn,
+    address gasToken,
+    uint256 neededGasTokenOut,
+    uint256 maxInputAvailable
+  ) internal returns (uint256 usedInput) {
+    if (address(router) == address(0)) revert RouterNotSet();
+
+    // Build path tokenIn -> (WZETA) -> gasToken
+    address[] memory path;
+    if (tokenIn != WZETA && gasToken != WZETA) {
+      path = new address[](3);
+      path[0] = tokenIn;
+      path[1] = WZETA;
+      path[2] = gasToken;
+    } else {
+      path = new address[](2);
+      path[0] = tokenIn;
+      path[1] = gasToken;
+    }
+
+    uint[] memory amountsIn = router.getAmountsIn(neededGasTokenOut, path);
+    uint256 requiredIn = amountsIn[0];
+    // Add slippage buffer
+    uint256 amountIn = (requiredIn * (10_000 + slippageBps)) / 10_000;
+    if (amountIn > maxInputAvailable) revert InsufficientForGas();
+
+    if (debug) emit DebugApproveReset(tokenIn, 0);
+    IERC20Minimal(tokenIn).safeApprove(address(router), 0);
+    if (debug) emit DebugApprove(tokenIn, amountIn);
+    IERC20Minimal(tokenIn).safeApprove(address(router), amountIn);
+
+    // Swap exact input to get at least neededGasTokenOut
+    router.swapExactTokensForTokens(
+      amountIn,
+      neededGasTokenOut,
+      path,
+      address(this),
+      block.timestamp + 600
+    );
+
+    // Clean up approval
+    IERC20Minimal(tokenIn).safeApprove(address(router), 0);
+
+    return amountIn;
+  }
+
   /*------------------------------ VIEW FUNCTIONS -------------------------------*/
 
   struct CampaignInfo {
@@ -691,6 +880,21 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     if (chainId == 97) return "BSC Testnet";
     if (chainId == 7001) return "ZetaChain Athens";
     return "Unknown Chain";
+  }
+
+  /*------------------------------ REVERT HANDLER -------------------------------*/
+  function onRevert(RevertContext calldata revertContext) external onlyGateway {
+    if (debug) emit DebugOnRevert(revertContext.asset, revertContext.amount, revertContext.revertMessage);
+    // Attempt fallback payout to campaign creator using encoded revert message
+    (uint256 campaignId) = abi.decode(
+      revertContext.revertMessage,
+      (uint256)
+    );
+    Campaign storage c = campaigns[campaignId];
+    if (c.creator != address(0)) {
+      IERC20Minimal(revertContext.asset).safeTransfer(c.creator, revertContext.amount);
+      if (debug) emit DebugTransferOut(revertContext.asset, c.creator, revertContext.amount);
+    }
   }
 
   /// Reject plain native transfers — must call donateNative()

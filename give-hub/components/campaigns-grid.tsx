@@ -169,10 +169,10 @@ export function CampaignsGrid({
       
       {/* View All button */}
       {!expanded && extraCards.length > 0 && (
-        <div className="flex justify-center mt-8">
+        <div className="flex justify-center mt-8 mb-20 md:mb-8">
           <button
             onClick={() => setExpanded(true)}
-            className="py-2 px-6 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transform transition hover:scale-105 font-semibold"
+            className="py-2 px-6 rounded-full bg-transparent border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm hover:shadow-md transform transition hover:scale-105 font-semibold"
           >
             View All Campaigns
           </button>

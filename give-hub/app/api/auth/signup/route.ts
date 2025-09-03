@@ -63,9 +63,10 @@ export async function POST(request: NextRequest) {
     response.cookies.set('auth-token', result.token!, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      // maxAge is in seconds
-      maxAge: 60 * 60 * 24 // 24 hours
+      sameSite: 'lax', // Changed from 'strict' to 'lax' for better cross-origin compatibility
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: '/',
+      // Remove domain restriction to work with any deployment URL
     });
     
     return response;
