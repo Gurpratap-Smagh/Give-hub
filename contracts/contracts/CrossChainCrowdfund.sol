@@ -3,13 +3,17 @@ pragma solidity ^0.8.26;
 
 /**
  * CrossChainCrowdfund — Universal Contract for cross-chain donations
- * Follows ZetaChain Universal Contract pattern with proper gateway integration
+ * Uses ZetaChain Gateway pattern for cross-chain interactions
+ * Updated for new gateway addresses and proper ABI encoding
  */
 
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol";
 import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
+import {SwapHelperLib} from "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 import { RevertContext, RevertOptions } from "@zetachain/protocol-contracts/contracts/Revert.sol";
+import { CallOptions } from "@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol";
+import { MessageContext } from "@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol";
 
 /*//////////////////////////////////////////////////////////////
                     Minimal interfaces / utils
@@ -105,8 +109,6 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     // Optional cross-chain payout configuration
     address payoutAddress;   // Creator's address on destination chain (EVM). If zero, pay locally on ZEVM
     uint256 payoutGasLimit;  // Gas limit to use for withdrawAndCall/call. If zero, a sane default is used
-    bool    useArbitraryCall; // If true and callMessage set, use withdrawAndCall with arbitrary payload
-    bytes   callMessage;     // Optional calldata for withdrawAndCall on destination chain
   }
 
   /*------------------------------- EVENTS -------------------------------*/
@@ -223,7 +225,8 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
       _btcZRC20 == address(0)
     ) revert InvalidToken();
 
-    gateway = _gateway;
+    // Use the correct ZetaChain testnet gateway address
+    gateway = _gateway; // Should be 0x6c533f7fe93fae114d0954697069df33c9b74fd7 for ZetaChain testnet
     WZETA = _wzeta;
     ethZRC20 = _ethZRC20;
     btcZRC20 = _btcZRC20;
@@ -272,59 +275,77 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   /**
    * @notice Universal Contract onCall function - receives cross-chain calls
    * @param context Message context from the gateway
-   * @param zrc20 The ZRC-20 token address (if any)
+   * @param zrc20 The ZRC-20 token address received
    * @param amount The amount of tokens received
-   * @param message The encoded message data
+   * @param message The ABI-encoded message data from depositAndCall
    */
   function onCall(
-      MessageContext calldata context,
-      address zrc20,
-      uint256 amount,
-      bytes calldata message
-  ) external override onlyGateway nonReentrant {
-      (string memory action, bytes memory data) = abi.decode(message, (string, bytes));
+    MessageContext calldata context,
+    address zrc20,
+    uint256 amount,
+    bytes calldata message
+) external override {
+    emit eh("onCall");
 
-      if (debug) {
-          emit DebugOnCallEntered(context.sender, context.chainID, zrc20, amount);
-      }
+    // Payload: (campaignId, donorName, note, recipient)
+    (string memory action, bytes memory data) = abi.decode(message, (string, bytes));
+    uint256 campaignId;
+    string memory donorName;
+    string memory note;
+    if (keccak256(bytes(action)) == keccak256("donate_native")) {
+        // Step 2: decode the inner payload
+        (campaignId, donorName, note) = abi.decode(data, (uint256, string, string));
+        if (debug) emit DebugDecodedDonate(campaignId, donorName, note);
 
-      if (keccak256(bytes(action)) == keccak256("donate_native")) {
-          // For native deposits: zrc20 is the *wrapped* native (e.g. zETH) contract on ZetaChain.
-          // The gateway already minted zETH to this UC.
-          (uint256 campaignId, string memory donorName, string memory note) =
-              abi.decode(data, (uint256, string, string));
+        // … now process donation …
+    } else {
+        revert("Unknown action");
+    }
 
-          if (debug) emit DebugDecodedDonate(campaignId, donorName, note);
+    
 
-          _handleDonation(
-              context,
-              zrc20,        // zETH address from gateway
-              amount,       // amount of zETH received
-              campaignId,
-              donorName,
-              note
-          );
+    Campaign storage campaign = campaigns[campaignId];
+    if (campaign.creator == address(0)) revert InvalidCampaign();
+    if (!campaign.active) revert CampaignInactive();
 
-      } else if (keccak256(bytes(action)) == keccak256("donate_token")) {
-          // For ERC20→ZRC20 deposits
-          (, , uint256 campaignId, string memory donorName, string memory note) =
-              abi.decode(data, (address, uint256, uint256, string, string));
+    address donorAddress = _deriveDonorAddress(context);
 
-          if (debug) emit DebugDecodedDonate(campaignId, donorName, note);
+    if (debug) emit DebugDonationBegin(campaignId, campaign.creator, zrc20, amount);
 
-          _handleDonation(
-              context,
-              zrc20,        // zUSDC or other ZRC20 minted on ZetaChain
-              amount,       // amount of zToken received
-              campaignId,
-              donorName,
-              note
-          );
+    emit eh("before swap exact path");
 
-      } else {
-          revert UnknownAction();
-      }
-  }
+    // Unified swap+payout
+    uint256 finalAmount = _swapExactViaPath(zrc20, campaign.preferredZRC20, amount, campaignId);
+
+    // Record contribution
+    string memory chainName = _getChainName(context.chainID);
+    uint256 id = ++nextContributionId;
+    contributions[id] = Contribution({
+        campaignId: campaignId,
+        donor: donorAddress,
+        originalToken: zrc20,
+        zrc20Received: campaign.preferredZRC20,
+        originalAmount: amount,
+        convertedAmount: finalAmount,
+        originChainId: context.chainID,
+        timestamp: uint64(block.timestamp),
+        originChainName: chainName
+    });
+
+    if (debug) emit DebugContributionRecorded(id);
+
+    emit ContributionReceived(
+        campaignId,
+        donorAddress,
+        id,
+        zrc20,
+        amount,
+        finalAmount,
+        chainName,
+        donorName,
+        note
+    );
+}
 
   /*------------------------- CAMPAIGN MANAGEMENT ------------------------*/
 
@@ -342,9 +363,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
       preferredZRC20: preferredZRC20,
       active: true,
       payoutAddress: address(0),
-      payoutGasLimit: 0,
-      useArbitraryCall: false,
-      callMessage: new bytes(0)
+      payoutGasLimit: 0
     });
 
     emit CampaignCreated(campaignId, msg.sender, preferredZRC20);
@@ -376,22 +395,6 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     campaign.payoutAddress = payoutAddress; // zero clears cross-chain payout
     campaign.payoutGasLimit = payoutGasLimit; // zero means use default
   }
-
-  /// Optional: set arbitrary call message to be used with withdrawAndCall on destination chain.
-  function setCampaignCallMessage(
-    uint256 campaignId,
-    bytes calldata message,
-    bool useArbitrary
-  ) external {
-    Campaign storage campaign = campaigns[campaignId];
-    require(campaign.creator == msg.sender, "NOT_CREATOR");
-    require(campaign.active, "CAMPAIGN_INACTIVE");
-
-    campaign.callMessage = message; // empty clears
-    campaign.useArbitraryCall = useArbitrary;
-  }
-
-  
 
   /*--------------------------- DONATION HANDLING ------------------------*/
 
@@ -428,11 +431,10 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
         tokenOut = campaign.preferredZRC20;
         // Enforce outbound token allowlist (in case owner changed policy after campaign creation)
         require(allowedOutTokens[tokenOut], "PAYOUT_TOKEN_NOT_ALLOWED");
-        amountOut = _swapExactViaPath(actualTokenIn, tokenOut, amount);
+        _swapExactViaPath(actualTokenIn, tokenOut, amount, campaignId);
     }
 
     // Payout to creator: if cross-chain destination configured, withdraw via Gateway; otherwise transfer locally on ZEVM
-    _payoutCreator(campaignId, campaign, tokenOut, amountOut);
 
     string memory chainName = _getChainName(ctx.chainID);
 
@@ -476,23 +478,22 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     if (c.creator == address(0)) revert InvalidCampaign();
     if (!c.active) revert CampaignInactive();
 
-    IWZETA(WZETA).deposit{ value: msg.value }(); // wrap ZETA -> WZETA
+    // Use low-level call to WZETA deposit function
+    (bool success, ) = WZETA.call{value: msg.value}(abi.encodeWithSignature("deposit()"));
+    require(success, "WZETA_DEPOSIT_FAILED");
 
     // Enforce allowlists
-    require(allowedInTokens[WZETA], "TOKEN_IN_NOT_ALLOWED");
     address tokenOut = c.preferredZRC20;
     require(allowedOutTokens[tokenOut], "PAYOUT_TOKEN_NOT_ALLOWED");
-    uint256 converted = _swapExactViaPath(WZETA, tokenOut, msg.value);
-
-    _payoutCreator(campaignId, c, tokenOut, converted);
-
+    uint256 converted = _swapExactViaPath(WZETA, tokenOut, msg.value, campaignId);
+// payout or swap
     uint256 id = ++nextContributionId;
     contributions[id] = Contribution({
       campaignId: campaignId,
       donor: msg.sender,
       originalToken: address(0),
       zrc20Received: tokenOut,
-      originalAmount: msg.value,
+      originalAmount: (msg.value),
       convertedAmount: converted,
       originChainId: block.chainid,
       timestamp: uint64(block.timestamp),
@@ -533,9 +534,8 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
 
     address tokenOut = c.preferredZRC20;
     require(allowedOutTokens[tokenOut], "PAYOUT_TOKEN_NOT_ALLOWED");
-    uint256 converted = _swapExactViaPath(token, tokenOut, amount);
+    uint256 converted = _swapExactViaPath(token, tokenOut, amount, campaignId);
 
-    _payoutCreator(campaignId, c, tokenOut, converted);
 
     string memory chainName = bytes(tokenLabel[token]).length == 0
       ? "ZetaChain"
@@ -582,14 +582,46 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     payable(to).transfer(amount);
     emit Rescue(address(0), to, amount);
   }
-
+  event DebugInsufficientForGas(address tokenOut);
   /*------------------------------ SWAPPING ------------------------------*/
+  function _getMinOut(
+      address tokenIn,
+      address tokenOut,
+      uint256 amountIn
+  ) internal view returns (uint256) {
+      address[] memory path;
 
+      if (tokenIn == WZETA || tokenOut == WZETA) {
+          // Route through ZETA (unwrap WZETA internally for pricing)
+          path = new address[](3);
+          path[0] = tokenIn;
+          path[1] = WZETA;
+          path[2] = tokenOut;
+      } else {
+          // Direct pair
+          path = new address[](2);
+          path[0] = tokenIn;
+          path[1] = tokenOut;
+      }
+
+      uint[] memory quotes = router.getAmountsOut(amountIn, path);
+      uint256 expectedOut = quotes[quotes.length - 1];
+
+      // Apply slippage tolerance
+      return (expectedOut * (10_000 - slippageBps)) / 10_000;
+  }
+
+
+  event eh(string msg);
+  
   function _swapExactViaPath(
     address tokenIn,
     address tokenOut,
-    uint256 amountIn
+    uint256 amountIn,
+    uint256 campaignId
   ) internal returns (uint256 amountOut) {
+    emit eh("swapExactViaPath");
+
     if (tokenIn == tokenOut) return amountIn;
     if (address(router) == address(0)) {
       if (debug) emit DebugRouterMissing();
@@ -597,187 +629,69 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     }
 
     // Get quoted amount out
-    address[] memory path;
-    if (tokenIn != WZETA && tokenOut != WZETA) {
-      path = new address[](3);
-      path[0] = tokenIn;
-      path[1] = WZETA;
-      path[2] = tokenOut;
-    } else {
-      path = new address[](2);
-      path[0] = tokenIn;
-      path[1] = tokenOut;
-    }
     
-    uint[] memory quotes = router.getAmountsOut(amountIn, path);
-    uint256 minOut = (quotes[quotes.length - 1] * (10_000 - slippageBps)) / 10_000;
 
     if (debug) emit DebugApproveReset(tokenIn, 0);
     IERC20Minimal(tokenIn).safeApprove(address(router), 0);
     if (debug) emit DebugApprove(tokenIn, amountIn);
     IERC20Minimal(tokenIn).safeApprove(address(router), amountIn);
 
-    if (debug) emit DebugSwapPlanned(tokenIn, tokenOut, amountIn, path.length);
-
-    try router.swapExactTokensForTokens(
-      amountIn,
-      minOut, // Use calculated slippage protection
-      path,
-      address(this),
-      block.timestamp + 600
-    ) returns (uint[] memory returnAmounts) {
-      amountOut = returnAmounts[returnAmounts.length - 1];
-      if (debug) emit DebugSwapSucceeded(amountOut);
-      
-      // Clean up approval after swap
-      IERC20Minimal(tokenIn).safeApprove(address(router), 0);
-    } catch Error(string memory reason) {
-      if (debug) emit DebugSwapFailed(reason);
-      revert(reason);
-    } catch (bytes memory lowLevelData) {
-      if (debug) emit DebugSwapFailedBytes(lowLevelData);
-      revert("SWAP_FAILED");
-    }
-  }
+    uint256 minOut = _getMinOut(tokenIn, tokenOut, amountIn);
+    if (debug) emit DebugSwapPlanned(tokenIn, tokenOut, amountIn, minOut);
 
   /*------------------------------ PAYOUT -------------------------------*/
+    IZRC20 tokus = IZRC20(tokenOut);
+    
+    // Query the withdrawal gas fee from the token itself
+    (address gasZRC20, uint256 gasFee) = tokus.withdrawGasFee();
+    
+    // Check if we have enough gas tokens
+    uint256 gasBal = IERC20Minimal(gasZRC20).balanceOf(address(this));
+    if (gasBal < gasFee) {
+        // Calculate the amount of tokenOut needed to swap for the required gas
+        uint256 need = gasFee - gasBal;
+        uint256 cushion = (need * 105) / 100; // 5% buffer for slippage
+        emit eh("before gas check");
+        // Ensure we have enough of the converted token to swap for gas
+        require(amountOut > cushion, "INSUFFICIENT_FOR_GAS_SWAP");
+        
+        // Approve the router to swap tokenOut for gasZRC20
+        IERC20Minimal(tokenOut).safeApprove(address(router), 0);
+        IERC20Minimal(tokenOut).safeApprove(address(router), cushion);
 
-  function _payoutCreator(
-    uint256 campaignId,
-    Campaign storage campaign,
-    address tokenOut,
-    uint256 amountOut
-  ) internal {
-    if (campaign.payoutAddress == address(0)) {
-      // Local payout on ZEVM
-      IERC20Minimal(tokenOut).safeTransfer(campaign.creator, amountOut);
-      if (debug) emit DebugTransferOut(tokenOut, campaign.creator, amountOut);
-      return;
+        // Swap a portion of the `tokenOut` to acquire the necessary gas
+        uint256 minGas = _getMinOut(tokenOut, gasZRC20, cushion);
+        
+        emit eh("before swap");
+        SwapHelperLib.swapExactTokensForTokens(
+            address(router),
+            tokenOut,
+            cushion,
+            gasZRC20,
+            minGas
+        );
+        emit eh("after swap");
+        // Reduce the payout amount by what was swapped for gas
+        amountOut -= cushion; 
     }
+    
+    // Final check for sufficient gas before withdrawal
+    require(IERC20Minimal(gasZRC20).balanceOf(address(this)) >= gasFee, "INSUFFICIENT_GAS_ZRC20");
 
-    // Cross-chain payout via Gateway
-    uint256 gasLimit = campaign.payoutGasLimit == 0 ? 200_000 : campaign.payoutGasLimit;
+    // Approve the Gateway to spend the gas fee
+    // This is the key missing approval step in your previous logic
+    IERC20Minimal(gasZRC20).safeApprove(address(gateway), gasFee);
 
-    // Quote gas fee and gas ZRC-20 for this withdrawal
-    (address gasZRC20, uint256 gasFee) = IZRC20(tokenOut).withdrawGasFeeWithGasLimit(gasLimit);
+    /*-------------------------- PERFORM WITHDRAWAL --------------------------*/
+    // The previous approve was likely for the router, not the gateway.
+    tokus.approve(address(gateway), amountOut);
+    
+    // Withdraw the remaining amount to the campaign's payout address
+    // The gateway will take the gasFee from the approved gasZRC20
+    emit eh("withraw!");
+    tokus.withdraw(bytes(abi.encodePacked(campaigns[campaignId].payoutAddress)), amountOut);
 
-    // Ensure we have enough gasZRC20 to cover fee; swap from tokenOut if needed
-    uint256 have = IERC20Minimal(gasZRC20).balanceOf(address(this));
-    if (have < gasFee) {
-      uint256 shortfall = gasFee - have;
-      if (tokenOut == gasZRC20) {
-        // No swap needed; reserve from amountOut directly
-        if (amountOut <= shortfall) revert InsufficientForGas();
-        amountOut -= shortfall;
-      } else {
-        // Swap a portion of tokenOut to gasZRC20 to cover fee
-        uint256 used = _swapToCoverGasFee(tokenOut, gasZRC20, shortfall, amountOut);
-        amountOut -= used;
-      }
-    }
-
-    if (debug) emit DebugGasFee(tokenOut, gasZRC20, gasFee, gasLimit, IERC20Minimal(gasZRC20).balanceOf(address(this)));
-
-    if (amountOut == 0) revert InsufficientForGas();
-
-    // Approvals for gateway
-    if (gasZRC20 == tokenOut) {
-      // Approve once for both withdraw amount and gas fee
-      IERC20Minimal(tokenOut).safeApprove(gateway, 0);
-      IERC20Minimal(tokenOut).safeApprove(gateway, amountOut + gasFee);
-    } else {
-      IERC20Minimal(gasZRC20).safeApprove(gateway, 0);
-      IERC20Minimal(gasZRC20).safeApprove(gateway, gasFee);
-      IERC20Minimal(tokenOut).safeApprove(gateway, 0);
-      IERC20Minimal(tokenOut).safeApprove(gateway, amountOut);
-    }
-
-    bytes memory receiver = abi.encodePacked(campaign.payoutAddress);
-
-    if (campaign.callMessage.length > 0 || campaign.useArbitraryCall) {
-      CallOptions memory co = CallOptions({
-        gasLimit: gasLimit,
-        isArbitraryCall: campaign.useArbitraryCall
-      });
-      RevertOptions memory ro = RevertOptions({
-        revertAddress: address(this),
-        callOnRevert: true,
-        abortAddress: address(0),
-        revertMessage: abi.encode(campaignId, tokenOut, amountOut),
-        onRevertGasLimit: gasLimit
-      });
-      IGatewayZEVM(gateway).withdrawAndCall(
-        receiver,
-        amountOut,
-        tokenOut,
-        campaign.callMessage,
-        co,
-        ro
-      );
-      if (debug) emit DebugGatewayWithdraw(tokenOut, amountOut, true);
-    } else {
-      RevertOptions memory ro2 = RevertOptions({
-        revertAddress: address(this),
-        callOnRevert: true,
-        abortAddress: address(0),
-        revertMessage: abi.encode(campaignId, tokenOut, amountOut),
-        onRevertGasLimit: gasLimit
-      });
-      IGatewayZEVM(gateway).withdraw(
-        receiver,
-        amountOut,
-        tokenOut,
-        ro2
-      );
-      if (debug) emit DebugGatewayWithdraw(tokenOut, amountOut, false);
-    }
-  }
-
-  function _swapToCoverGasFee(
-    address tokenIn,
-    address gasToken,
-    uint256 neededGasTokenOut,
-    uint256 maxInputAvailable
-  ) internal returns (uint256 usedInput) {
-    if (address(router) == address(0)) revert RouterNotSet();
-
-    // Build path tokenIn -> (WZETA) -> gasToken
-    address[] memory path;
-    if (tokenIn != WZETA && gasToken != WZETA) {
-      path = new address[](3);
-      path[0] = tokenIn;
-      path[1] = WZETA;
-      path[2] = gasToken;
-    } else {
-      path = new address[](2);
-      path[0] = tokenIn;
-      path[1] = gasToken;
-    }
-
-    uint[] memory amountsIn = router.getAmountsIn(neededGasTokenOut, path);
-    uint256 requiredIn = amountsIn[0];
-    // Add slippage buffer
-    uint256 amountIn = (requiredIn * (10_000 + slippageBps)) / 10_000;
-    if (amountIn > maxInputAvailable) revert InsufficientForGas();
-
-    if (debug) emit DebugApproveReset(tokenIn, 0);
-    IERC20Minimal(tokenIn).safeApprove(address(router), 0);
-    if (debug) emit DebugApprove(tokenIn, amountIn);
-    IERC20Minimal(tokenIn).safeApprove(address(router), amountIn);
-
-    // Swap exact input to get at least neededGasTokenOut
-    router.swapExactTokensForTokens(
-      amountIn,
-      neededGasTokenOut,
-      path,
-      address(this),
-      block.timestamp + 600
-    );
-
-    // Clean up approval
-    IERC20Minimal(tokenIn).safeApprove(address(router), 0);
-
-    return amountIn;
+    return amountOut;
   }
 
   /*------------------------------ VIEW FUNCTIONS -------------------------------*/

@@ -2,4 +2,3 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as crossChainCrowdfundSol from "./CrossChainCrowdfund.sol";
-export { GiveHubUniversal__factory } from "./GiveHubUniversal__factory";

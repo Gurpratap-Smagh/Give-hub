@@ -3,3 +3,5 @@
 /* eslint-disable */
 import type * as protocolContracts from "./protocol-contracts";
 export type { protocolContracts };
+import type * as toolkit from "./toolkit";
+export type { toolkit };

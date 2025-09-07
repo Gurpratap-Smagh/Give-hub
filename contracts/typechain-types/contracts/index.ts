@@ -3,4 +3,3 @@
 /* eslint-disable */
 import type * as crossChainCrowdfundSol from "./CrossChainCrowdfund.sol";
 export type { crossChainCrowdfundSol };
-export type { GiveHubUniversal } from "./GiveHubUniversal";

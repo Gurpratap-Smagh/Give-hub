@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as protocolContracts from "./protocol-contracts";
+export * as toolkit from "./toolkit";

@@ -98,7 +98,6 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "router"
       | "setAllowedInToken"
       | "setAllowedOutToken"
-      | "setCampaignCallMessage"
       | "setDebug"
       | "setSlippageBps"
       | "setTokenLabel"
@@ -124,6 +123,7 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "DebugDonationBegin"
       | "DebugGasFee"
       | "DebugGatewayWithdraw"
+      | "DebugInsufficientForGas"
       | "DebugOnCallEntered"
       | "DebugOnRevert"
       | "DebugRouterMissing"
@@ -137,6 +137,7 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "OwnershipTransferred"
       | "Rescue"
       | "SlippageUpdated"
+      | "eh"
   ): EventFragment;
 
   encodeFunctionData(functionFragment: "WZETA", values?: undefined): string;
@@ -217,10 +218,6 @@ export interface CrossChainCrowdfundInterface extends Interface {
   encodeFunctionData(
     functionFragment: "setAllowedOutToken",
     values: [AddressLike, boolean]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setCampaignCallMessage",
-    values: [BigNumberish, BytesLike, boolean]
   ): string;
   encodeFunctionData(functionFragment: "setDebug", values: [boolean]): string;
   encodeFunctionData(
@@ -325,10 +322,6 @@ export interface CrossChainCrowdfundInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "setAllowedOutToken",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "setCampaignCallMessage",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setDebug", data: BytesLike): Result;
@@ -587,6 +580,18 @@ export namespace DebugGatewayWithdrawEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace DebugInsufficientForGasEvent {
+  export type InputTuple = [tokenOut: AddressLike];
+  export type OutputTuple = [tokenOut: string];
+  export interface OutputObject {
+    tokenOut: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace DebugOnCallEnteredEvent {
   export type InputTuple = [
     originSender: BytesLike,
@@ -790,6 +795,18 @@ export namespace SlippageUpdatedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace ehEvent {
+  export type InputTuple = [msg: string];
+  export type OutputTuple = [msg: string];
+  export interface OutputObject {
+    msg: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export interface CrossChainCrowdfund extends BaseContract {
   connect(runner?: ContractRunner | null): CrossChainCrowdfund;
   waitForDeployment(): Promise<this>;
@@ -850,14 +867,12 @@ export interface CrossChainCrowdfund extends BaseContract {
   campaigns: TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, string, boolean, string, bigint, boolean, string] & {
+      [string, string, boolean, string, bigint] & {
         creator: string;
         preferredZRC20: string;
         active: boolean;
         payoutAddress: string;
         payoutGasLimit: bigint;
-        useArbitraryCall: boolean;
-        callMessage: string;
       }
     ],
     "view"
@@ -987,12 +1002,6 @@ export interface CrossChainCrowdfund extends BaseContract {
     "nonpayable"
   >;
 
-  setCampaignCallMessage: TypedContractMethod<
-    [campaignId: BigNumberish, message: BytesLike, useArbitrary: boolean],
-    [void],
-    "nonpayable"
-  >;
-
   setDebug: TypedContractMethod<[enabled: boolean], [void], "nonpayable">;
 
   setSlippageBps: TypedContractMethod<
@@ -1069,14 +1078,12 @@ export interface CrossChainCrowdfund extends BaseContract {
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, string, boolean, string, bigint, boolean, string] & {
+      [string, string, boolean, string, bigint] & {
         creator: string;
         preferredZRC20: string;
         active: boolean;
         payoutAddress: string;
         payoutGasLimit: bigint;
-        useArbitraryCall: boolean;
-        callMessage: string;
       }
     ],
     "view"
@@ -1221,13 +1228,6 @@ export interface CrossChainCrowdfund extends BaseContract {
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "setCampaignCallMessage"
-  ): TypedContractMethod<
-    [campaignId: BigNumberish, message: BytesLike, useArbitrary: boolean],
-    [void],
-    "nonpayable"
-  >;
-  getFunction(
     nameOrSignature: "setDebug"
   ): TypedContractMethod<[enabled: boolean], [void], "nonpayable">;
   getFunction(
@@ -1352,6 +1352,13 @@ export interface CrossChainCrowdfund extends BaseContract {
     DebugGatewayWithdrawEvent.OutputObject
   >;
   getEvent(
+    key: "DebugInsufficientForGas"
+  ): TypedContractEvent<
+    DebugInsufficientForGasEvent.InputTuple,
+    DebugInsufficientForGasEvent.OutputTuple,
+    DebugInsufficientForGasEvent.OutputObject
+  >;
+  getEvent(
     key: "DebugOnCallEntered"
   ): TypedContractEvent<
     DebugOnCallEnteredEvent.InputTuple,
@@ -1441,6 +1448,13 @@ export interface CrossChainCrowdfund extends BaseContract {
     SlippageUpdatedEvent.InputTuple,
     SlippageUpdatedEvent.OutputTuple,
     SlippageUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "eh"
+  ): TypedContractEvent<
+    ehEvent.InputTuple,
+    ehEvent.OutputTuple,
+    ehEvent.OutputObject
   >;
 
   filters: {
@@ -1563,6 +1577,17 @@ export interface CrossChainCrowdfund extends BaseContract {
       DebugGatewayWithdrawEvent.InputTuple,
       DebugGatewayWithdrawEvent.OutputTuple,
       DebugGatewayWithdrawEvent.OutputObject
+    >;
+
+    "DebugInsufficientForGas(address)": TypedContractEvent<
+      DebugInsufficientForGasEvent.InputTuple,
+      DebugInsufficientForGasEvent.OutputTuple,
+      DebugInsufficientForGasEvent.OutputObject
+    >;
+    DebugInsufficientForGas: TypedContractEvent<
+      DebugInsufficientForGasEvent.InputTuple,
+      DebugInsufficientForGasEvent.OutputTuple,
+      DebugInsufficientForGasEvent.OutputObject
     >;
 
     "DebugOnCallEntered(bytes,uint256,address,uint256)": TypedContractEvent<
@@ -1706,6 +1731,17 @@ export interface CrossChainCrowdfund extends BaseContract {
       SlippageUpdatedEvent.InputTuple,
       SlippageUpdatedEvent.OutputTuple,
       SlippageUpdatedEvent.OutputObject
+    >;
+
+    "eh(string)": TypedContractEvent<
+      ehEvent.InputTuple,
+      ehEvent.OutputTuple,
+      ehEvent.OutputObject
+    >;
+    eh: TypedContractEvent<
+      ehEvent.InputTuple,
+      ehEvent.OutputTuple,
+      ehEvent.OutputObject
     >;
   };
 }

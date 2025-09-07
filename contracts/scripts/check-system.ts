@@ -1,4 +1,6 @@
 import hardhat from "hardhat";
+import path from "path";
+import fs from "fs";
 // Use CommonJS require for local helpers (compiled via ts-node in Hardhat)
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const helpers = require("../utils/helpers.js");
@@ -40,9 +42,7 @@ async function main() {
     console.log("USDT.ETH ZRC20:", tokens["USDT.ETH"]);
     console.log("✅ Fallback succeeded (no on-chain reads).");
   } else {
-    const abi = [
-      "function gasCoinZRC20ByChainId(uint256) view returns (address)",
-    ];
+    const abi = artifact.abi;
     const sc = new ethers.Contract(addr, abi, ethers.provider);
     try {
       const ethExtId = chainId === "7000" ? 1 : 1; // default to mainnet mapping on non-Athens
