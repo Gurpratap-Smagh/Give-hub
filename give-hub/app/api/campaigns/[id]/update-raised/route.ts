@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CampaignModel } from '../../../../../lib/mongodb/models/campaign'
-import { connectDb } from '../../../../../lib/mongodb/database'
-
+import {connectMongo} from '../../../../../lib/mongodb/connection'
 interface CampaignData {
   goal: number;
   raised: number;
@@ -31,7 +30,7 @@ export async function POST(
     }
 
     // Connect to database
-    await connectDb()
+    await connectMongo()
 
     // Use atomic $inc operation for thread-safe raised amount update
     const updatedCampaign = await CampaignModel.findOneAndUpdate(
