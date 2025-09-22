@@ -13,7 +13,6 @@ import "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol";
 import {SwapHelperLib} from "@zetachain/toolkit/contracts/SwapHelperLib.sol";
 import { RevertContext, RevertOptions } from "@zetachain/protocol-contracts/contracts/Revert.sol";
 import { CallOptions } from "@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol";
-import { MessageContext } from "@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol";
 
 /*//////////////////////////////////////////////////////////////
                     Minimal interfaces / utils
@@ -83,7 +82,7 @@ abstract contract ReentrancyGuardLite {
                           Contract
 //////////////////////////////////////////////////////////////*/
 
-contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardLite {
+contract CrossChainCrowdfund is OwnableLite, ReentrancyGuardLite, UniversalContract {
   using SafeERC20Lite for IERC20Minimal;
 
   /*------------------------------- TYPES -------------------------------*/
@@ -162,6 +161,7 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   /*------------------------------ STORAGE ------------------------------*/
 
   address public immutable gateway;
+  address public immutable uniswapRouter;
 
   mapping(uint256 => Campaign) public campaigns;
   mapping(uint256 => Contribution) public contributions;
@@ -216,7 +216,8 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     address _wzeta,
     address _ethZRC20,
     address _btcZRC20,
-    address _usdcZRC20
+    address _usdcZRC20,
+    address _uniswapRouter
   ) {
     if (
       _gateway == address(0) ||
@@ -231,6 +232,9 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     ethZRC20 = _ethZRC20;
     btcZRC20 = _btcZRC20;
     usdcZRC20 = _usdcZRC20;
+    uniswapRouter = _uniswapRouter;
+    router = IUniswapV2Router02(_uniswapRouter);
+
 
     tokenLabel[_ethZRC20] = "zETH.Sepolia";
     tokenLabel[_btcZRC20] = "zBTC.Sepolia";
@@ -271,6 +275,8 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
     require(msg.sender == gateway, "OnlyGateway");
     _;
   }
+  event a(MessageContext context, address zrc20, uint256 amount, bytes message);
+
 
   /**
    * @notice Universal Contract onCall function - receives cross-chain calls
@@ -279,36 +285,21 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
    * @param amount The amount of tokens received
    * @param message The ABI-encoded message data from depositAndCall
    */
+
   function onCall(
     MessageContext calldata context,
     address zrc20,
     uint256 amount,
     bytes calldata message
-) external override {
-    emit eh("onCall");
-
+) external {
     // Payload: (campaignId, donorName, note, recipient)
-    (string memory action, bytes memory data) = abi.decode(message, (string, bytes));
-    uint256 campaignId;
-    string memory donorName;
-    string memory note;
-    if (keccak256(bytes(action)) == keccak256("donate_native")) {
-        // Step 2: decode the inner payload
-        (campaignId, donorName, note) = abi.decode(data, (uint256, string, string));
-        if (debug) emit DebugDecodedDonate(campaignId, donorName, note);
-
-        // … now process donation …
-    } else {
-        revert("Unknown action");
-    }
-
+    (uint256 campaignId, string memory donorName, string memory note) = abi.decode(message, (uint256, string, string));
     
-
     Campaign storage campaign = campaigns[campaignId];
     if (campaign.creator == address(0)) revert InvalidCampaign();
     if (!campaign.active) revert CampaignInactive();
 
-    address donorAddress = _deriveDonorAddress(context);
+    address donorAddress = abi.decode(context.sender, (address));
 
     if (debug) emit DebugDonationBegin(campaignId, campaign.creator, zrc20, amount);
 
@@ -352,7 +343,6 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   // Allow any whitelisted payout token on creation
   function createCampaign(address preferredZRC20) external returns (uint256 campaignId) {
     if (preferredZRC20 == address(0)) revert InvalidToken();
-    require(allowedOutTokens[preferredZRC20], "PAYOUT_TOKEN_NOT_ALLOWED");
 
     campaignId = ++nextCampaignId;
 
@@ -467,107 +457,177 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   }
 
   /// Accept native ZETA, wrap to WZETA, and forward immediately (no escrow)
+  /// @notice Universal local donation on ZEVM (native ZETA or any ZRC20)
+  /// @dev For native ZETA send with msg.value and pass tokenIn = address(0), amount ignored.
+  ///      For ZRC20 set tokenIn = token address and amount > 0; msg.value must be 0.
+  function donate(
+      address tokenIn,                // address(0) for native ZETA, else ZRC-20
+      uint256 amount,                 // ignored for native; required for ZRC-20
+      uint256 campaignId,
+      string calldata donorName,
+      string calldata note
+  ) public payable nonReentrant {
+      bool isNative = (tokenIn == address(0));
+      uint256 amountIn = isNative ? msg.value : amount;
+
+      require(amountIn > 0, isNative ? "NO_VALUE" : "NO_AMOUNT");
+      if (!isNative) {
+          // Pull ZRC-20 from donor
+          IERC20Minimal(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+          require(msg.value == 0, "NO_MSG_VALUE_FOR_ERC20");
+      }
+
+      Campaign storage c = campaigns[campaignId];
+      if (c.creator == address(0)) revert InvalidCampaign();
+      if (!c.active) revert CampaignInactive();
+
+      address tokenOut = c.preferredZRC20;
+      require(allowedOutTokens[tokenOut], "PAYOUT_TOKEN_NOT_ALLOWED");
+
+      // Convert/route and forward to the campaign creator
+      uint256 out = _handleSwapAndSend(
+          tokenIn,
+          tokenOut,
+          amountIn,
+          payable(c.creator)
+      );
+
+      // Compose origin label
+      string memory chainName = isNative
+          ? "ZetaChain"
+          : (bytes(tokenLabel[tokenIn]).length == 0 ? "ZetaChain" : tokenLabel[tokenIn]);
+
+      // Record contribution
+      uint256 id = ++nextContributionId;
+      contributions[id] = Contribution({
+          campaignId: campaignId,
+          donor: msg.sender,
+          originalToken: tokenIn,
+          zrc20Received: tokenOut,
+          originalAmount: amountIn,
+          convertedAmount: out,
+          originChainId: block.chainid,
+          timestamp: uint64(block.timestamp),
+          originChainName: chainName
+      });
+
+      if (debug) emit DebugContributionRecorded(id);
+
+      emit ContributionReceived(
+          campaignId,
+          msg.sender,
+          id,
+          tokenIn,
+          amountIn,
+          out,
+          chainName,
+          donorName,
+          note
+      );
+  }
+
+  function _handleSwapAndSend(
+      address tokenIn,
+      address tokenOut,
+      uint256 amountIn,
+      address payable recipient
+  ) internal returns (uint256 amountOut) {
+      require(amountIn > 0, "ZERO_AMOUNT");
+      require(recipient != address(0), "ZERO_RECIPIENT");
+
+      // 0) Same → same (just forward)
+      if (tokenIn == tokenOut) {
+          IERC20Minimal(tokenOut).safeTransfer(recipient, amountIn);
+          return amountIn;
+      }
+
+      // 1) Native ZETA → WZETA (wrap passthrough)
+      if (tokenIn == address(0) && tokenOut == WZETA) {
+          IWZETA(WZETA).deposit{value: amountIn}();
+          IERC20Minimal(WZETA).safeTransfer(recipient, amountIn);
+          return amountIn;
+      }
+
+      // 2) Native ZETA → any ZRC-20 (wrap then swap → recipient)
+      if (tokenIn == address(0) && tokenOut != address(0)) {
+          IWZETA(WZETA).deposit{value: amountIn}();
+          require(address(router) != address(0), "ROUTER_NOT_SET");
+          IERC20Minimal(WZETA).safeApprove(address(router), 0);
+          IERC20Minimal(WZETA).safeApprove(address(router), amountIn);
+
+          uint256 minOut = _getMinOut(WZETA, tokenOut, amountIn);
+          address[] memory path = new address[](2);
+          path[0] = WZETA; path[1] = tokenOut;
+
+          uint[] memory amounts = router.swapExactTokensForTokens(
+              amountIn, minOut, path, recipient, block.timestamp
+          );
+          return amounts[amounts.length - 1];
+      }
+
+      // 3) WZETA → native ZETA (unwrap and send)
+      if (tokenIn == WZETA && tokenOut == address(0)) {
+          IWZETA(WZETA).withdraw(amountIn);
+          (bool sent, ) = recipient.call{value: amountIn}("");
+          require(sent, "NATIVE_TRANSFER_FAILED");
+          return amountIn;
+      }
+
+      // 4) Any ZRC-20 → native ZETA (swap to WZETA here, then unwrap and send)
+      if (tokenIn != address(0) && tokenOut == address(0)) {
+          require(address(router) != address(0), "ROUTER_NOT_SET");
+          IERC20Minimal(tokenIn).safeApprove(address(router), 0);
+          IERC20Minimal(tokenIn).safeApprove(address(router), amountIn);
+
+          uint256 minW = _getMinOut(tokenIn, WZETA, amountIn);
+          address[] memory pathW = new address[](2);
+          pathW[0] = tokenIn; pathW[1] = WZETA;
+
+          uint[] memory amountsW = router.swapExactTokensForTokens(
+              amountIn, minW, pathW, address(this), block.timestamp
+          );
+          uint256 wzetaOut = amountsW[amountsW.length - 1];
+
+          IWZETA(WZETA).withdraw(wzetaOut);
+          (bool sent2, ) = recipient.call{value: wzetaOut}("");
+          require(sent2, "NATIVE_TRANSFER_FAILED");
+          return wzetaOut;
+      }
+
+      // 5) Generic ZRC-20 → ZRC-20 swap (to recipient)
+      require(address(router) != address(0), "ROUTER_NOT_SET");
+      IERC20Minimal(tokenIn).safeApprove(address(router), 0);
+      IERC20Minimal(tokenIn).safeApprove(address(router), amountIn);
+
+      uint256 minOut2 = _getMinOut(tokenIn, tokenOut, amountIn);
+      
+      address[] memory path2 = new address[](2);
+      path2[0] = tokenIn; path2[1] = tokenOut;
+
+      uint[] memory amounts = router.swapExactTokensForTokens(
+          amountIn, minOut2, path2, recipient, block.timestamp
+      );
+      return amounts[amounts.length - 1];
+  }
+
   function donateNative(
-    uint256 campaignId,
-    string calldata donorName,
-    string calldata note
+      uint256 campaignId,
+      string calldata donorName,
+      string calldata note
   ) external payable nonReentrant {
-    require(msg.value > 0, "NO_VALUE");
-
-    Campaign storage c = campaigns[campaignId];
-    if (c.creator == address(0)) revert InvalidCampaign();
-    if (!c.active) revert CampaignInactive();
-
-    // Use low-level call to WZETA deposit function
-    (bool success, ) = WZETA.call{value: msg.value}(abi.encodeWithSignature("deposit()"));
-    require(success, "WZETA_DEPOSIT_FAILED");
-
-    // Enforce allowlists
-    address tokenOut = c.preferredZRC20;
-    require(allowedOutTokens[tokenOut], "PAYOUT_TOKEN_NOT_ALLOWED");
-    uint256 converted = _swapExactViaPath(WZETA, tokenOut, msg.value, campaignId);
-// payout or swap
-    uint256 id = ++nextContributionId;
-    contributions[id] = Contribution({
-      campaignId: campaignId,
-      donor: msg.sender,
-      originalToken: address(0),
-      zrc20Received: tokenOut,
-      originalAmount: (msg.value),
-      convertedAmount: converted,
-      originChainId: block.chainid,
-      timestamp: uint64(block.timestamp),
-      originChainName: "ZetaChain"
-    });
-
-    if (debug) emit DebugContributionRecorded(id);
-
-    emit ContributionReceived(
-      campaignId,
-      msg.sender,
-      id,
-      address(0),
-      msg.value,
-      converted,
-      "ZetaChain",
-      donorName,
-      note
-    );
+      donate(address(0), 0, campaignId, donorName, note);
   }
 
-  /// Accept local ZRC-20 and forward (swap->WZETA->creator)
   function donateZRC20(
-    address token,
-    uint256 amount,
-    uint256 campaignId,
-    string calldata donorName,
-    string calldata note
+      address token,
+      uint256 amount,
+      uint256 campaignId,
+      string calldata donorName,
+      string calldata note
   ) external nonReentrant {
-    require(amount > 0, "NO_AMOUNT");
-    if (!allowedInTokens[token]) revert InvalidToken();
-
-    Campaign storage c = campaigns[campaignId];
-    if (c.creator == address(0)) revert InvalidCampaign();
-    if (!c.active) revert CampaignInactive();
-
-    IERC20Minimal(token).safeTransferFrom(msg.sender, address(this), amount);
-
-    address tokenOut = c.preferredZRC20;
-    require(allowedOutTokens[tokenOut], "PAYOUT_TOKEN_NOT_ALLOWED");
-    uint256 converted = _swapExactViaPath(token, tokenOut, amount, campaignId);
-
-
-    string memory chainName = bytes(tokenLabel[token]).length == 0
-      ? "ZetaChain"
-      : tokenLabel[token];
-
-    uint256 id = ++nextContributionId;
-    contributions[id] = Contribution({
-      campaignId: campaignId,
-      donor: msg.sender,
-      originalToken: token,
-      zrc20Received: tokenOut,
-      originalAmount: amount,
-      convertedAmount: converted,
-      originChainId: block.chainid,
-      timestamp: uint64(block.timestamp),
-      originChainName: chainName
-    });
-
-    if (debug) emit DebugContributionRecorded(id);
-
-    emit ContributionReceived(
-      campaignId,
-      msg.sender,
-      id,
-      token,
-      amount,
-      converted,
-      chainName,
-      donorName,
-      note
-    );
+      donate(token, amount, campaignId, donorName, note);
   }
+
 
   /*--------------------------- RESCUE FUNCTIONS --------------------------*/
   
@@ -584,32 +644,18 @@ contract CrossChainCrowdfund is UniversalContract, OwnableLite, ReentrancyGuardL
   }
   event DebugInsufficientForGas(address tokenOut);
   /*------------------------------ SWAPPING ------------------------------*/
-  function _getMinOut(
-      address tokenIn,
-      address tokenOut,
-      uint256 amountIn
-  ) internal view returns (uint256) {
-      address[] memory path;
-
-      if (tokenIn == WZETA || tokenOut == WZETA) {
-          // Route through ZETA (unwrap WZETA internally for pricing)
-          path = new address[](3);
-          path[0] = tokenIn;
-          path[1] = WZETA;
-          path[2] = tokenOut;
-      } else {
-          // Direct pair
-          path = new address[](2);
-          path[0] = tokenIn;
-          path[1] = tokenOut;
-      }
-
-      uint[] memory quotes = router.getAmountsOut(amountIn, path);
-      uint256 expectedOut = quotes[quotes.length - 1];
-
-      // Apply slippage tolerance
-      return (expectedOut * (10_000 - slippageBps)) / 10_000;
+  function _getMinOut(address tokenIn, address tokenOut, uint256 amountIn)
+    internal view returns (uint256)
+  {
+    if (tokenIn == tokenOut) return amountIn;
+    require(address(router) != address(0), "ROUTER_NOT_SET");
+    address[] memory path = new address[](2);
+    path[0] = tokenIn; path[1] = tokenOut;
+    uint[] memory quotes = router.getAmountsOut(amountIn, path);
+    uint256 expectedOut = quotes[quotes.length - 1];
+    return (expectedOut * (10_000 - slippageBps)) / 10_000;
   }
+
 
 
   event eh(string msg);

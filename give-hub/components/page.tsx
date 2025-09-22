@@ -32,6 +32,7 @@ import {
 } from '@/lib/web3/client'
 import { isAddress } from '@/lib/address'
 import ErrorModal from '@/components/error-modal'
+import TokenPicker from '@/components/TokenPicker'
 
 // ZRC-20 options are fetched from the server via /api/zrc20-options
 
@@ -640,6 +641,26 @@ export default function CreateCampaignPage() {
                 </div>
               )}
             </div>
+
+            <div>
+              <label className="block text-lg font-semibold text-gray-900 mb-3">
+                Preferred Payout Token {requiresOnChain ? '*' : ''}
+              </label>
+              <TokenPicker
+                creatorMode // ensures WZETA/ZETA dropdown for campaign creation
+                value={preferredToken ? { chain: 'ZETA', symbol: '', address: preferredToken } : undefined}
+                onChange={(picked) => {
+                  // picked = { chain, symbol, address?, isNative? }
+                  setPreferredToken(picked.address || '')
+                }}
+              />
+              {preferredToken && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Token address: {preferredToken}
+                </p>
+              )}
+            </div>
+
 
             {/* Preferred Token (ZRC-20) */}
             <div>

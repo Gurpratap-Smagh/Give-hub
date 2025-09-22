@@ -166,7 +166,7 @@ npm run dev
   - Correct `SystemContract` address is set.
   - ZRC-20 representations are configured and supported on the testnet.
   - Any DEX/router you rely on exists on testnet with sufficient liquidity.
-- If you’re only testing single-chain Zeta testnet donations, `donateNative()` + WZETA flow is sufficient.
+- If you’re only testing single-chain Zeta testnet donations, `donate()` + WZETA flow is sufficient.
 
 ---
 

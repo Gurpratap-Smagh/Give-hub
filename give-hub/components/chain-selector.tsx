@@ -46,7 +46,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
     icon: 'Ζ',
     chainId: 7001,
     nativeToken: 'ZETA',
-    zrc20Address: '0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf',
+    zrc20Address: process.env.NEXT_PUBLIC_WZETA_ATHENS ?? '0x5F0b1a82749cb4E2278EC87F8BF6B618dC71a8bf',
     isTestnet: true
   }
 ];

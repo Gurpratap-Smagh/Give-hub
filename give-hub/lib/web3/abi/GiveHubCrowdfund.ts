@@ -81,7 +81,7 @@ export const CrossChainCrowdfundABI = [
       { "internalType": "string", "name": "donorName", "type": "string" },
       { "internalType": "string", "name": "note", "type": "string" }
     ],
-    "name": "donateNative",
+    "name": "donate",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
@@ -94,7 +94,7 @@ export const CrossChainCrowdfundABI = [
       { "internalType": "string", "name": "donorName", "type": "string" },
       { "internalType": "string", "name": "note", "type": "string" }
     ],
-    "name": "donateZRC20",
+    "name": "donate",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

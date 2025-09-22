@@ -82,8 +82,9 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "contributions"
       | "createCampaign"
       | "debug"
-      | "donateNative"
-      | "donateZRC20"
+      | "donate"
+      | "donate"
+      | "donate"
       | "ethZRC20"
       | "gateway"
       | "getAllSyncedCampaigns"
@@ -105,6 +106,7 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "slippageBps"
       | "tokenLabel"
       | "transferOwnership"
+      | "uniswapRouter"
       | "updateCampaignDestination"
       | "updateCampaignPayoutToken"
       | "usdcZRC20"
@@ -137,6 +139,7 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "OwnershipTransferred"
       | "Rescue"
       | "SlippageUpdated"
+      | "a"
       | "eh"
   ): EventFragment;
 
@@ -168,11 +171,15 @@ export interface CrossChainCrowdfundInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "debug", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "donateNative",
+    functionFragment: "donate",
+    values: [AddressLike, BigNumberish, BigNumberish, string, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "donate",
     values: [BigNumberish, string, string]
   ): string;
   encodeFunctionData(
-    functionFragment: "donateZRC20",
+    functionFragment: "donate",
     values: [AddressLike, BigNumberish, BigNumberish, string, string]
   ): string;
   encodeFunctionData(functionFragment: "ethZRC20", values?: undefined): string;
@@ -245,6 +252,10 @@ export interface CrossChainCrowdfundInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "uniswapRouter",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "updateCampaignDestination",
     values: [BigNumberish, AddressLike, BigNumberish]
   ): string;
@@ -278,12 +289,13 @@ export interface CrossChainCrowdfundInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "debug", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "donate", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "donateNative",
+    functionFragment: "donate",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "donateZRC20",
+    functionFragment: "donate",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "ethZRC20", data: BytesLike): Result;
@@ -344,6 +356,10 @@ export interface CrossChainCrowdfundInterface extends Interface {
   decodeFunctionResult(functionFragment: "tokenLabel", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "uniswapRouter",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -795,6 +811,31 @@ export namespace SlippageUpdatedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace aEvent {
+  export type InputTuple = [
+    context: MessageContextStruct,
+    zrc20: AddressLike,
+    amount: BigNumberish,
+    message: BytesLike
+  ];
+  export type OutputTuple = [
+    context: MessageContextStructOutput,
+    zrc20: string,
+    amount: bigint,
+    message: string
+  ];
+  export interface OutputObject {
+    context: MessageContextStructOutput;
+    zrc20: string;
+    amount: bigint;
+    message: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace ehEvent {
   export type InputTuple = [msg: string];
   export type OutputTuple = [msg: string];
@@ -914,13 +955,25 @@ export interface CrossChainCrowdfund extends BaseContract {
 
   debug: TypedContractMethod<[], [boolean], "view">;
 
-  donateNative: TypedContractMethod<
+  donate: TypedContractMethod<
+    [
+      tokenIn: AddressLike,
+      amount: BigNumberish,
+      campaignId: BigNumberish,
+      donorName: string,
+      note: string
+    ],
+    [void],
+    "payable"
+  >;
+
+  donate: TypedContractMethod<
     [campaignId: BigNumberish, donorName: string, note: string],
     [void],
     "payable"
   >;
 
-  donateZRC20: TypedContractMethod<
+  donate: TypedContractMethod<
     [
       token: AddressLike,
       amount: BigNumberish,
@@ -1032,6 +1085,8 @@ export interface CrossChainCrowdfund extends BaseContract {
     "nonpayable"
   >;
 
+  uniswapRouter: TypedContractMethod<[], [string], "view">;
+
   updateCampaignDestination: TypedContractMethod<
     [
       campaignId: BigNumberish,
@@ -1124,14 +1179,27 @@ export interface CrossChainCrowdfund extends BaseContract {
     nameOrSignature: "debug"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
-    nameOrSignature: "donateNative"
+    nameOrSignature: "donate"
+  ): TypedContractMethod<
+    [
+      tokenIn: AddressLike,
+      amount: BigNumberish,
+      campaignId: BigNumberish,
+      donorName: string,
+      note: string
+    ],
+    [void],
+    "payable"
+  >;
+  getFunction(
+    nameOrSignature: "donate"
   ): TypedContractMethod<
     [campaignId: BigNumberish, donorName: string, note: string],
     [void],
     "payable"
   >;
   getFunction(
-    nameOrSignature: "donateZRC20"
+    nameOrSignature: "donate"
   ): TypedContractMethod<
     [
       token: AddressLike,
@@ -1252,6 +1320,9 @@ export interface CrossChainCrowdfund extends BaseContract {
   getFunction(
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[n: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "uniswapRouter"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "updateCampaignDestination"
   ): TypedContractMethod<
@@ -1448,6 +1519,13 @@ export interface CrossChainCrowdfund extends BaseContract {
     SlippageUpdatedEvent.InputTuple,
     SlippageUpdatedEvent.OutputTuple,
     SlippageUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "a"
+  ): TypedContractEvent<
+    aEvent.InputTuple,
+    aEvent.OutputTuple,
+    aEvent.OutputObject
   >;
   getEvent(
     key: "eh"
@@ -1731,6 +1809,17 @@ export interface CrossChainCrowdfund extends BaseContract {
       SlippageUpdatedEvent.InputTuple,
       SlippageUpdatedEvent.OutputTuple,
       SlippageUpdatedEvent.OutputObject
+    >;
+
+    "a(tuple,address,uint256,bytes)": TypedContractEvent<
+      aEvent.InputTuple,
+      aEvent.OutputTuple,
+      aEvent.OutputObject
+    >;
+    a: TypedContractEvent<
+      aEvent.InputTuple,
+      aEvent.OutputTuple,
+      aEvent.OutputObject
     >;
 
     "eh(string)": TypedContractEvent<

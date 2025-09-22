@@ -120,17 +120,25 @@ export class DonationEventService {
   private async processBlocks(fromBlock: number, toBlock: number): Promise<void> {
     if (!this.provider || !this.contractAddress) return;
 
-    try {
-      const filter = {
-        address: this.contractAddress,
-        topics: [CONTRIBUTION_RECEIVED_TOPIC],
-        fromBlock,
-        toBlock
-      };
+    const CHUNK_SIZE = 4000; // Max block range allowed by some RPC providers
+    let allLogs: ethers.Log[] = [];
 
-      const logs = await this.provider.getLogs(filter);
+    try {
+      for (let start = fromBlock; start <= toBlock; start += CHUNK_SIZE) {
+        const end = Math.min(start + CHUNK_SIZE - 1, toBlock);
+        
+        const filter = {
+          address: this.contractAddress,
+          topics: [CONTRIBUTION_RECEIVED_TOPIC],
+          fromBlock: start,
+          toBlock: end,
+        };
+
+        const logs = await this.provider.getLogs(filter);
+        allLogs = allLogs.concat(logs);
+      }
       
-      for (const log of logs) {
+      for (const log of allLogs) {
         const donation = this.decodeDonation(log);
         if (donation && !this.seenDonations.has(donation.id)) {
           this.seenDonations.add(donation.id);

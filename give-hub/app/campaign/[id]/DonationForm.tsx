@@ -3,10 +3,11 @@
 import { useMemo, useState } from 'react';
 import TokenPicker from '@/components/TokenPicker';
 import { makePayment } from '@/lib/payments/zetachain-gateway';
+import { CHAIN_NAMES } from '@/components/payment-modal';
 
 type Picked = { chain: string; symbol: string; address?: string; isNative?: boolean };
-
-export default function DonationForm({ campaign }: { campaign: { id: string | number, title?: string } }) {
+ 
+export default function DonationForm({ campaign }: { campaign: { onchainId: string | number, title?: string } }) {
   const [amount, setAmount] = useState('');
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
@@ -38,7 +39,11 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
     if (chain.includes('SEPOLIA')) return 'sepolia';
     return 'zeta';
   }
-
+  function chainIdFromToken(token: { chain?: string } | null): number {
+    const k = (token?.chain || '').toUpperCase();
+    if (k === 'SEPOLIA') return 11155111;
+    return 7001; // default ZetaChain Athens
+  }
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedToken) {
@@ -65,18 +70,22 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
       const donorNote = note.trim();
 
       setStatus(`Initiating payment on ${preferredChain === 'sepolia' ? 'Ethereum Sepolia' : 'ZetaChain'}...`);
+      const sourceChainId = chainIdFromToken(selectedToken);
+
 
       const txHash = await makePayment({
-        campaignId: Number(campaign.id),
+        campaignId: Number(campaign.onchainId),
         donorName,
         note: donorNote,
         amount: normalizedAmount,
-        preferredChain,
-        tokenAddress: selectedToken.address && selectedToken.address !== '' ? selectedToken.address : undefined,
-        onStatusUpdate: (status: string) => {
-          setStatus(status);
-        },
+        sourceChainId, // 7001 or 11155111
+        mode: detectMode(selectedToken),
+        tokenAddress: selectedToken.address || undefined,
+        onStatusUpdate: (s: string) => setStatus(s),
+        preferredChain: CHAIN_NAMES[sourceChainId],
       });
+
+      
 
       setStatus(`Donation successful! Transaction: ${txHash.slice(0, 10)}...`);
       
@@ -95,13 +104,19 @@ export default function DonationForm({ campaign }: { campaign: { id: string | nu
   }
 
   const disabled = busy || !amount || !selectedToken;
-  const submitLabel = useMemo(() => {
+  function detectMode(t: Picked): 'zeta_native' | 'zeta_zrc20' | 'crosschain_sepolia' {
+    const chain = (t.chain || '').toUpperCase();
+    if (chain === 'ZETA') return t.isNative ? 'zeta_native' : 'zeta_zrc20';
+    if (chain === 'SEPOLIA') return 'crosschain_sepolia';
+    throw new Error(`Unsupported chain: ${t.chain}`);
+  }
+    const submitLabel = useMemo(() => {
     if (busy) return 'Processing…';
     if (!selectedToken) return 'Donate';
-    const chain = getChainFromToken(selectedToken);
-    if (chain === 'sepolia') return `Donate ${selectedToken.symbol} via Sepolia`;
+    const mode = detectMode(selectedToken);
+    if (mode === 'crosschain_sepolia') return `Donate ${selectedToken.symbol} via Sepolia → ZetaChain`;
     return `Donate ${selectedToken.symbol} on ZetaChain`;
-  }, [busy, selectedToken]);
+    }, [busy, selectedToken]);
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 max-w-full">

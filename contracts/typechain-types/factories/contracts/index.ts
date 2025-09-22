@@ -2,3 +2,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as crossChainCrowdfundSol from "./CrossChainCrowdfund.sol";
+export * as iBaseRegistrySol from "./IBaseRegistry.sol";
+export * as iGatewayZevmSol from "./IGatewayZEVM.sol";
+export * as universalContractSol from "./UniversalContract.sol";
+export { ICoreRegistry__factory } from "./ICoreRegistry__factory";

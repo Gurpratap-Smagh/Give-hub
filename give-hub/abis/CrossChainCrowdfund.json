@@ -340,7 +340,7 @@
         "type": "string"
       }
     ],
-    "name": "donateNative",
+    "name": "donate",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
@@ -373,7 +373,7 @@
         "type": "string"
       }
     ],
-    "name": "donateZRC20",
+    "name": "donate",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

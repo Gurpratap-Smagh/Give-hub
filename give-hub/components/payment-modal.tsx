@@ -14,6 +14,10 @@ import { DonationToast } from "@/components/donation-toast";
 
 // Payment provider mode
 const PAYMENT_PROVIDER = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || "local").toLowerCase();
+export const CHAIN_NAMES: Record<number, string> = {
+  7001: 'ZetaChain Athens',
+  11155111: 'Ethereum Sepolia'
+};
 
 interface PaymentModalProps {
   campaign: Campaign;
@@ -45,6 +49,8 @@ export default function PaymentModal({
     u !== null &&
     "username" in (u as Record<string, unknown>) &&
     typeof (u as { username?: unknown }).username === "string";
+    
+    
 
   const effectiveChains =
     Array.isArray(campaign.chains) && campaign.chains.length > 0
@@ -161,6 +167,7 @@ export default function PaymentModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, autoSubmit, amount, selectedChain, picked?.address, isProcessing, missingOnChainMapping]);
 
+  // Updated handlePayment function for payment-modal.tsx
   const handlePayment = async () => {
     const raw = (amount || "").trim().replace(/,/g, ".");
     const amountValue = parseFloat(raw);
@@ -175,6 +182,7 @@ export default function PaymentModal({
       if (onZeta) {
         const pickedChainUpper = (picked?.chain || '').toUpperCase();
         const isZetaChainPicked = pickedChainUpper.includes('ZETA');
+        const isSepoliaPicked = pickedChainUpper.includes('SEPOLIA');
         
         const donorDisplayName = (donorName || "").trim() || (user && hasUsername(user) ? user.username : "Anonymous");
         const donorNote = (note || "").trim();
@@ -184,20 +192,66 @@ export default function PaymentModal({
           picked,
           isNative: picked?.isNative,
           address: picked?.address,
-          chain: picked?.chain
+          chain: picked?.chain,
+          isZetaChainPicked,
+          isSepoliaPicked
         });
+
+        // Determine the source chain ID and token address
+        let sourceChainId: number;
+        let tokenAddress: string | undefined;
+        
+        if (isZetaChainPicked) {
+          sourceChainId = 7001; // ZetaChain Athens testnet
+          // For native ZETA, don't pass tokenAddress or use the special identifier
+          if (picked?.isNative || picked?.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
+            tokenAddress = undefined; // This will trigger donate
+          } else if (picked?.address) {
+            tokenAddress = picked.address; // This will trigger donate
+          }
+        } else if (isSepoliaPicked) {
+          sourceChainId = 11155111; // Ethereum Sepolia
+          // For Sepolia, tokenAddress doesn't matter as much since it goes through cross-chain gateway
+          // But we can still pass it for logging/tracking purposes
+          tokenAddress = picked?.address || undefined;
+        } else {
+          throw new Error(`Unsupported chain: ${picked?.chain}`);
+        }
+
+        const detectMode = () => {
+          if (isZetaChainPicked) {
+            if (picked?.isNative || picked?.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
+              return 'zeta_native';
+            }
+            return 'zeta_zrc20';
+          }
+          if (isSepoliaPicked) {
+            return 'crosschain_sepolia';
+          }
+          return undefined;
+        };
+
+        const mode = detectMode();
+        if (!mode) {
+          showError('Could not determine payment mode.');
+          setIsProcessing(false);
+          return;
+        }
 
         const txHash = await makePayment({
           campaignId: Number(onChainCampaignId),
           donorName: donorDisplayName,
           note: donorNote,
           amount: raw,
-          preferredChain: isZetaChainPicked ? 'zeta' : 'sepolia',
-          tokenAddress: picked?.isNative ? undefined : (picked?.address && picked.address !== '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' ? picked.address.trim() : undefined),
+          sourceChainId,
+          tokenAddress,
+          preferredChain: CHAIN_NAMES[sourceChainId],
+          mode, // Pass the detected mode here
           onStatusUpdate: (status: string) => {
             if (!status) return;
             setProcessingStatus(status);
             showInfo(status);
+
             if (onStatusUpdate) {
               try { 
                 onStatusUpdate(status); 
@@ -224,7 +278,7 @@ export default function PaymentModal({
         return;
       }
 
-      // Local/mock payment mode
+      // Local/mock payment mode (unchanged)
       if (!onZeta) {
         if (!walletAddress) {
           try {
@@ -251,6 +305,98 @@ export default function PaymentModal({
       setIsProcessing(false);
     }
   };
+  // const handlePayment = async () => {
+  //   const raw = (amount || "").trim().replace(/,/g, ".");
+  //   const amountValue = parseFloat(raw);
+
+  //   if (!amountValue || amountValue <= 0) {
+  //     showError("Please enter a valid amount");
+  //     return;
+  //   }
+
+  //   setIsProcessing(true);
+  //   try {
+  //     if (onZeta) {
+  //       const pickedChainUpper = (picked?.chain || '').toUpperCase();
+  //       const isZetaChainPicked = pickedChainUpper.includes('ZETA');
+        
+  //       const donorDisplayName = (donorName || "").trim() || (user && hasUsername(user) ? user.username : "Anonymous");
+  //       const donorNote = (note || "").trim();
+
+  //       // Debug token data
+  //       console.log('Payment token data:', {
+  //         picked,
+  //         isNative: picked?.isNative,
+  //         address: picked?.address,
+  //         chain: picked?.chain
+  //       });
+
+  //       const txHash = await makePayment({
+  //         campaignId: Number(onChainCampaignId),
+  //         donorName: donorDisplayName,
+  //         note: donorNote,
+  //         amount: raw,
+  //         preferredChain: isZetaChainPicked ? 'zeta' : 'sepolia',
+  //         sourceChainId: isZetaChainPicked ? 7001 : 11155111,
+  //         sourceChain: isZetaChainPicked ? 'zeta' : 'sepolia',
+  //         tokenAddress: picked?.isNative ? undefined : (picked?.address && picked.address !== '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' ? picked.address.trim() : undefined),
+  //         onStatusUpdate: (status: string) => {
+  //           if (!status) return;
+  //           setProcessingStatus(status);
+  //           showInfo(status);
+  //           if (onStatusUpdate) {
+  //             try { 
+  //               onStatusUpdate(status); 
+  //             } catch (e) {
+  //               if (process.env.NODE_ENV === 'development') {
+  //                 console.warn('Status update callback failed:', e);
+  //               }
+  //             }
+  //           }
+  //         },
+  //       });
+
+  //       // Start donation flow tracking with additional params
+  //       const chainName = isZetaChainPicked ? 'ZetaChain' : 'Ethereum Sepolia';
+  //       startDonation(txHash, raw, campaign.id, donorDisplayName, chainName, displaySymbol);
+  //       onPaymentSuccess(amountValue, chainName, displaySymbol);
+        
+  //       // Close modal immediately but let donation flow handle success notification
+  //       onClose();
+  //       setAmount("");
+  //       setDonorName("");
+  //       setNote("");
+  //       setProcessingStatus("");
+  //       return;
+  //     }
+
+  //     // Local/mock payment mode
+  //     if (!onZeta) {
+  //       if (!walletAddress) {
+  //         try {
+  //           const { address } = await connectWallet();
+  //           setWalletAddress(address);
+  //         } catch (e) {
+  //           console.warn('Wallet connection failed:', e);
+  //         }
+  //       }
+
+  //       onPaymentSuccess(amountValue, selectedChain, 'USD');
+  //       showSuccess(`Mock payment of $${raw} completed!`);
+  //       onClose();
+  //       setAmount("");
+  //       setDonorName("");
+  //       setNote("");
+  //       return;
+  //     }
+  //   } catch (error) {
+  //     console.error('Payment failed:', error);
+  //     const errorMessage = error instanceof Error ? error.message : 'Payment failed';
+  //     showError(`Payment failed: ${errorMessage}`);
+  //   } finally {
+  //     setIsProcessing(false);
+  //   }
+  // };
   
   // Do not render modal content unless explicitly opened
   if (!isOpen) return null;

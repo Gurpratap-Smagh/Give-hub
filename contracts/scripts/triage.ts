@@ -57,13 +57,13 @@ async function main() {
   const router = await uc.router();
   console.log("router():", router);
   if (router === ethers.ZeroAddress) {
-    console.error("❌ Router not set. donateNative will fail on swap.");
+    console.error("❌ Router not set. donate will fail on swap.");
   }
 
-  // 6) Dry-run donateNative to capture the precise revert
+  // 6) Dry-run donate to capture the precise revert
   try {
-    console.log("callStatic.donateNative(… value=1 wei) to sniff revert reason…");
-    await uc.callStatic.donateNative(CAMPAIGN_ID, "probe", "probe", { value: 1n });
+    console.log("callStatic.donate(… value=1 wei) to sniff revert reason…");
+    await uc.callStatic.donate(CAMPAIGN_ID, "probe", "probe", { value: 1n });
     console.log("✅ Static call passed (with 1 wei). Real tx should pass the guards.");
   } catch (e: any) {
     // Parse custom errors if present

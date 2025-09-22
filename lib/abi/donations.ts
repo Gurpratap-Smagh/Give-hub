@@ -6,8 +6,8 @@ export const DONATION_ABI = [
   "event CampaignCreated(uint256 indexed campaignId, address indexed creator, address preferredZRC20)",
   
   // Core donation functions
-  "function donateNative(uint256 campaignId, string donorName, string note) external payable",
-  "function donateZRC20(address token, uint256 amount, uint256 campaignId, string donorName, string note) external",
+  "function donate(uint256 campaignId, string donorName, string note) external payable",
+  "function donate(address token, uint256 amount, uint256 campaignId, string donorName, string note) external",
   
   // Campaign functions  
   "function createCampaign(address preferredZRC20) external returns (uint256 campaignId)",

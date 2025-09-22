@@ -26,10 +26,10 @@ async function main() {
       const contract = await ethers.getContractAt("CrossChainCrowdfund", addr);
       const wzeta = getAddress("0x5f9982a5ca0c5fce0e063a7dd7c2f2aa5f4a5a53");
 
-      // see if donateNative exists
-      console.log("  Checking donateNative with staticcall...");
-      await contract.callStatic.donateNative(1n, "test", "ping", { value: 1 });
-      console.log("  ✅ donateNative works");
+      // see if donate exists
+      console.log("  Checking donate with staticcall...");
+      await contract.callStatic.donate(1n, "test", "ping", { value: 1 });
+      console.log("  ✅ donate works");
 
       // see if allowedInTokens getter exists
       try {

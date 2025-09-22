@@ -15,9 +15,9 @@ const WZETA_ABI = [
 
 const CROWDFUND_ABI = [
   // Native payable path
-  'function donateNative(uint256 campaignId, string donorName, string note) payable',
+  'function donate(uint256 campaignId, string donorName, string note) payable',
   // ZRC-20 path
-  'function donateZRC20ToCampaign(uint256 campaignId, address token, uint256 amount, string donorName, string note)',
+  'function donateToCampaign(uint256 campaignId, address token, uint256 amount, string donorName, string note)',
   // View functions
   'function getCampaignBalance(uint256 campaignId) view returns (uint256)',
   'function WZETA() view returns (address)',
@@ -81,7 +81,7 @@ async function main() {
     console.log(`WZETA approved successfully: ${approveTx.hash}`);
     
     console.log('Step 3: Donate using ZRC-20 path');
-    const donateTx = await crowdfund.donateZRC20ToCampaign(
+    const donateTx = await crowdfund.donateToCampaign(
       CAMPAIGN_ID,
       wzetaAddr,
       donationAmount,
@@ -98,7 +98,7 @@ async function main() {
   console.log('\n=== TEST 2: Donate with WZETA directly ===');
   try {
     console.log('Donating with WZETA using native payable method');
-    const donateTx = await crowdfund.donateNative(
+    const donateTx = await crowdfund.donate(
       CAMPAIGN_ID,
       DONOR_NAME,
       NOTE,
