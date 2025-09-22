@@ -27,7 +27,7 @@ import { showError, showSuccess, showInfo } from '@/components/notification-mana
 import { 
   connectWallet, 
   ensureWalletOnChain, 
-  createCampaignOnChain, 
+  createAndConfigureCampaign, 
   isCreator
 } from '@/lib/web3/client'
 import { isAddress } from '@/lib/address'
@@ -236,192 +236,175 @@ export default function CreateCampaignPage() {
    * Handle form submission with Web3 integration
    * Creates campaign on-chain first, then saves to database
    */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!user) {
-      showError('Please sign in to create a campaign', 'Authentication Required')
-      router.push('/auth?next=/create')
-      return
-    }
 
-    setSubmitLoading(true)
-    setSubmitMessage('Validating campaign data...')
-    if (!formData.title || !formData.description || !formData.goal || !formData.category) {
-      showError('Please fill in all required fields', 'Validation Error')
-      setSubmitLoading(false)
-      setSubmitMessage('')
-      return
-    }
-    if (formData.category === 'other' && !otherCategory.trim()) {
-      showError('Please specify your category', 'Validation Error')
-      return
-    }
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    setIsSubmitting(true)
-    
-    let onChainCampaignId: bigint | string | null = null
-    
-    try {
-      // Step 4: Create on-chain campaign if payment provider is ZetaChain
-      
-      if (requiresOnChain) {
-        setSubmitMessage('Creating on-chain campaign...')
-        showInfo('Creating on-chain campaign…', 'Blockchain Integration')
-        // Step 3: Connect wallet (will trigger metamask if not connected)
-        setSubmitMessage('Connecting wallet...')
-        showInfo('Connecting wallet…', 'Wallet Connection')
-        
-        // Step 2: Connect wallet and ensure correct network
-        const { address, chainId } = await connectWallet()
-        const targetChainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
-        
-        if (chainId !== targetChainId) {
-          showInfo(`Switching to ZetaChain network...`, 'Network Switch')
-          await ensureWalletOnChain(targetChainId)
-        }
-        
-        // Step 3: Check if creator already exists on-chain
-        const creatorExists = await isCreator(address)
-        if (!creatorExists) {
-          showInfo('Registering as creator on-chain...', 'Creator Registration')
-        }
-        
-        // Step 4: Create campaign on-chain
-        setTxPhase('confirming')
-        showInfo('Confirm in MetaMask…', 'Transaction Confirmation')
-        const res = await createCampaignOnChain({
-          preferredZRC20: preferredToken,
-          onSent: (hash) => {
-            setTxPhase('mining')
-            setTxHash(hash)
-            const base = process.env.NEXT_PUBLIC_ZETA_EXPLORER_URL
-            if (base) {
-              showSuccess(`Transaction sent: ${base}/tx/${hash}`, 'Transaction Sent')
-            } else {
-              showSuccess(`Transaction sent: ${hash}`, 'Transaction Sent')
-            }
-          }
-        })
-        setTxPhase('done')
-        onChainCampaignId = res.id
-        console.debug('[create] On-chain campaign created. ID:', onChainCampaignId?.toString(), 'tx:', res.txHash)
-      }
-
-      // Step 5: Save campaign to off-chain database
-      setSubmitMessage('Saving campaign to database...')
-      const campaignData: Record<string, unknown> = {
-        title: formData.title,
-        imgSrc: image,
-        description: formData.description,
-        category: formData.category === 'other' ? otherCategory.trim() : formData.category,
-        goal: parseFloat(formData.goal),
-        creatorId: user.id,
-        preferredZRC20: preferredToken || undefined,
-      }
-      // Attach on-chain mapping if we created on-chain and have required envs
-      if (onChainCampaignId) {
-        const chainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || '7001')
-        const contract = process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS || ''
-        if (contract && contract.length === 42) {
-          campaignData.onChain = {
-            chainId,
-            contract,
-            campaignId: onChainCampaignId.toString(),
-          }
-          console.debug('[create] Attaching onChain mapping to payload:', campaignData.onChain)
-        } else {
-          console.error('[create] Missing or invalid NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS; on-chain mapping will NOT be persisted.', { contract })
-          showError('On-chain campaign created, but missing contract env to save mapping. Please set NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS.', 'Configuration Error')
-        }
-      } else if (requiresOnChain) {
-        console.warn('[create] Expected on-chain campaign ID but did not obtain one; saving off-chain only.')
-      }
-      
-      const response = await fetch('/api/campaigns', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(campaignData),
-      });
-      
-      if (!response.ok) {
-        if (response.status === 401) {
-          showError('Something went wrong. Please try again.', 'Campaign Creation Error')
-          router.push('/auth?next=/create')
-          return
-        }
-        let details = ''
-        try {
-          const data = await response.json()
-          details = data?.error || data?.message || ''
-        } catch {}
-        throw new Error(details || 'Failed to create campaign')
-      }
-      
-      const result = await response.json()
-      showSuccess('Campaign created successfully!', 'Campaign Created')
-      console.debug('[create] API response:', result)
-      const persistedOnChain = Boolean(result?.campaign?.onChain || result?.onChain)
-      if (persistedOnChain) {
-        console.log('[create] On-chain mapping persisted on server:', (result?.campaign?.onChain || result?.onChain))
-      } else if (requiresOnChain) {
-        console.error('[create] Server saved campaign WITHOUT on-chain mapping. Verify env and API handling.')
-      }
-      // Optionally trigger a backend sync to ensure on-chain events are persisted before redirect
-      if (requiresOnChain) {
-        try {
-          setSubmitMessage('Syncing on-chain data...')
-          showInfo('Creating Stripe setup intent...', 'Payment Setup')
-          const syncRes = await fetch(`/api/sync?range=2000`, { method: 'GET' })
-          const syncJson = await syncRes.json().catch(() => null)
-          if (syncRes.ok && (syncJson?.success ?? false)) {
-            console.debug('[create] Sync complete:', syncJson)
-          } else {
-            console.warn('[create] Sync did not report success:', syncJson)
-          }
-        } catch (e) {
-          console.error('[create] Sync call failed:', e)
-          const errorMsg = e instanceof Error ? e.message : 'Unknown error'
-          showError('Sync failed: ' + errorMsg, 'Sync Error')
-        }
-      }
-
-      // Navigate to the created campaign (robust)
-      const newId = result?.campaign?.id || result?.id
-      if (!newId) {
-        console.error('[create] Missing campaign id in response, cannot navigate. Result:', result)
-        showError('Campaign saved but navigation failed: missing id.', 'Navigation Error')
-      } else {
-        const path = `/campaign/${newId}`
-        console.debug('[create] Navigating to', path)
-        router.push(path)
-      }
-      
-    } catch (error) {
-      const errorMsg = (error as Error).message || 'An error occurred'
-      showError(errorMsg, 'Campaign Creation Error')
-      // Show modal for wallet/testnet errors in on-chain mode
-      if (requiresOnChain) {
-        const hint = `Creators must have ZetaChain Athens testnet funds (ZETA for gas and WZETA as preferred token).\n\nDetails: ${errorMsg}`
-        setErrorText(hint)
-        setErrorDetails(error)
-        setErrorOpen(true)
-      }
-      
-      // If on-chain creation succeeded but off-chain failed, show different message
-      if (onChainCampaignId) {
-        showError(`Campaign created on blockchain (ID: ${onChainCampaignId}) but failed to save locally. Please contact support.`, 'Database Save Error')
-      }
-    } finally {
-      setIsSubmitting(false)
-      setTxPhase('idle')
-      setSubmitLoading(false)
-      setSubmitMessage('')
-    }
+  if (!user) {
+    showError("Please sign in to create a campaign", "Authentication Required");
+    router.push("/auth?next=/create");
+    return;
   }
+
+  setSubmitLoading(true);
+  setSubmitMessage("Validating campaign data...");
+  if (!formData.title || !formData.description || !formData.goal || !formData.category) {
+    showError("Please fill in all required fields", "Validation Error");
+    setSubmitLoading(false);
+    setSubmitMessage("");
+    return;
+  }
+  if (formData.category === "other" && !otherCategory.trim()) {
+    showError("Please specify your category", "Validation Error");
+    return;
+  }
+
+  setIsSubmitting(true);
+
+  let onChainCampaignId: bigint | string | null = null;
+
+  try {
+    if (requiresOnChain) {
+      setSubmitMessage("Creating on-chain campaign...");
+      showInfo("Creating on-chain campaign…", "Blockchain Integration");
+
+      const { address, chainId } = await connectWallet();
+      const targetChainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || "7001");
+
+      if (chainId !== targetChainId) {
+        showInfo(`Switching to ZetaChain network...`, "Network Switch");
+        await ensureWalletOnChain(targetChainId);
+      }
+
+      const creatorExists = await isCreator(address);
+      if (!creatorExists) {
+        showInfo("Registering as creator on-chain...", "Creator Registration");
+      }
+
+      setTxPhase("confirming");
+      showInfo("Confirm in MetaMask…", "Transaction Confirmation");
+
+      const res = await createAndConfigureCampaign({
+        preferredZRC20: preferredToken || process.env.NEXT_PUBLIC_WZETA_ADDRESS!,
+        payoutAddress: address,
+        payoutGasLimit: 0,
+      });
+
+      setTxPhase("done");
+      onChainCampaignId = res.campaignId;
+      setTxHash(res.txHash);
+
+      console.debug(
+        "[create] On-chain campaign created. ID:",
+        onChainCampaignId?.toString(),
+        "tx:",
+        res.txHash
+      );
+    }
+
+    setSubmitMessage("Saving campaign to database...");
+    const campaignData: Record<string, unknown> = {
+      title: formData.title,
+      imgSrc: image,
+      description: formData.description,
+      category:
+        formData.category === "other" ? otherCategory.trim() : formData.category,
+      goal: parseFloat(formData.goal),
+      creatorId: user.id,
+      preferredZRC20: preferredToken || undefined,
+    };
+
+    if (onChainCampaignId) {
+      const chainId = parseInt(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || "7001");
+      const contract = process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS || "";
+      if (contract && contract.length === 42) {
+        campaignData.onChain = {
+          chainId,
+          contract,
+          campaignId: onChainCampaignId.toString(),
+        };
+        console.debug(
+          "[create] Attaching onChain mapping to payload:",
+          campaignData.onChain
+        );
+      } else {
+        console.error(
+          "[create] Missing or invalid NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS; on-chain mapping will NOT be persisted.",
+          { contract }
+        );
+        showError(
+          "On-chain campaign created, but missing contract env to save mapping. Please set NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS.",
+          "Configuration Error"
+        );
+      }
+    } else if (requiresOnChain) {
+      console.warn(
+        "[create] Expected on-chain campaign ID but did not obtain one; saving off-chain only."
+      );
+    }
+
+    const response = await fetch("/api/campaigns", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(campaignData),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        showError("Something went wrong. Please try again.", "Campaign Creation Error");
+        router.push("/auth?next=/create");
+        return;
+      }
+      let details = "";
+      try {
+        const data = await response.json();
+        details = data?.error || data?.message || "";
+      } catch {}
+      throw new Error(details || "Failed to create campaign");
+    }
+
+    const result = await response.json();
+    showSuccess("Campaign created successfully!", "Campaign Created");
+    console.debug("[create] API response:", result);
+
+    const newId = result?.campaign?.id || result?.id;
+    if (!newId) {
+      console.error(
+        "[create] Missing campaign id in response, cannot navigate. Result:",
+        result
+      );
+      showError("Campaign saved but navigation failed: missing id.", "Navigation Error");
+    } else {
+      router.push(`/campaign/${newId}`);
+    }
+  } catch (error) {
+    const errorMsg = (error as Error).message || "An error occurred";
+    showError(errorMsg, "Campaign Creation Error");
+
+    if (requiresOnChain) {
+      const hint = `Creators must have ZetaChain Athens testnet funds (ZETA for gas and WZETA as preferred token).\n\nDetails: ${errorMsg}`;
+      setErrorText(hint);
+      setErrorDetails(error);
+      setErrorOpen(true);
+    }
+
+    if (onChainCampaignId) {
+      showError(
+        `Campaign created on blockchain (ID: ${onChainCampaignId}) but failed to save locally. Please contact support.`,
+        "Database Save Error"
+      );
+    }
+  } finally {
+    setIsSubmitting(false);
+    setTxPhase("idle");
+    setSubmitLoading(false);
+    setSubmitMessage("");
+  }
+};
+
 
   const handleAiEdit = async () => {
     if (aiLoading) return;
@@ -716,12 +699,12 @@ export default function CreateCampaignPage() {
                 >
                   {imageGenLoading ? (
                     // Spinner
-                    <svg className="animate-spin h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="status" aria-label="Loading">
+                    <svg className="animate-spin h-10 w-10 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="status" aria-label="Loading">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
                     </svg>
                   ) : (
-                    <span className="text-lg leading-none">✦</span>
+                    <span className="text-4xl leading-none">✦</span>
                   )}
                 </button>
               )}

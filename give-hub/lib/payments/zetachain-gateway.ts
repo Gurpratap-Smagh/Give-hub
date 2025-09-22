@@ -1,6 +1,22 @@
 'use client';
 
 import { ethers, BrowserProvider, Contract, parseEther, parseUnits } from 'ethers';
+import type { WindowWithEthereum } from '../../types/ethereum';
+// Import the ABI from the JSON file
+import artifact from '../../abis/fresh.json';
+
+// Type for the ABI from fresh.json
+type ContractABI = Array<{
+  type: string;
+  name?: string;
+  inputs?: Array<{ name: string; type: string; internalType: string }>;
+  outputs?: Array<{ name: string; type: string; internalType: string }>;
+  stateMutability?: string;
+  anonymous?: boolean;
+}>;
+
+// Extract the ABI from the artifact
+const abi = (artifact as { abi: ContractABI }).abi;
 
 // Chain configuration
 export const CHAINS = {
@@ -36,8 +52,8 @@ const ERC20_ABI = [
 
 // ZetaChain contract ABI for direct donations
 const CROWDFUND_ABI = [
-  'function donateNative(uint256 campaignId, string calldata donorName, string calldata note) payable',
-  'function donateZRC20(address token, uint256 amount, uint256 campaignId, string calldata donorName, string calldata note)',
+  'function contribute(uint256 campaignId, string calldata donorName, string calldata note) payable',
+  'function contributeZRC20(address token, uint256 amount, uint256 campaignId, string calldata donorName, string calldata note)',
 ] as const;
 
 export type RevertOptions = [string, boolean, string, string, bigint];
@@ -47,6 +63,9 @@ export interface PaymentParams {
   donorName: string;
   note: string;
   amount: string;
+  sourceChainId: number;
+  tokenAddress?: string;
+  preferredChain: string;
   onStatusUpdate?: (status: string) => void;
 }
 
@@ -57,6 +76,7 @@ export interface CrossChainPaymentParams extends PaymentParams {
 
 export interface DirectZetaPaymentParams extends PaymentParams {
   tokenAddress?: string; // For ZRC-20, omit for native ZETA
+  prefferedChain?: string;
 }
 
 /**
@@ -85,7 +105,7 @@ function buildInnerDonateNative(campaignId: number, donorName: string, note: str
 
 
 /** Outer wrapper expected by onCall: (string action, bytes inner) */
-function encodeGatewayMessage(action: 'donate_native' | 'donate_token', inner: string): string {
+function encodeGatewayMessage(action: 'contribute' | 'contribute_zrc20', inner: string): string {
   return ethers.AbiCoder.defaultAbiCoder().encode(['string','bytes'], [action, inner]);
 }
 
@@ -177,7 +197,7 @@ export async function payFromSourceChain(params: CrossChainPaymentParams): Promi
     onStatusUpdate?.('Confirming native ETH payment...');
     const value = parseEther(amount);
     const inner = buildInnerDonateNative(campaignId, donorName, note);
-    const message = encodeGatewayMessage('donate_native', inner);
+    const message = encodeGatewayMessage('contribute', inner);
     
     const tx = await gateway[
       'depositAndCall(address,bytes,(address,bool,address,bytes,uint256))'
@@ -214,7 +234,7 @@ export async function payFromSourceChain(params: CrossChainPaymentParams): Promi
       onStatusUpdate?.('Confirming ERC-20 payment...');
       // Build message payload for token donation
       const inner = buildInnerDonateNative(campaignId, donorName, note);
-      const message = encodeGatewayMessage('donate_token', inner);
+      const message = encodeGatewayMessage('contribute_zrc20', inner);
       const tx = await gateway.depositAndCall(
         receiverAddress,
         tokenAmount,
@@ -258,8 +278,7 @@ export async function payDirectlyOnZeta(params: DirectZetaPaymentParams): Promis
     // Native ZETA payment
     onStatusUpdate?.('Confirming native ZETA payment...');
     const value = parseEther(amount);
-    
-    const tx = await contract.donateNative(campaignId, donorName, note, { value });
+    const tx = await contract.donate(ethers.ZeroAddress, 0n, campaignId, donorName, note, { value });
     
     onStatusUpdate?.('Transaction submitted, waiting for confirmation...');
     await tx.wait();
@@ -285,7 +304,7 @@ export async function payDirectlyOnZeta(params: DirectZetaPaymentParams): Promis
       await approveTx.wait();
       
       onStatusUpdate?.('Confirming ZRC-20 payment...');
-      const tx = await contract.donateZRC20(tokenAddress, tokenAmount, campaignId, donorName, note);
+      const tx = await contract.donate(tokenAddress, tokenAmount, campaignId, donorName, note);
       
       onStatusUpdate?.('Transaction submitted, waiting for confirmation...');
       await tx.wait();
@@ -301,22 +320,127 @@ export async function payDirectlyOnZeta(params: DirectZetaPaymentParams): Promis
 /**
  * Smart payment router - determines best payment method
  */
-export async function makePayment(params: {
+type MakePaymentArgs = {
   campaignId: number;
   donorName: string;
   note: string;
-  amount: string;
-  preferredChain: 'sepolia' | 'zeta';
-  tokenAddress?: string;
-  onStatusUpdate?: (status: string) => void;
-}): Promise<string> {
-  
-  if (params.preferredChain === 'sepolia') {
-    return payFromSourceChain({
-      ...params,
-      sourceChain: 'sepolia',
+  amount: string;                // decimal string
+  sourceChainId: number;
+  tokenAddress?: string;         // undefined => native token
+  mode: 'zeta_native' | 'zeta_zrc20' | 'crosschain_sepolia';
+  onStatusUpdate?: (s: string) => void;
+  preferredChain?: string;
+};
+
+export async function makePayment(args: MakePaymentArgs): Promise<string> {
+  const { campaignId, donorName, note, amount, sourceChainId, tokenAddress, mode, onStatusUpdate } = args;
+  const say = (s: string) => onStatusUpdate?.(s);
+
+  const CONTRACT = process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS!;
+  if (!CONTRACT) throw new Error("Contract address missing (NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS)");
+
+  const provider = new ethers.BrowserProvider((window as WindowWithEthereum).ethereum);
+  const network = await provider.getNetwork();
+  if (Number(network.chainId) !== sourceChainId) {
+    await (window as WindowWithEthereum).ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: ethers.toBeHex(sourceChainId) }],
     });
-  } else {
-    return payDirectlyOnZeta(params);
   }
+  const signer = await provider.getSigner();
+
+  // Helpers
+  async function parseAmount(addr?: string) {
+    if (!addr) return ethers.parseUnits(amount, 18);
+    // Normalize to EIP-55 to avoid "bad address checksum"
+    const checksummed = ethers.getAddress(addr.toLowerCase());
+    const erc20 = new ethers.Contract(checksummed, ERC20_ABI, signer);
+    const dec: number = await erc20.decimals();
+    return ethers.parseUnits(amount, dec);
+  }
+
+
+  // ZetaChain direct: native ZETA or any ZRC20 on ZetaChain
+  if (mode === "zeta_native") {
+    // Native ZETA on ZetaChain: call contract directly
+    say("Preparing native ZETA donation on ZetaChain…");
+    const contract = new ethers.Contract(CONTRACT, abi, signer);
+    const value = await parseAmount(); // 18 decimals
+    const tx = await contract.donateNative(ethers.ZeroAddress, 0n, campaignId, donorName, note, { value });
+    say("Confirming on ZetaChain…");
+    const r = await tx.wait();
+    return r?.hash ?? tx.hash;
+  } else if (mode === "zeta_zrc20") {
+    // ZRC20 token on ZetaChain: approve + call contract directly
+    if (!tokenAddress) throw new Error("Token address required for ZRC-20 donation");
+    say("Approving ZRC-20 allowance on ZetaChain…");
+    const tokenAddr = ethers.getAddress(tokenAddress.toLowerCase());
+    const erc20 = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
+
+    const amt = await parseAmount(tokenAddress);
+    const approveTx = await erc20.approve(CONTRACT, amt);
+    await approveTx.wait();
+
+    say("Sending ZRC-20 donation on ZetaChain…");
+    const contract = new ethers.Contract(CONTRACT, abi, signer);
+    const addr = ethers.getAddress(tokenAddress.toLowerCase());
+    const tx = await contract.donate(addr, amt, campaignId, donorName, note);
+    const r = await tx.wait();
+    return r?.hash ?? tx.hash;
+  }
+
+
+  // All other chains/tokens: use Gateway contract (e.g., Sepolia, non-ZetaChain)
+  if (mode === 'crosschain_sepolia') {
+    // Only require GATEWAY env for non-ZetaChain payments
+    // crosschain_sepolia: use Gateway on Sepolia and double-encode payload
+    // Outer: (string action, bytes data)
+    const coder = ethers.AbiCoder.defaultAbiCoder();
+    const GATEWAY = process.env.NEXT_PUBLIC_ZETA_GATEWAY_SEPOLIA;
+    if (!GATEWAY) throw new Error("Gateway address missing (NEXT_PUBLIC_ZETA_GATEWAY_SEPOLIA)");
+    const gateway = new ethers.Contract(GATEWAY, GATEWAY_ABI, signer);
+
+    if (!tokenAddress) {
+      // ETH native over Sepolia → action=donate_native, data=(campaignId, donorName, note)
+      say("Building cross-chain payload for native ETH (Sepolia → ZetaChain)…");
+      const inner = coder.encode(["uint256","string","string"], [campaignId, donorName, note]);
+      const payload = coder.encode(["string","bytes"], ["contribute", inner]);
+      const value = await parseAmount(); // 18 ETH
+
+      say("Calling Gateway.depositAndCall (native)…");
+      const tx = await gateway.depositAndCall(
+        CONTRACT,
+        payload,
+        { revertAddress: ethers.ZeroAddress, callOnRevert: false, abortAddress: ethers.ZeroAddress, revertMessage: "0x", onRevertGasLimit: 0 },
+        { value }
+      );
+      const r = await tx.wait();
+      return r?.hash ?? tx.hash;
+    } else {
+      // ERC-20 (e.g., USDC on Sepolia) → action=donate_token, data=(token,address amount, campaignId, donorName, note)
+      say("Approving Gateway to pull ERC-20 on Sepolia…");
+      const amt = await parseAmount(tokenAddress);
+      const erc20 = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+      const a = await erc20.approve(GATEWAY, amt);
+      await a.wait();
+
+      say("Building cross-chain payload for ERC-20 (Sepolia → ZetaChain)…");
+      const inner = coder.encode(["address","uint256","uint256","string","string"], [tokenAddress, amt, campaignId, donorName, note]);
+      const payload = coder.encode(["string","bytes"], ["contribute_zrc20", inner]);
+
+      say("Calling Gateway.depositAndCall (ERC-20)…");
+      const tx = await gateway.depositAndCall(
+        CONTRACT,
+        tokenAddress,
+        amt,
+        payload,
+        { revertAddress: ethers.ZeroAddress, callOnRevert: false, abortAddress: ethers.ZeroAddress, revertMessage: "0x", onRevertGasLimit: 0 }
+      );
+      const r = await tx.wait();
+      return r?.hash ?? tx.hash;
+    }
+  }
+
+  // Fallback for unknown mode
+  throw new Error(`Unsupported payment mode: ${mode}`);
 }

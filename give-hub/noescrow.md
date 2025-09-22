@@ -32,7 +32,7 @@ File: `contracts/_archive_min_rollback/CrossChainCrowdfund.sol`
   - `_swapTokens(...)` is currently a placeholder. Wire it to Zeta’s DEX/Router when available so donations are converted automatically to the creator’s preferred token.
 
 ### Optional: Same-Chain Native Donations (Zeta)
-Add a payable entrypoint (example): `donateNative(uint256 campaignId, string note)` which:
+Add a payable entrypoint (example): `donate(uint256 campaignId, string note)` which:
 - Wraps native ZETA to WZETA: `IWZETA(WZETA).deposit{value: msg.value}()`.
 - Swaps WZETA to the creator’s preferred ZRC-20 if necessary.
 - Immediately transfers tokens to `campaign.creator`.
@@ -41,7 +41,7 @@ Add a payable entrypoint (example): `donateNative(uint256 campaignId, string not
 Files: `lib/web3/client.ts`, `app/studio/page.tsx`
 
 - Donations
-  - On Zeta: call `donateNative(...)` with `{ value }` when donating in native ZETA.
+  - On Zeta: call `donate(...)` with `{ value }` when donating in native ZETA.
   - Cross-chain: use Zeta’s official cross-chain donation flow so the UniversalContract `onCall(...)` is invoked by the Zeta system. Avoid calling `onCall` directly from an EOA—no system transfer/mint occurs in that case.
 - UI/UX
   - Remove or hide “Withdraw All On-Chain Funds” from `app/studio/page.tsx`.
@@ -50,9 +50,9 @@ Files: `lib/web3/client.ts`, `app/studio/page.tsx`
 
 ## Local vs Testnet
 - Local
-  - You can test immediate forward using `donateNative` with `{ value }`. Cross-chain simulation requires mocks; a plain EOA `onCall` won’t mint ZRC-20.
+  - You can test immediate forward using `donate` with `{ value }`. Cross-chain simulation requires mocks; a plain EOA `onCall` won’t mint ZRC-20.
 - Testnet
-  - Same-chain (Zeta): works immediately with `donateNative`.
+  - Same-chain (Zeta): works immediately with `donate`.
   - Cross-chain: configure ZetaChain messaging so your contract’s `onCall` is invoked by the system, delivering ZRC-20 funds. Then swap and forward.
 
 ## Required Env Vars (frontend)
@@ -66,10 +66,10 @@ Files: `lib/web3/client.ts`, `app/studio/page.tsx`
   - [ ] Remove internal balance mapping updates in `_handleDonation(...)`.
   - [ ] Add immediate `transfer` to `campaign.creator`.
   - [ ] Remove/disable `withdrawCampaignFunds(...)`.
-  - [ ] (Optional) Add `donateNative(...)` + wrap/swap logic.
+  - [ ] (Optional) Add `donate(...)` + wrap/swap logic.
   - [ ] Wire `_swapTokens(...)` to Zeta Router when ready.
 - Frontend
-  - [ ] Update donation to use `donateNative(...)` on Zeta and Zeta cross-chain flow for other chains.
+  - [ ] Update donation to use `donate(...)` on Zeta and Zeta cross-chain flow for other chains.
   - [ ] Remove Withdraw UI from `app/studio/page.tsx`.
   - [ ] Update copy: "Funds are forwarded instantly; no escrow." 
 

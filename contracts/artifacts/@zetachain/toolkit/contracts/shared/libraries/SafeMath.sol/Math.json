@@ -1,0 +1,26 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "Math",
+  "sourceName": "@zetachain/toolkit/contracts/shared/libraries/SafeMath.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "AdditionsOverflow",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "MultiplicationsOverflow",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "SubtractionsUnderflow",
+      "type": "error"
+    }
+  ],
+  "bytecode": "0x60808060405234601757603a9081601d823930815050f35b600080fdfe600080fdfea2646970667358221220485add34e08ce15d932d6f8a4af75188ac8443e4e7a5c68bf5f2e7c662f10e6264736f6c634300081a0033",
+  "deployedBytecode": "0x600080fdfea2646970667358221220485add34e08ce15d932d6f8a4af75188ac8443e4e7a5c68bf5f2e7c662f10e6264736f6c634300081a0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

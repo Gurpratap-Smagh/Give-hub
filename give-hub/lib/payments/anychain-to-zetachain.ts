@@ -79,7 +79,7 @@ const ERC20_ABI = [
  *  - Native:  action='donate_native', data=abi.encode(uint256 campaignId, string donorName, string note)
  *  - ERC-20:  action='donate_token',  data=abi.encode(address zrc20, uint256 amount, uint256 campaignId, string donorName, string note)
  */
-export function buildDonateNativeMessage(
+export function builddonateMessage(
   campaignId: bigint | number,
   donorName: string,
   note: string,
@@ -155,7 +155,7 @@ export async function depositNativeToZEVM(params: AnychainPayParams) {
   const sender = await signer.getAddress();
 
   const gw = new Contract(gateway, GATEWAY_ABI, signer);
-  const message = buildDonateNativeMessage(campaignId, donorName, note);
+  const message = builddonateMessage(campaignId, donorName, note);
   const revertOpts = buildRevertOptions(sender);
   const value = parseEther(String(amount));
 

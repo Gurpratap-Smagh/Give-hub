@@ -1,9 +1,9 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\Users\\gurpr\\GiveHub\\a\\Give-hub\\contracts\\contracts\\CrossChainCrowdfund.sol": {
-      "lastModificationDate": 1756699288415,
-      "contentHash": "74c4a5da7fd913d11cbd422b97246bb2",
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\contracts\\CrossChainCrowdfund.sol": {
+      "lastModificationDate": 1757888938393,
+      "contentHash": "a92ec65893db20f802d488b27abfb0d3",
       "sourceName": "contracts/CrossChainCrowdfund.sol",
       "solcConfig": {
         "version": "0.8.26",
@@ -33,8 +33,10 @@
       "imports": [
         "@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol",
         "@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol",
-        "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol",
-        "@openzeppelin/contracts/token/ERC20/IERC20.sol"
+        "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol",
+        "@zetachain/toolkit/contracts/SwapHelperLib.sol",
+        "@zetachain/protocol-contracts/contracts/Revert.sol",
+        "@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol"
       ],
       "versionPragmas": [
         "^0.8.26"
@@ -49,10 +51,10 @@
         "SafeERC20Lite"
       ]
     },
-    "C:\\Users\\gurpr\\GiveHub\\a\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\SystemContract.sol": {
-      "lastModificationDate": 1756689204669,
-      "contentHash": "4a2b1aa863db7739bc4798044fe98ed7",
-      "sourceName": "@zetachain/protocol-contracts/contracts/zevm/SystemContract.sol",
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@zetachain\\toolkit\\contracts\\SwapHelperLib.sol": {
+      "lastModificationDate": 1757473643642,
+      "contentHash": "e74953dbc35905e8a2ea434e4332e7b8",
+      "sourceName": "@zetachain/toolkit/contracts/SwapHelperLib.sol",
       "solcConfig": {
         "version": "0.8.26",
         "settings": {
@@ -79,96 +81,20 @@
         }
       },
       "imports": [
-        "./interfaces/IZRC20.sol",
-        "./interfaces/UniversalContract.sol"
+        "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol",
+        "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol",
+        "./shared/interfaces/IZRC20.sol",
+        "./shared/libraries/UniswapV2Library.sol"
       ],
       "versionPragmas": [
         "0.8.26"
       ],
       "artifacts": [
-        "SystemContract",
-        "SystemContractErrors"
+        "SwapHelperLib"
       ]
     },
-    "C:\\Users\\gurpr\\GiveHub\\a\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts\\token\\ERC20\\IERC20.sol": {
-      "lastModificationDate": 1756689197222,
-      "contentHash": "df36f7051335cd1e748b1b6463b7fdd3",
-      "sourceName": "@openzeppelin/contracts/token/ERC20/IERC20.sol",
-      "solcConfig": {
-        "version": "0.8.26",
-        "settings": {
-          "viaIR": true,
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "IERC20"
-      ]
-    },
-    "C:\\Users\\gurpr\\GiveHub\\a\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\UniversalContract.sol": {
-      "lastModificationDate": 1756689206527,
-      "contentHash": "9a0358c008d7f0408549dfbb02118922",
-      "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol",
-      "solcConfig": {
-        "version": "0.8.26",
-        "settings": {
-          "viaIR": true,
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../../../contracts/Revert.sol"
-      ],
-      "versionPragmas": [
-        "0.8.26"
-      ],
-      "artifacts": [
-        "UniversalContract",
-        "zContract"
-      ]
-    },
-    "C:\\Users\\gurpr\\GiveHub\\a\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\IGatewayZEVM.sol": {
-      "lastModificationDate": 1756689206517,
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\IGatewayZEVM.sol": {
+      "lastModificationDate": 1757473668798,
       "contentHash": "a5ca34df96db3beffcb5085057aa76cf",
       "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol",
       "solcConfig": {
@@ -209,8 +135,46 @@
         "IGatewayZEVMEvents"
       ]
     },
-    "C:\\Users\\gurpr\\GiveHub\\a\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\IZRC20.sol": {
-      "lastModificationDate": 1756689206524,
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\Revert.sol": {
+      "lastModificationDate": 1757473641893,
+      "contentHash": "a45f5144b4fa2354e2524a574d2d8159",
+      "sourceName": "@zetachain/protocol-contracts/contracts/Revert.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "0.8.26"
+      ],
+      "artifacts": [
+        "Abortable",
+        "Revertable"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\IZRC20.sol": {
+      "lastModificationDate": 1757473668803,
       "contentHash": "84b48919995d4c490e30dcd04fb1d5a8",
       "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol",
       "solcConfig": {
@@ -248,10 +212,126 @@
         "ZRC20Events"
       ]
     },
-    "C:\\Users\\gurpr\\GiveHub\\a\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\Revert.sol": {
-      "lastModificationDate": 1756689173083,
-      "contentHash": "a45f5144b4fa2354e2524a574d2d8159",
-      "sourceName": "@zetachain/protocol-contracts/contracts/Revert.sol",
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\UniversalContract.sol": {
+      "lastModificationDate": 1757473668804,
+      "contentHash": "9a0358c008d7f0408549dfbb02118922",
+      "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../../contracts/Revert.sol"
+      ],
+      "versionPragmas": [
+        "0.8.26"
+      ],
+      "artifacts": [
+        "UniversalContract",
+        "zContract"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@uniswap\\v2-periphery\\contracts\\interfaces\\IUniswapV2Router01.sol": {
+      "lastModificationDate": 1757473659359,
+      "contentHash": "95d8729b2c698dc663322167b3c085fe",
+      "sourceName": "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.6.2"
+      ],
+      "artifacts": [
+        "IUniswapV2Router01"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@uniswap\\v2-periphery\\contracts\\interfaces\\IUniswapV2Router02.sol": {
+      "lastModificationDate": 1757473659419,
+      "contentHash": "3fd36426274a5b35f7e702f87ba08a8e",
+      "sourceName": "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./IUniswapV2Router01.sol"
+      ],
+      "versionPragmas": [
+        ">=0.6.2"
+      ],
+      "artifacts": [
+        "IUniswapV2Router02"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@zetachain\\toolkit\\contracts\\shared\\interfaces\\IZRC20.sol": {
+      "lastModificationDate": 1757473661531,
+      "contentHash": "25438a3a020a18156c8738c9448604c0",
+      "sourceName": "@zetachain/toolkit/contracts/shared/interfaces/IZRC20.sol",
       "solcConfig": {
         "version": "0.8.26",
         "settings": {
@@ -282,8 +362,323 @@
         "0.8.26"
       ],
       "artifacts": [
-        "Abortable",
-        "Revertable"
+        "IZRC20",
+        "IZRC20Metadata",
+        "ZRC20Events"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@zetachain\\toolkit\\contracts\\shared\\libraries\\UniswapV2Library.sol": {
+      "lastModificationDate": 1757473661573,
+      "contentHash": "8a20ce02e67df0a71b9324f28704e1ba",
+      "sourceName": "@zetachain/toolkit/contracts/shared/libraries/UniswapV2Library.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol",
+        "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol",
+        "./SafeMath.sol"
+      ],
+      "versionPragmas": [
+        ">=0.5.0"
+      ],
+      "artifacts": [
+        "UniswapV2Library"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@uniswap\\v2-core\\contracts\\interfaces\\IUniswapV2Pair.sol": {
+      "lastModificationDate": 1757473652436,
+      "contentHash": "3fa31c3860f2b9585c3a98c64850829e",
+      "sourceName": "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.5.0"
+      ],
+      "artifacts": [
+        "IUniswapV2Pair"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@uniswap\\v2-core\\contracts\\interfaces\\IUniswapV2Factory.sol": {
+      "lastModificationDate": 1757473652359,
+      "contentHash": "ec39b5372f4f4d52101b4da561e2aee6",
+      "sourceName": "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.5.0"
+      ],
+      "artifacts": [
+        "IUniswapV2Factory"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\node_modules\\@zetachain\\toolkit\\contracts\\shared\\libraries\\SafeMath.sol": {
+      "lastModificationDate": 1757473661553,
+      "contentHash": "203fb84febc6f15c3480a9b69c2f7d83",
+      "sourceName": "@zetachain/toolkit/contracts/shared/libraries/SafeMath.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "0.8.26"
+      ],
+      "artifacts": [
+        "Math"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\contracts\\UniversalContract.sol": {
+      "lastModificationDate": 1757609688027,
+      "contentHash": "ec9660272d03953b4e8c14e58bd67bee",
+      "sourceName": "contracts/UniversalContract.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@zetachain/protocol-contracts/contracts/Revert.sol",
+        "./IGatewayZEVM.sol",
+        "./ICoreRegistry.sol"
+      ],
+      "versionPragmas": [
+        "0.8.26"
+      ],
+      "artifacts": [
+        "UniversalContract",
+        "zContract"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\contracts\\IGatewayZEVM.sol": {
+      "lastModificationDate": 1757609638031,
+      "contentHash": "5fca28717467bd3d3933b4902a6bfb5f",
+      "sourceName": "contracts/IGatewayZEVM.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@zetachain/protocol-contracts/contracts/Revert.sol",
+        "./UniversalContract.sol"
+      ],
+      "versionPragmas": [
+        "0.8.26"
+      ],
+      "artifacts": [
+        "IGatewayZEVM",
+        "IGatewayZEVMErrors",
+        "IGatewayZEVMEvents"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\contracts\\ICoreRegistry.sol": {
+      "lastModificationDate": 1757609382466,
+      "contentHash": "82a34d666bc882b1ebfbddab2d9319bf",
+      "sourceName": "contracts/ICoreRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./IBaseRegistry.sol"
+      ],
+      "versionPragmas": [
+        "0.8.26"
+      ],
+      "artifacts": [
+        "ICoreRegistry"
+      ]
+    },
+    "C:\\Users\\gurpr\\GiveHub\\Give-hub\\contracts\\contracts\\IBaseRegistry.sol": {
+      "lastModificationDate": 1757609371240,
+      "contentHash": "61d878a12f5aa74bc0992f7ba678d7a0",
+      "sourceName": "contracts/IBaseRegistry.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "0.8.26"
+      ],
+      "artifacts": [
+        "IBaseRegistry",
+        "IBaseRegistryErrors",
+        "IBaseRegistryEvents"
       ]
     }
   }

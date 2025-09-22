@@ -7,6 +7,27 @@
 
 import { z } from 'zod';
 
+export async function getGatewayAddress(sourceChainId: number): Promise<string> {
+  // Preferred: JSON map
+  const raw = await process.env.NEXT_PUBLIC_GATEWAYS;
+  if (raw) {
+    try {
+      const map = JSON.parse(raw) as Record<string, string>;
+      const addr = map[String(sourceChainId)];
+      if (addr && /^0x[0-9a-fA-F]{40}$/.test(addr)) return addr;
+    } catch {}
+  }
+
+  // Fallbacks
+  if (sourceChainId === 7001 && process.env.NEXT_PUBLIC_ZEVM_GATEWAY)
+    return process.env.NEXT_PUBLIC_ZEVM_GATEWAY!;
+  if (sourceChainId === 11155111 && process.env.NEXT_PUBLIC_SEPOLIA_GATEWAY)
+    return process.env.NEXT_PUBLIC_SEPOLIA_GATEWAY!;
+
+  throw new Error(`No gateway address configured for chainId ${sourceChainId}`);
+}
+
+
 // Define schema for environment variables (Zod v4 compatible)
 export const env = z.object({
   // App Configuration

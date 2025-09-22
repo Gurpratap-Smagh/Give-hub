@@ -271,20 +271,6 @@ function AuthInner() {
             </p>
           </div>
 
-          {/* Implementation Status */}
-          <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center">
-              <div className="text-blue-600 mr-3">🔐</div>
-              <div>
-                <p className="text-sm text-blue-800 font-medium">
-                  JWT Authentication Active
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  Mock data storage - MongoDB integration ready for deployment.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

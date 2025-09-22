@@ -32,6 +32,7 @@ import {
 } from '@/lib/web3/client'
 import { isAddress } from '@/lib/address'
 import ErrorModal from '@/components/error-modal'
+import TokenPicker from '@/components/TokenPicker'
 
 // ZRC-20 options are fetched from the server via /api/zrc20-options
 
@@ -641,6 +642,26 @@ export default function CreateCampaignPage() {
               )}
             </div>
 
+            <div>
+              <label className="block text-lg font-semibold text-gray-900 mb-3">
+                Preferred Payout Token {requiresOnChain ? '*' : ''}
+              </label>
+              <TokenPicker
+                creatorMode // ensures WZETA/ZETA dropdown for campaign creation
+                value={preferredToken ? { chain: 'ZETA', symbol: '', address: preferredToken } : undefined}
+                onChange={(picked) => {
+                  // picked = { chain, symbol, address?, isNative? }
+                  setPreferredToken(picked.address || '')
+                }}
+              />
+              {preferredToken && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Token address: {preferredToken}
+                </p>
+              )}
+            </div>
+
+
             {/* Preferred Token (ZRC-20) */}
             <div>
               <label className="block text-lg font-semibold text-gray-900 mb-3">
@@ -714,12 +735,12 @@ export default function CreateCampaignPage() {
                 >
                   {imageGenLoading ? (
                     // Spinner
-                    <svg className="animate-spin h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" role="status" aria-label="Loading">
+                    <svg className="animate-spin h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="black" viewBox="0 0 24 24" role="status" aria-label="Loading">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
                     </svg>
                   ) : (
-                    <span className="text-lg leading-none">✦</span>
+                    <span className="text-4xl leading-none">✦</span>
                   )}
                 </button>
               )}

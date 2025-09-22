@@ -95,7 +95,7 @@ async function getSigner() {
  * ZEVM direct donation (on Athens): supports native ZETA, WZETA, and any ZRC-20.
  * If tokenAddress === ZETA_NATIVE_IDENTIFIER → deposit to WZETA then donate
  * If tokenAddress === WZETA → native payable path
- * Otherwise → approve + donateZRC20*
+ * Otherwise → approve + donate*
  * 
  * IMPORTANT: All campaign payouts are always in WZETA on ZetaChain.
  */
@@ -151,7 +151,7 @@ export async function processDonation(params: {
 
   const crowdfund = new Contract(contract!, CROWDFUND_ABI, signer);
 
-  // Handle native ZETA directly via donateNative (contract wraps to WZETA internally)
+  // Handle native ZETA directly via donate (contract wraps to WZETA internally)
   if (isNativeZETA) {
     // Parse amount tolerantly; default to 1 wei to force a wallet prompt
     let value;
@@ -161,11 +161,11 @@ export async function processDonation(params: {
       value = parseEther('0.000000000000000001');
     }
     return sendWithStatus(
-      () => crowdfund.donateNative(campaignId, donorName, note, { value }),
+      () => crowdfund.donate(campaignId, donorName, note, { value }),
       params.setStatus,
     );
   } else if (isWZETA) {
-    // WZETA is a ZRC-20: approve + donateZRC20(token, amount, campaignId, ...)
+    // WZETA is a ZRC-20: approve + donate(token, amount, campaignId, ...)
     const erc20 = new Contract(WZETA!, ERC20_ABI, signer);
     let decimals = params.tokenDecimals ?? 18;
     try {
@@ -183,7 +183,7 @@ export async function processDonation(params: {
       return;
     }
     return sendWithStatus(
-      () => crowdfund.donateZRC20(WZETA!, amount, campaignId, donorName, note),
+      () => crowdfund.donate(WZETA!, amount, campaignId, donorName, note),
       params.setStatus,
     );
   }
@@ -211,9 +211,9 @@ export async function processDonation(params: {
     return;
   }
 
-  // donateZRC20 using correct signature: (address token, uint256 amount, uint256 campaignId, string donorName, string note)
+  // donate using correct signature: (address token, uint256 amount, uint256 campaignId, string donorName, string note)
   return sendWithStatus(
-    () => crowdfund.donateZRC20(effectiveToken, amount, campaignId, donorName, note),
+    () => crowdfund.donate(effectiveToken, amount, campaignId, donorName, note),
     params.setStatus,
   );
 }

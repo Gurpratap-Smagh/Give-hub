@@ -35,6 +35,20 @@ export type MessageContextStructOutput = [
   chainID: bigint
 ] & { sender: string; senderEVM: string; chainID: bigint };
 
+export type RevertContextStruct = {
+  sender: AddressLike;
+  asset: AddressLike;
+  amount: BigNumberish;
+  revertMessage: BytesLike;
+};
+
+export type RevertContextStructOutput = [
+  sender: string,
+  asset: string,
+  amount: bigint,
+  revertMessage: string
+] & { sender: string; asset: string; amount: bigint; revertMessage: string };
+
 export declare namespace CrossChainCrowdfund {
   export type CampaignInfoStruct = {
     campaignId: BigNumberish;
@@ -68,8 +82,9 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "contributions"
       | "createCampaign"
       | "debug"
-      | "donateNative"
-      | "donateZRC20"
+      | "donate"
+      | "donate"
+      | "donate"
       | "ethZRC20"
       | "gateway"
       | "getAllSyncedCampaigns"
@@ -77,6 +92,7 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "nextCampaignId"
       | "nextContributionId"
       | "onCall"
+      | "onRevert"
       | "owner"
       | "rescueNative"
       | "rescueToken"
@@ -90,6 +106,8 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "slippageBps"
       | "tokenLabel"
       | "transferOwnership"
+      | "uniswapRouter"
+      | "updateCampaignDestination"
       | "updateCampaignPayoutToken"
       | "usdcZRC20"
   ): FunctionFragment;
@@ -105,7 +123,11 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "DebugContributionRecorded"
       | "DebugDecodedDonate"
       | "DebugDonationBegin"
+      | "DebugGasFee"
+      | "DebugGatewayWithdraw"
+      | "DebugInsufficientForGas"
       | "DebugOnCallEntered"
+      | "DebugOnRevert"
       | "DebugRouterMissing"
       | "DebugRouterSet"
       | "DebugSwapFailed"
@@ -117,6 +139,8 @@ export interface CrossChainCrowdfundInterface extends Interface {
       | "OwnershipTransferred"
       | "Rescue"
       | "SlippageUpdated"
+      | "a"
+      | "eh"
   ): EventFragment;
 
   encodeFunctionData(functionFragment: "WZETA", values?: undefined): string;
@@ -147,11 +171,15 @@ export interface CrossChainCrowdfundInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "debug", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "donateNative",
+    functionFragment: "donate",
+    values: [AddressLike, BigNumberish, BigNumberish, string, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "donate",
     values: [BigNumberish, string, string]
   ): string;
   encodeFunctionData(
-    functionFragment: "donateZRC20",
+    functionFragment: "donate",
     values: [AddressLike, BigNumberish, BigNumberish, string, string]
   ): string;
   encodeFunctionData(functionFragment: "ethZRC20", values?: undefined): string;
@@ -175,6 +203,10 @@ export interface CrossChainCrowdfundInterface extends Interface {
   encodeFunctionData(
     functionFragment: "onCall",
     values: [MessageContextStruct, AddressLike, BigNumberish, BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "onRevert",
+    values: [RevertContextStruct]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
@@ -220,6 +252,14 @@ export interface CrossChainCrowdfundInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "uniswapRouter",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "updateCampaignDestination",
+    values: [BigNumberish, AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "updateCampaignPayoutToken",
     values: [BigNumberish, AddressLike]
   ): string;
@@ -249,12 +289,13 @@ export interface CrossChainCrowdfundInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "debug", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "donate", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "donateNative",
+    functionFragment: "donate",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "donateZRC20",
+    functionFragment: "donate",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "ethZRC20", data: BytesLike): Result;
@@ -276,6 +317,7 @@ export interface CrossChainCrowdfundInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "onCall", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "onRevert", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "rescueNative",
@@ -314,6 +356,14 @@ export interface CrossChainCrowdfundInterface extends Interface {
   decodeFunctionResult(functionFragment: "tokenLabel", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "uniswapRouter",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "updateCampaignDestination",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -496,6 +546,68 @@ export namespace DebugDonationBeginEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace DebugGasFeeEvent {
+  export type InputTuple = [
+    token: AddressLike,
+    gasToken: AddressLike,
+    gasFee: BigNumberish,
+    gasLimit: BigNumberish,
+    haveBalance: BigNumberish
+  ];
+  export type OutputTuple = [
+    token: string,
+    gasToken: string,
+    gasFee: bigint,
+    gasLimit: bigint,
+    haveBalance: bigint
+  ];
+  export interface OutputObject {
+    token: string;
+    gasToken: string;
+    gasFee: bigint;
+    gasLimit: bigint;
+    haveBalance: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace DebugGatewayWithdrawEvent {
+  export type InputTuple = [
+    receiverToken: AddressLike,
+    amount: BigNumberish,
+    withCall: boolean
+  ];
+  export type OutputTuple = [
+    receiverToken: string,
+    amount: bigint,
+    withCall: boolean
+  ];
+  export interface OutputObject {
+    receiverToken: string;
+    amount: bigint;
+    withCall: boolean;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace DebugInsufficientForGasEvent {
+  export type InputTuple = [tokenOut: AddressLike];
+  export type OutputTuple = [tokenOut: string];
+  export interface OutputObject {
+    tokenOut: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace DebugOnCallEnteredEvent {
   export type InputTuple = [
     originSender: BytesLike,
@@ -514,6 +626,28 @@ export namespace DebugOnCallEnteredEvent {
     originChainId: bigint;
     zrc20In: string;
     amount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace DebugOnRevertEvent {
+  export type InputTuple = [
+    asset: AddressLike,
+    amount: BigNumberish,
+    revertMessage: BytesLike
+  ];
+  export type OutputTuple = [
+    asset: string,
+    amount: bigint,
+    revertMessage: string
+  ];
+  export interface OutputObject {
+    asset: string;
+    amount: bigint;
+    revertMessage: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -677,6 +811,43 @@ export namespace SlippageUpdatedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace aEvent {
+  export type InputTuple = [
+    context: MessageContextStruct,
+    zrc20: AddressLike,
+    amount: BigNumberish,
+    message: BytesLike
+  ];
+  export type OutputTuple = [
+    context: MessageContextStructOutput,
+    zrc20: string,
+    amount: bigint,
+    message: string
+  ];
+  export interface OutputObject {
+    context: MessageContextStructOutput;
+    zrc20: string;
+    amount: bigint;
+    message: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace ehEvent {
+  export type InputTuple = [msg: string];
+  export type OutputTuple = [msg: string];
+  export interface OutputObject {
+    msg: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export interface CrossChainCrowdfund extends BaseContract {
   connect(runner?: ContractRunner | null): CrossChainCrowdfund;
   waitForDeployment(): Promise<this>;
@@ -737,10 +908,12 @@ export interface CrossChainCrowdfund extends BaseContract {
   campaigns: TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, string, boolean] & {
+      [string, string, boolean, string, bigint] & {
         creator: string;
         preferredZRC20: string;
         active: boolean;
+        payoutAddress: string;
+        payoutGasLimit: bigint;
       }
     ],
     "view"
@@ -782,13 +955,25 @@ export interface CrossChainCrowdfund extends BaseContract {
 
   debug: TypedContractMethod<[], [boolean], "view">;
 
-  donateNative: TypedContractMethod<
+  donate: TypedContractMethod<
+    [
+      tokenIn: AddressLike,
+      amount: BigNumberish,
+      campaignId: BigNumberish,
+      donorName: string,
+      note: string
+    ],
+    [void],
+    "payable"
+  >;
+
+  donate: TypedContractMethod<
     [campaignId: BigNumberish, donorName: string, note: string],
     [void],
     "payable"
   >;
 
-  donateZRC20: TypedContractMethod<
+  donate: TypedContractMethod<
     [
       token: AddressLike,
       amount: BigNumberish,
@@ -832,6 +1017,12 @@ export interface CrossChainCrowdfund extends BaseContract {
       amount: BigNumberish,
       message: BytesLike
     ],
+    [void],
+    "nonpayable"
+  >;
+
+  onRevert: TypedContractMethod<
+    [revertContext: RevertContextStruct],
     [void],
     "nonpayable"
   >;
@@ -894,6 +1085,18 @@ export interface CrossChainCrowdfund extends BaseContract {
     "nonpayable"
   >;
 
+  uniswapRouter: TypedContractMethod<[], [string], "view">;
+
+  updateCampaignDestination: TypedContractMethod<
+    [
+      campaignId: BigNumberish,
+      payoutAddress: AddressLike,
+      payoutGasLimit: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
+
   updateCampaignPayoutToken: TypedContractMethod<
     [campaignId: BigNumberish, newToken: AddressLike],
     [void],
@@ -930,10 +1133,12 @@ export interface CrossChainCrowdfund extends BaseContract {
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, string, boolean] & {
+      [string, string, boolean, string, bigint] & {
         creator: string;
         preferredZRC20: string;
         active: boolean;
+        payoutAddress: string;
+        payoutGasLimit: bigint;
       }
     ],
     "view"
@@ -974,14 +1179,27 @@ export interface CrossChainCrowdfund extends BaseContract {
     nameOrSignature: "debug"
   ): TypedContractMethod<[], [boolean], "view">;
   getFunction(
-    nameOrSignature: "donateNative"
+    nameOrSignature: "donate"
+  ): TypedContractMethod<
+    [
+      tokenIn: AddressLike,
+      amount: BigNumberish,
+      campaignId: BigNumberish,
+      donorName: string,
+      note: string
+    ],
+    [void],
+    "payable"
+  >;
+  getFunction(
+    nameOrSignature: "donate"
   ): TypedContractMethod<
     [campaignId: BigNumberish, donorName: string, note: string],
     [void],
     "payable"
   >;
   getFunction(
-    nameOrSignature: "donateZRC20"
+    nameOrSignature: "donate"
   ): TypedContractMethod<
     [
       token: AddressLike,
@@ -1033,6 +1251,13 @@ export interface CrossChainCrowdfund extends BaseContract {
       amount: BigNumberish,
       message: BytesLike
     ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "onRevert"
+  ): TypedContractMethod<
+    [revertContext: RevertContextStruct],
     [void],
     "nonpayable"
   >;
@@ -1095,6 +1320,20 @@ export interface CrossChainCrowdfund extends BaseContract {
   getFunction(
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[n: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "uniswapRouter"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "updateCampaignDestination"
+  ): TypedContractMethod<
+    [
+      campaignId: BigNumberish,
+      payoutAddress: AddressLike,
+      payoutGasLimit: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "updateCampaignPayoutToken"
   ): TypedContractMethod<
@@ -1170,11 +1409,39 @@ export interface CrossChainCrowdfund extends BaseContract {
     DebugDonationBeginEvent.OutputObject
   >;
   getEvent(
+    key: "DebugGasFee"
+  ): TypedContractEvent<
+    DebugGasFeeEvent.InputTuple,
+    DebugGasFeeEvent.OutputTuple,
+    DebugGasFeeEvent.OutputObject
+  >;
+  getEvent(
+    key: "DebugGatewayWithdraw"
+  ): TypedContractEvent<
+    DebugGatewayWithdrawEvent.InputTuple,
+    DebugGatewayWithdrawEvent.OutputTuple,
+    DebugGatewayWithdrawEvent.OutputObject
+  >;
+  getEvent(
+    key: "DebugInsufficientForGas"
+  ): TypedContractEvent<
+    DebugInsufficientForGasEvent.InputTuple,
+    DebugInsufficientForGasEvent.OutputTuple,
+    DebugInsufficientForGasEvent.OutputObject
+  >;
+  getEvent(
     key: "DebugOnCallEntered"
   ): TypedContractEvent<
     DebugOnCallEnteredEvent.InputTuple,
     DebugOnCallEnteredEvent.OutputTuple,
     DebugOnCallEnteredEvent.OutputObject
+  >;
+  getEvent(
+    key: "DebugOnRevert"
+  ): TypedContractEvent<
+    DebugOnRevertEvent.InputTuple,
+    DebugOnRevertEvent.OutputTuple,
+    DebugOnRevertEvent.OutputObject
   >;
   getEvent(
     key: "DebugRouterMissing"
@@ -1252,6 +1519,20 @@ export interface CrossChainCrowdfund extends BaseContract {
     SlippageUpdatedEvent.InputTuple,
     SlippageUpdatedEvent.OutputTuple,
     SlippageUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "a"
+  ): TypedContractEvent<
+    aEvent.InputTuple,
+    aEvent.OutputTuple,
+    aEvent.OutputObject
+  >;
+  getEvent(
+    key: "eh"
+  ): TypedContractEvent<
+    ehEvent.InputTuple,
+    ehEvent.OutputTuple,
+    ehEvent.OutputObject
   >;
 
   filters: {
@@ -1354,6 +1635,39 @@ export interface CrossChainCrowdfund extends BaseContract {
       DebugDonationBeginEvent.OutputObject
     >;
 
+    "DebugGasFee(address,address,uint256,uint256,uint256)": TypedContractEvent<
+      DebugGasFeeEvent.InputTuple,
+      DebugGasFeeEvent.OutputTuple,
+      DebugGasFeeEvent.OutputObject
+    >;
+    DebugGasFee: TypedContractEvent<
+      DebugGasFeeEvent.InputTuple,
+      DebugGasFeeEvent.OutputTuple,
+      DebugGasFeeEvent.OutputObject
+    >;
+
+    "DebugGatewayWithdraw(address,uint256,bool)": TypedContractEvent<
+      DebugGatewayWithdrawEvent.InputTuple,
+      DebugGatewayWithdrawEvent.OutputTuple,
+      DebugGatewayWithdrawEvent.OutputObject
+    >;
+    DebugGatewayWithdraw: TypedContractEvent<
+      DebugGatewayWithdrawEvent.InputTuple,
+      DebugGatewayWithdrawEvent.OutputTuple,
+      DebugGatewayWithdrawEvent.OutputObject
+    >;
+
+    "DebugInsufficientForGas(address)": TypedContractEvent<
+      DebugInsufficientForGasEvent.InputTuple,
+      DebugInsufficientForGasEvent.OutputTuple,
+      DebugInsufficientForGasEvent.OutputObject
+    >;
+    DebugInsufficientForGas: TypedContractEvent<
+      DebugInsufficientForGasEvent.InputTuple,
+      DebugInsufficientForGasEvent.OutputTuple,
+      DebugInsufficientForGasEvent.OutputObject
+    >;
+
     "DebugOnCallEntered(bytes,uint256,address,uint256)": TypedContractEvent<
       DebugOnCallEnteredEvent.InputTuple,
       DebugOnCallEnteredEvent.OutputTuple,
@@ -1363,6 +1677,17 @@ export interface CrossChainCrowdfund extends BaseContract {
       DebugOnCallEnteredEvent.InputTuple,
       DebugOnCallEnteredEvent.OutputTuple,
       DebugOnCallEnteredEvent.OutputObject
+    >;
+
+    "DebugOnRevert(address,uint256,bytes)": TypedContractEvent<
+      DebugOnRevertEvent.InputTuple,
+      DebugOnRevertEvent.OutputTuple,
+      DebugOnRevertEvent.OutputObject
+    >;
+    DebugOnRevert: TypedContractEvent<
+      DebugOnRevertEvent.InputTuple,
+      DebugOnRevertEvent.OutputTuple,
+      DebugOnRevertEvent.OutputObject
     >;
 
     "DebugRouterMissing()": TypedContractEvent<
@@ -1484,6 +1809,28 @@ export interface CrossChainCrowdfund extends BaseContract {
       SlippageUpdatedEvent.InputTuple,
       SlippageUpdatedEvent.OutputTuple,
       SlippageUpdatedEvent.OutputObject
+    >;
+
+    "a(tuple,address,uint256,bytes)": TypedContractEvent<
+      aEvent.InputTuple,
+      aEvent.OutputTuple,
+      aEvent.OutputObject
+    >;
+    a: TypedContractEvent<
+      aEvent.InputTuple,
+      aEvent.OutputTuple,
+      aEvent.OutputObject
+    >;
+
+    "eh(string)": TypedContractEvent<
+      ehEvent.InputTuple,
+      ehEvent.OutputTuple,
+      ehEvent.OutputObject
+    >;
+    eh: TypedContractEvent<
+      ehEvent.InputTuple,
+      ehEvent.OutputTuple,
+      ehEvent.OutputObject
     >;
   };
 }

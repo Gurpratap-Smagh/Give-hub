@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Eip1193Provider } from 'ethers';
 import { useLiveDonations } from '@/components/useLiveDonations';
-import { showError } from '@/components/notification-manager';
 
 interface DonationFlowState {
   isProcessing: boolean;
@@ -52,49 +52,17 @@ export function useDonationFlow(campaignId?: string) {
     // Show loading notification immediately
     console.log('[useDonationFlow] Starting donation flow for tx:', txHash);
 
-    // After 30s, save donation anyway and show timeout message
+    // After 30s, if no chain event arrives, show timeout message but do not persist;
+    // rely on DonationEventService to persist when the on-chain event is indexed.
     timeoutRef.current = setTimeout(async () => {
       setState(prev => ({ ...prev, timedOut: true }));
-      console.log('[useDonationFlow] Transaction timeout, saving donation anyway');
-      
-      // Save donation to MongoDB even if blockchain confirmation is pending
-      if (state.lastDonation) {
-        try {
-          const res = await fetch(`/api/campaigns/${campaignId}/donations`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              amount: parseFloat(amount),
-              chain: chain || 'zeta',
-              donorName: donorName || 'Anonymous',
-              tokenSymbol: state.lastDonation?.tokenSymbol || 'ZETA',
-              txId: txHash,
-              timestamp: new Date().toISOString(),
-              status: 'pending_confirmation'
-            })
-          });
-          
-          if (res.ok) {
-            const result = await res.json();
-            console.log('[useDonationFlow] MongoDB updated after timeout:', result);
-            setTimeout(() => {
-              setState(prev => ({ ...prev, isProcessing: false, showToast: true }));
-            }, 3000);
-          } else {
-            const errorData = await res.text();
-            console.error('[useDonationFlow] Timeout API error:', errorData);
-            throw new Error(`Failed to save donation: ${res.status}`);
-          }
-        } catch (err) {
-          console.error('[useDonationFlow] Failed to save donation after timeout:', err);
-          setTimeout(() => {
-            setState(prev => ({ ...prev, isProcessing: false }));
-          }, 5000);
-        }
-      }
+      console.log('[useDonationFlow] Transaction timeout; waiting for chain event to persist');
+      setTimeout(() => {
+        setState(prev => ({ ...prev, isProcessing: false, showToast: true }));
+      }, 3000);
       timeoutRef.current = null;
     }, TIMEOUT_DURATION);
-  }, [state.lastDonation]);
+  }, []);
 
   // Stop loading and show success toast
   const completeDonation = useCallback(() => {
@@ -127,39 +95,9 @@ export function useDonationFlow(campaignId?: string) {
   // Save donation and update MongoDB raised amount when wallet confirms transaction
   const handleWalletConfirmation = useCallback(async (txHash: string) => {
     if (!state.lastDonation) return;
-    
-    try {
-      console.log('[useDonationFlow] Wallet confirmed transaction, saving to MongoDB:', txHash);
-      
-      // Save donation immediately after wallet confirmation - this will update campaign.raised
-      const response = await fetch(`/api/campaigns/${state.lastDonation.campaignId}/donations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: parseFloat(state.lastDonation.amount),
-          chain: state.lastDonation.chain || 'zeta',
-          donorName: state.lastDonation.donorName || 'Anonymous',
-          tokenSymbol: state.lastDonation.tokenSymbol || 'ZETA',
-          txId: txHash,
-          timestamp: new Date().toISOString(),
-          status: 'confirmed'
-        })
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log('[useDonationFlow] MongoDB updated successfully:', result);
-        completeDonation();
-      } else {
-        const errorData = await response.text();
-        console.error('[useDonationFlow] API error:', errorData);
-        throw new Error(`Failed to save donation: ${response.status}`);
-      }
-    } catch (error) {
-      console.error('[useDonationFlow] Error saving donation:', error);
-      showError('Save Failed', 'Please contact support with your transaction hash.');
-      setState(prev => ({ ...prev, isProcessing: false }));
-    }
+    // Let DonationEventService detect the on-chain event and persist via /donations
+    console.log('[useDonationFlow] Wallet confirmed transaction; awaiting chain event for persistence:', txHash);
+    completeDonation();
   }, [state.lastDonation, completeDonation]);
 
   // Watch for wallet confirmation (transaction receipt)
@@ -169,8 +107,10 @@ export function useDonationFlow(campaignId?: string) {
     // Check if wallet shows transaction as confirmed
     const checkWalletConfirmation = async () => {
       try {
-        if (typeof window !== 'undefined' && (window as any).ethereum) {
-          const provider = new (await import('ethers')).BrowserProvider((window as any).ethereum);
+        const maybeEth = typeof window !== 'undefined' ? (window as unknown as { ethereum?: unknown }).ethereum : undefined;
+        if (maybeEth) {
+          const { BrowserProvider } = await import('ethers');
+          const provider = new BrowserProvider(maybeEth as Eip1193Provider);
           const receipt = await provider.getTransactionReceipt(state.pendingTxHash!);
           
           if (receipt && receipt.status === 1) {

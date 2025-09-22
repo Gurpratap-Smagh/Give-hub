@@ -3,3 +3,10 @@
 /* eslint-disable */
 import type * as crossChainCrowdfundSol from "./CrossChainCrowdfund.sol";
 export type { crossChainCrowdfundSol };
+import type * as iBaseRegistrySol from "./IBaseRegistry.sol";
+export type { iBaseRegistrySol };
+import type * as iGatewayZevmSol from "./IGatewayZEVM.sol";
+export type { iGatewayZevmSol };
+import type * as universalContractSol from "./UniversalContract.sol";
+export type { universalContractSol };
+export type { ICoreRegistry } from "./ICoreRegistry";

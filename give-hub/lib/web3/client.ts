@@ -643,6 +643,37 @@ export async function getCampaignsByCreator(
   return campaigns;
 }
 
+export async function createAndConfigureCampaign({
+  preferredZRC20,
+  payoutAddress,
+  payoutGasLimit
+}: {
+  preferredZRC20: string;   // usually WZETA (from env)
+  payoutAddress?: string;   // optional
+  payoutGasLimit?: number;  // optional
+}) {
+  // Step 1: create campaign
+  const { id: campaignId, txHash } = await createCampaignOnChain({
+    preferredZRC20,
+  });
+
+  // Step 2: explicitly set payout token (keeps consistency even if constructor set it)
+  await updateCampaignPayoutToken(campaignId, preferredZRC20);
+
+  // Step 3: optional payout destination
+  if (payoutAddress) {
+    const contract = await getContract(await (await getProvider()).getSigner());
+    const tx = await contract.updateCampaignDestination(
+      toBigInt(campaignId),
+      payoutAddress,
+      payoutGasLimit || 0
+    );
+    await tx.wait(1);
+  }
+
+  return { campaignId, txHash };
+}
+
 // Get donation events for a campaign
 export async function getCampaignDonations(
   campaignId: bigint,
@@ -868,7 +899,9 @@ export async function donateToCampaign(
 
     const contract = await getContract(signer);
     const tx = await contract.donateNative(campaignIdBigInt, donorName || '', note, {
-      value: toWei18(amountInEther) // Use coercion utility for amount
+      value: toWei18(amountInEther), // Use coercion utility for amount
+      gasLimit: 500_000n
+      
     });
     console.debug("[web3] donateNative tx:", tx?.hash);
 
@@ -1020,5 +1053,90 @@ export async function donateZRC20ToCampaign(
       logError: true
     });
     throw error;
+  }
+}
+import { getGatewayAddress } from "@/lib/env";
+
+export async function donateCrossChain(
+  sourceChainId: number,
+  campaignId: bigint | string | number,
+
+  amountInEther: string,
+  donorName: string = "",
+  memo: string = ""
+): Promise<string> {
+
+  const GATEWAY_ADDRESSES = await getGatewayAddress(sourceChainId);
+
+  // Resolve universal contract address
+  const prov = await getProvider();
+  const signer = await prov.getSigner();
+  const sender = await signer.getAddress();
+  const universalContractAddress =
+    process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS ||
+    process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT;
+
+  if (!universalContractAddress) {
+    throw new Error("Universal contract address not configured");
+  }
+
+  // Encode cross-chain message payload
+  const abi = ethers.AbiCoder.defaultAbiCoder();
+
+
+  const payload = abi.encode(
+    ["uint256", "string", "string"], 
+    [campaignId, donorName, memo]
+  );
+  // Get gateway address for the source chain
+  if (!GATEWAY_ADDRESSES) {
+    throw new Error(
+      `Unsupported chain for cross-chain donation: ${sourceChainId}`
+    );
+  }
+
+  // Gateway ABI
+  const gatewayABI = [
+    "function depositAndCall(address receiver, bytes calldata payload, (address revertAddress,bool callOnRevert,address abortAddress,bytes revertMessage,uint256 onRevertGasLimit) calldata revertOptions) external payable",
+  ];
+
+  const gateway = new ethers.Contract(GATEWAY_ADDRESSES, gatewayABI, signer);
+
+  // Revert handling options
+  const revertOptions: [
+    string, // revertAddress
+    boolean, // callOnRevert
+    string, // abortAddress
+    string, // revertMessage
+    bigint  // onRevertGasLimit
+  ] = [
+    sender,
+    false,
+    ethers.ZeroAddress,
+    "0x",
+    10_000_000n
+  ];
+
+  try {
+    // Perform depositAndCall into the universal contract
+    const tx = await gateway.depositAndCall(
+      universalContractAddress, // must be string, not contract instance
+      payload,
+      revertOptions,
+      {
+        value: toWei18(amountInEther),
+        gasLimit: 500_000n,
+      }
+    );
+
+    await tx.wait(5);
+    return tx.hash;
+  } catch (error) {
+    console.error("Error in depositAndCall:", error);
+    throw new Error(
+      `Cross-chain transaction failed: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
   }
 }

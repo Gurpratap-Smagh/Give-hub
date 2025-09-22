@@ -153,6 +153,18 @@ export const mongoDb = {
     const doc = await CampaignModel.findOneAndUpdate({ id }, updateData, { new: true }).lean();
     return toCampaign(doc);
   },
+  incrementCampaignRaised: async function(id: string, amount: number): Promise<Campaign | null> {
+    await connectMongo();
+    const doc = await CampaignModel.findOneAndUpdate(
+      { id },
+      { 
+        $inc: { raised: amount },
+        $set: { updatedAt: new Date() }
+      },
+      { new: true }
+    ).lean();
+    return toCampaign(doc);
+  },
   async searchCampaigns(query: Partial<Campaign> & { q?: string }): Promise<Campaign[]> {
     await connectMongo();
     const mongoQuery: any = {};
