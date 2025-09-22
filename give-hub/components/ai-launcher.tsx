@@ -70,7 +70,7 @@ export default function AILauncher() {
         aria-pressed={open}
         title="Open GiveHub AI"
       >
-        <span className="transform scale-75">✦</span>
+        <span className="transform scale-75 text-4xl">✦</span>
       </button>
 
       {/* Overlay for desktop, side panel for mobile */}

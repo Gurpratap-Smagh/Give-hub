@@ -363,7 +363,7 @@ export default function AIOverlay({ open, onClose, onAction, theme: themeProp }:
               onMouseDown={handleMouseDown}
             >
               <span
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-transparent text-[14px] text-blue-600 border border-blue-600 shadow-sm hover:bg-blue-600/10 transition-colors"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-transparent text-4xl text-blue-600 border border-blue-600 shadow-sm hover:bg-blue-600/10 transition-colors"
                 title="Drag"
                 aria-label="Drag GiveHub AI"
               >
