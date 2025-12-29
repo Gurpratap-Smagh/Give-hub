@@ -14,7 +14,7 @@ async function main() {
   console.log("Deploying Proxy...");
   // This helper handles: 1. Deploying Implementation, 2. Deploying Proxy, 3. Calling initialize()
   const crowdfund = await upgrades.deployProxy(Crowdfund, [
-    process.env.UNISWAP_ROUTER,
+    process.env.UNISWAP_ROUTER, process.env.T_ZETA,
     Number(process.env.GAS_LIMIT || 100000)
   ], { initializer: 'initialize', kind: 'uups', unsafeAllow: ["constructor", "state-variable-immutable"] });
   
