@@ -264,7 +264,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
     uint256 amount,
     string memory donorName,
     string memory note
-  ) external override onlyGateway {
+  ) external {
 
     address donorAddress = msg.sender;
     uint256 amountOut;
@@ -293,7 +293,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
       zrc20
     );
 
-    string memory chainName = _getChainName(block.chainID);
+    string memory chainName = _getChainName(block.chainid);
     uint256 id = ++nextContributionId;
     contributions[id] = Contribution({
       campaignId: campaignId,
@@ -302,7 +302,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
       zrc20Received: campaign.preferredZRC20,
       originalAmount: amount,
       convertedAmount: amountOut,
-      originChainId: block.chainID,
+      originChainId: block.chainid,
       timestamp: uint64(block.timestamp),
       originChainName: chainName
     });
