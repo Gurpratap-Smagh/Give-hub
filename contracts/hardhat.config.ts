@@ -4,6 +4,7 @@ import "@nomicfoundation/hardhat-ethers";
 import "@typechain/hardhat";
 import "@zetachain/toolkit/tasks";
 import "dotenv/config";
+import "@openzeppelin/hardhat-upgrades";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -21,7 +22,7 @@ const config: HardhatUserConfig = {
     zetachain_testnet: {
       url:
         process.env.ZETA_HTTP ||
-        "https://zetachain-athens-evm.blockpi.network/v1/rpc/public",
+        "https://zetachain-athens.g.allthatnode.com/archive/evm",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 7001,
       gas: 5_000_000,

@@ -1,84 +1,38 @@
+import { ethers, upgrades } from "hardhat";
 import * as dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+
 dotenv.config();
-import hardhat from "hardhat";
-const hre: any = hardhat;
-const { ethers, artifacts } = hre;
-
-function req(name: string): string {
-  const v = process.env[name];
-  if (!v || !v.trim()) throw new Error(`Missing ${name} in .env`);
-  return v.trim();
-}
-
-function opt(name: string, def?: string): string | undefined {
-  const v = process.env[name];
-  return v && v.trim() ? v.trim() : def;
-}
-
-// tolerant receipt poller to dodge Zeta's intermittent "ethereum tx not found"
-async function waitForReceiptSafe(
-  provider: any,
-  txHash: string,
-  timeoutMs = 300_000,
-  intervalMs = 3_000
-) {
-  const start = Date.now();
-  while (true) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error(`Timed out waiting for receipt: ${txHash}`);
-    }
-    try {
-      const r = await provider.getTransactionReceipt(txHash);
-      if (r) return r;
-    } catch {
-      // swallow transient provider errors
-    }
-    await new Promise((res) => setTimeout(res, intervalMs));
-  }
-}
-
-// crude address check (just to catch typos quickly)
-function isLikeAddress(x: string | undefined): x is string {
-  return !!x && /^0x[a-fA-F0-9]{40}$/.test(x);
-}
 
 async function main() {
-  // --- ENV ---
-  const RPC = req("ZETA_HTTP");
-  const PK = req("PRIVATE_KEY");
-  const GATEWAY = req("GATEWAY");
-  const UNISWAP_ROUTER = req("UNISWAP_ROUTER");
-  const GAS_LIMIT = Number(opt("GAS_LIMIT", "100000")) || 100000;
-  // Add any other params your initialize needs
-  const INITIAL_OWNER = opt("INITIAL_OWNER") || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; // anvil default
+  const [deployer] = await ethers.getSigners();
+  console.log("Deploying with account:", deployer.address);
 
-  const provider = new ethers.JsonRpcProvider(RPC);
-  const wallet = new ethers.Wallet(PK, provider);
-  const net = await provider.getNetwork();
-  console.log(`\nChainId: ${net.chainId}`);
-  console.log(`Gateway: ${GATEWAY}`);
-  console.log(`Router: ${UNISWAP_ROUTER}`);
-  console.log(`Gas Limit: ${GAS_LIMIT}`);
+  const Crowdfund = await ethers.getContractFactory("CrossChainCrowdfund");
 
-  // --- Deploy ---
-  const Crowdfund = await ethers.getContractFactory("CrossChainCrowdfund", wallet);
-  const crowdfund = await Crowdfund.deploy();
-  const sent = await crowdfund.deployTransaction.wait();
-  const contractAddress = sent.contractAddress!;
-  console.log(`\n✅ Deployed at: ${contractAddress}`);
+  console.log("Deploying Proxy...");
+  // This helper handles: 1. Deploying Implementation, 2. Deploying Proxy, 3. Calling initialize()
+  const crowdfund = await upgrades.deployProxy(Crowdfund, [
+    process.env.UNISWAP_ROUTER,
+    Number(process.env.GAS_LIMIT || 100000)
+  ], { initializer: 'initialize', kind: 'uups', unsafeAllow: ["constructor", "state-variable-immutable"] });
+  
 
-  // --- Initialize ---
-  const tx = await crowdfund.connect(wallet).initialize(
-    INITIAL_OWNER,
-    GATEWAY,
-    UNISWAP_ROUTER,
-    GAS_LIMIT
-  );
-  await tx.wait();
-  console.log("Initialized!");
+  await crowdfund.waitForDeployment();
+  const proxyAddress = await crowdfund.getAddress();
+  
+  console.log("🚀 Proxy deployed to:", proxyAddress);
+
+  // Update .env
+  const envPath = path.join(process.cwd(), ".env");
+  let envContent = fs.readFileSync(envPath, "utf-8");
+  envContent = envContent.split("\n").filter(line => !line.startsWith("CROWDFUND_ADDRESS=")).join("\n");
+  envContent += `\nCROWDFUND_ADDRESS=${proxyAddress}`;
+  fs.writeFileSync(envPath, envContent);
 }
 
-main().catch((e) => {
-  console.error("\n❌ Deployment failed:", e);
-  process.exit(1);
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
 });

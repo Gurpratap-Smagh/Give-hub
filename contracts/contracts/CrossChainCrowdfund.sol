@@ -115,7 +115,6 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
 
   /*------------------------------ STORAGE ------------------------------*/
 
-  address public gateway;
   address public uniswapRouter;
   uint256 public gasLimit;
 
@@ -125,39 +124,23 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
   uint256 public nextCampaignId;
   uint256 public nextContributionId;
 
-  // Token allowlists
-  mapping(address => bool) public allowedInTokens;
-  mapping(address => bool) public allowedOutTokens;
-
-  event AllowedInTokenSet(address token, bool allowed);
-  event AllowedOutTokenSet(address token, bool allowed);
-
   /*---------------------------- CONSTRUCTOR & INIT ----------------------------*/
   
   constructor() {
-    _disableInitializers();
   }
 
-  function initialize(address initialOwner, address _gateway, address _uniswapRouter, uint256 _gasLimit) external initializer {
-    __Ownable_init(initialOwner);
+  function initialize(address _uniswapRouter, uint256 _gasLimit) external initializer {
+    __Ownable_init();
     __UUPSUpgradeable_init();
 
-    if (_gateway == address(0) || _uniswapRouter == address(0)) revert InvalidAddress();
-
-    gateway = _gateway;
+    if (_uniswapRouter == address(0)) revert InvalidAddress();
     uniswapRouter = _uniswapRouter;
     gasLimit = _gasLimit;
   }
 
   function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
-  /*--------------------------- UNIVERSAL ENTRY --------------------------*/
-  
-  modifier onlyGateway() {
-    require(msg.sender == gateway, "OnlyGateway");
-    _;
-  }
-
+ 
   /*------------------------------- HELPER STRUCTS ----------------------------*/
 
   struct Params {
@@ -172,38 +155,45 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
     address inputToken,
     uint256 amount,
     address targetToken,
-    bool withdraw
+    bool isWithdraw
   ) internal returns (uint256 out, address gasZRC20, uint256 gasFee) {
+    uint256 inputForGas;
     uint256 swapAmount = amount;
     gasFee = 0;
     gasZRC20 = address(0);
 
-    if (withdraw) {
+    
+
+    if (isWithdraw) {
       (gasZRC20, gasFee) = IZRC20(targetToken).withdrawGasFee();
       uint256 minInput = quoteMinInput(inputToken, targetToken);
       if (amount < minInput) revert InsufficientAmount("Not enough for gas");
 
       if (gasZRC20 != inputToken) {
-        SwapHelperLib.swapTokensForExactTokens(
+        inputForGas = SwapHelperLib.swapTokensForExactTokens(
           uniswapRouter,
           inputToken,
           gasFee,
           gasZRC20,
           amount
         );
-        swapAmount = amount - gasFee;
+        swapAmount = amount - inputForGas;
       } else {
         swapAmount = amount - gasFee;
       }
     }
-
-    out = SwapHelperLib.swapExactTokensForTokens(
-      uniswapRouter,
-      inputToken,
-      swapAmount,
-      targetToken,
-      0
-    );
+    if (inputToken == targetToken) {
+        // Skip Uniswap if tokens are identical
+        out = swapAmount;
+    } else {
+        out = SwapHelperLib.swapExactTokensForTokens(
+            uniswapRouter,
+            inputToken,
+            swapAmount,
+            targetToken,
+            0
+        );
+    }
   }
 
   function quoteMinInput(
@@ -244,20 +234,18 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
     address originalInputToken
   ) internal {
     if (!params.withdraw) {
-      // Local payout on ZetaChain
       IERC20(params.target).safeTransfer(address(uint160(bytes20(params.to))), amountOut);
       return;
     }
 
-    // Cross-chain withdraw
     if (gasZRC20 == params.target) {
-      IERC20(gasZRC20).safeApprove(gateway, amountOut + gasFee);
+      IERC20(gasZRC20).safeApprove(address(gateway), amountOut + gasFee);
     } else {
-      IERC20(gasZRC20).safeApprove(gateway, gasFee);
-      IERC20(params.target).safeApprove(gateway, amountOut);
+      IERC20(gasZRC20).safeApprove(address(gateway), gasFee);
+      IERC20(params.target).safeApprove(address(gateway), amountOut);
     }
 
-    IGatewayZEVM(gateway).withdraw(
+    IGatewayZEVM(address(gateway)).withdraw(
       params.to,
       amountOut,
       params.target,
@@ -281,19 +269,16 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
       message,
       (uint256, string, string)
     );
-
     address donorAddress = BytesHelperLib.bytesToAddress(context.sender, 0);
-
-    Campaign storage campaign = campaigns[campaignId];
-    require(campaign.creator != address(0), "InvalidCampaign");
-    require(campaign.active, "CampaignInactive");
-    require(allowedInTokens[zrc20], "InvalidToken");
-
-    (uint256 amountOut, address gasZRC20, uint256 gasFee) = handleGasAndSwap(
-      zrc20,
-      amount,
-      campaign.preferredZRC20,
-      campaign.payoutAddress != address(0)
+    uint256 amountOut;
+    address gasZRC20;
+    uint256 gasFee;
+    Campaign storage campaign = campaigns[campaignId]; 
+    (amountOut, gasZRC20, gasFee) = handleGasAndSwap(
+    zrc20,
+    amount,
+    campaign.preferredZRC20,
+    campaign.payoutAddress != address(0)
     );
 
     withdraw(
@@ -311,8 +296,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
       zrc20
     );
 
-    // Record contribution
-    string memory chainName = _getChainName(context.origin);
+    string memory chainName = _getChainName(context.chainID);
     uint256 id = ++nextContributionId;
     contributions[id] = Contribution({
       campaignId: campaignId,
@@ -321,7 +305,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
       zrc20Received: campaign.preferredZRC20,
       originalAmount: amount,
       convertedAmount: amountOut,
-      originChainId: context.origin,
+      originChainId: context.chainID,
       timestamp: uint64(block.timestamp),
       originChainName: chainName
     });
@@ -339,7 +323,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
     );
   }
 
-  function onRevert(RevertContext calldata context) external override onlyGateway {
+  function onRevert(RevertContext calldata context) external onlyGateway {
     (bytes memory originalSender, address originalToken) = abi.decode(
       context.revertMessage,
       (bytes, address)
@@ -352,7 +336,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
       true
     );
 
-    IGatewayZEVM(gateway).withdraw(
+    IGatewayZEVM(address(gateway)).withdraw(
       originalSender,
       out,
       originalToken,
@@ -369,9 +353,6 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
   /*------------------------- CAMPAIGN MANAGEMENT ------------------------*/
 
   function createCampaign(address preferredZRC20) external returns (uint256 campaignId) {
-    require(preferredZRC20 != address(0), "InvalidToken");
-    require(allowedOutTokens[preferredZRC20], "PayoutTokenNotAllowed");
-
     campaignId = ++nextCampaignId;
     campaigns[campaignId] = Campaign({
       creator: msg.sender,
@@ -387,8 +368,6 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
   function updateCampaignPayoutToken(uint256 campaignId, address newToken) external {
     Campaign storage campaign = campaigns[campaignId];
     require(campaign.creator == msg.sender, "NotCreator");
-    require(campaign.active, "CampaignInactive");
-    require(allowedOutTokens[newToken], "PayoutTokenNotAllowed");
 
     campaign.preferredZRC20 = newToken;
     emit CampaignCreated(campaignId, msg.sender, newToken); // Reuse event for simplicity
@@ -401,7 +380,6 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
   ) external {
     Campaign storage campaign = campaigns[campaignId];
     require(campaign.creator == msg.sender, "NotCreator");
-    require(campaign.active, "CampaignInactive");
 
     campaign.payoutAddress = payoutAddress;
     campaign.payoutGasLimit = payoutGasLimit;
@@ -483,7 +461,6 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
 
   function getCampaignInfo(uint256 campaignId) external view returns (CampaignInfo memory info) {
     Campaign storage campaign = campaigns[campaignId];
-    require(campaign.creator != address(0), "CAMPAIGN_NOT_FOUND");
     
     info = CampaignInfo({
       campaignId: campaignId,
