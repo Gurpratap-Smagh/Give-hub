@@ -259,9 +259,9 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
     );
   }
   function donateNative(
+    uint256 campaignId,
     address zrc20,
     uint256 amount,
-    uint256 campaignId,
     string memory donorName,
     string memory note
   ) external override onlyGateway {
