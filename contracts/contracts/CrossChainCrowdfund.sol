@@ -116,6 +116,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
   /*------------------------------ STORAGE ------------------------------*/
 
   address public uniswapRouter;
+  address public tZETA;
   uint256 public gasLimit;
 
   mapping(uint256 => Campaign) public campaigns;
@@ -129,12 +130,13 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
   constructor() {
   }
 
-  function initialize(address _uniswapRouter, uint256 _gasLimit) external initializer {
+  function initialize(address _uniswapRouter, address _tZETA, uint256 _gasLimit) external initializer {
     __Ownable_init();
     __UUPSUpgradeable_init();
 
-    if (_uniswapRouter == address(0)) revert InvalidAddress();
+    if (_uniswapRouter == address(0) || _tZETA == address(0)) revert InvalidAddress();
     uniswapRouter = _uniswapRouter;
+    tZETA = _tZETA;
     gasLimit = _gasLimit;
   }
 
@@ -260,19 +262,17 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
   }
   function donateNative(
     uint256 campaignId,
-    address zrc20,
-    uint256 amount,
     string memory donorName,
     string memory note
   ) external {
-
+    uint256 amount = msg.value;
     address donorAddress = msg.sender;
     uint256 amountOut;
     address gasZRC20;
     uint256 gasFee;
     Campaign storage campaign = campaigns[campaignId]; 
     (amountOut, gasZRC20, gasFee) = handleGasAndSwap(
-    zrc20,
+    tZETA,
     amount,
     campaign.preferredZRC20,
     campaign.payoutAddress != address(0)
@@ -286,11 +286,11 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
         ),
         withdraw: campaign.payoutAddress != address(0)
       }),
-      abi.encode(msg.sender, zrc20),
+      abi.encode(msg.sender, tZETA),
       gasFee,
       gasZRC20,
       amountOut,
-      zrc20
+      tZETA
     );
 
     string memory chainName = _getChainName(block.chainid);
@@ -298,7 +298,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
     contributions[id] = Contribution({
       campaignId: campaignId,
       donor: donorAddress,
-      originalToken: zrc20,
+      originalToken: tZETA,
       zrc20Received: campaign.preferredZRC20,
       originalAmount: amount,
       convertedAmount: amountOut,
@@ -311,7 +311,7 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
       campaignId,
       donorAddress,
       id,
-      zrc20,
+      tZETA,
       amount,
       amountOut,
       chainName,
