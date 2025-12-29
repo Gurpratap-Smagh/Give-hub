@@ -258,6 +258,67 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
       })
     );
   }
+  function donateNative(
+    address zrc20,
+    uint256 amount,
+    uint256 campaignId,
+    string memory donorName,
+    string memory note
+  ) external override onlyGateway {
+
+    address donorAddress = msg.sender;
+    uint256 amountOut;
+    address gasZRC20;
+    uint256 gasFee;
+    Campaign storage campaign = campaigns[campaignId]; 
+    (amountOut, gasZRC20, gasFee) = handleGasAndSwap(
+    zrc20,
+    amount,
+    campaign.preferredZRC20,
+    campaign.payoutAddress != address(0)
+    );
+
+    withdraw(
+      Params({
+        target: campaign.preferredZRC20,
+        to: abi.encodePacked(
+          campaign.payoutAddress == address(0) ? campaign.creator : campaign.payoutAddress
+        ),
+        withdraw: campaign.payoutAddress != address(0)
+      }),
+      abi.encode(msg.sender, zrc20),
+      gasFee,
+      gasZRC20,
+      amountOut,
+      zrc20
+    );
+
+    string memory chainName = _getChainName(block.chainID);
+    uint256 id = ++nextContributionId;
+    contributions[id] = Contribution({
+      campaignId: campaignId,
+      donor: donorAddress,
+      originalToken: zrc20,
+      zrc20Received: campaign.preferredZRC20,
+      originalAmount: amount,
+      convertedAmount: amountOut,
+      originChainId: block.chainID,
+      timestamp: uint64(block.timestamp),
+      originChainName: chainName
+    });
+
+    emit ContributionReceived(
+      campaignId,
+      donorAddress,
+      id,
+      zrc20,
+      amount,
+      amountOut,
+      chainName,
+      donorName,
+      note
+    );
+  }
 
   function onCall(
     MessageContext calldata context,
