@@ -1081,9 +1081,9 @@
       "contracts/CrossChainCrowdfund.sol:CrossChainCrowdfund": {
         "src": "contracts/CrossChainCrowdfund.sol:55",
         "version": {
-          "withMetadata": "c4b2fbc8dc11706dd6ee4a643cd4b41dac50322bdd4b7dbce812d4443e27a7ca",
-          "withoutMetadata": "492872acc7b8c584bfde754f34f32f16f3c414902d6f2647cde88996f2c108c2",
-          "linkedWithoutMetadata": "492872acc7b8c584bfde754f34f32f16f3c414902d6f2647cde88996f2c108c2"
+          "withMetadata": "c34858401a9fdbb40f1ca1c6d2b0b1a20d1054da9dc3ce7cd2c0398958e1e486",
+          "withoutMetadata": "da1f63170041ad3da89d5f9723e5b9cb5bb755b5d25506b08e62dc3afa79bb27",
+          "linkedWithoutMetadata": "da1f63170041ad3da89d5f9723e5b9cb5bb755b5d25506b08e62dc3afa79bb27"
         },
         "inherit": [
           "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:OwnableUpgradeable",
@@ -1104,6 +1104,7 @@
           "()",
           "initialize(address,uint256)",
           "quoteMinInput(address,address)",
+          "donateNative(address,uint256,uint256,string,string)",
           "onCall((bytes,address,uint256),address,uint256,bytes)",
           "onRevert((address,address,uint256,bytes))",
           "createCampaign(address)",
@@ -1397,7 +1398,7 @@
       "contracts/CrossChainCrowdfund.sol:SafeERC20": {
         "src": "contracts/CrossChainCrowdfund.sol:36",
         "version": {
-          "withMetadata": "a783910d1af69d5678f118bfffd5b0dd0f5a390bb9e62fbdbf37381cdbea6f19",
+          "withMetadata": "aa422e9df4bb32d15d9012e55d85457a186b4b7355f797262bffd2d62d9b6ddc",
           "withoutMetadata": "e2a89a66865458f0d9fedd4bc7faf0ee62e4c341d176ab79d29bd77a1bdfc32a",
           "linkedWithoutMetadata": "e2a89a66865458f0d9fedd4bc7faf0ee62e4c341d176ab79d29bd77a1bdfc32a"
         },
