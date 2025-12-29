@@ -1081,9 +1081,9 @@
       "contracts/CrossChainCrowdfund.sol:CrossChainCrowdfund": {
         "src": "contracts/CrossChainCrowdfund.sol:55",
         "version": {
-          "withMetadata": "c34858401a9fdbb40f1ca1c6d2b0b1a20d1054da9dc3ce7cd2c0398958e1e486",
-          "withoutMetadata": "da1f63170041ad3da89d5f9723e5b9cb5bb755b5d25506b08e62dc3afa79bb27",
-          "linkedWithoutMetadata": "da1f63170041ad3da89d5f9723e5b9cb5bb755b5d25506b08e62dc3afa79bb27"
+          "withMetadata": "ad241f319270ba1014b91442c13be3d60b6af6d733917cd22aab80e9189f9884",
+          "withoutMetadata": "e563c78a5868fb8b9f7c902396ac1c3b735f20afdab3c5f6b4d766a1063860b5",
+          "linkedWithoutMetadata": "e563c78a5868fb8b9f7c902396ac1c3b735f20afdab3c5f6b4d766a1063860b5"
         },
         "inherit": [
           "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:OwnableUpgradeable",
@@ -1102,9 +1102,9 @@
         ],
         "methods": [
           "()",
-          "initialize(address,uint256)",
+          "initialize(address,address,uint256)",
           "quoteMinInput(address,address)",
-          "donateNative(address,uint256,uint256,string,string)",
+          "donateNative(uint256,string,string)",
           "onCall((bytes,address,uint256),address,uint256,bytes)",
           "onRevert((address,address,uint256,bytes))",
           "createCampaign(address)",
@@ -1189,44 +1189,52 @@
               "src": "contracts/CrossChainCrowdfund.sol:118"
             },
             {
-              "label": "gasLimit",
+              "label": "tZETA",
               "offset": 0,
               "slot": "202",
-              "type": "t_uint256",
+              "type": "t_address",
               "contract": "CrossChainCrowdfund",
               "src": "contracts/CrossChainCrowdfund.sol:119"
             },
             {
-              "label": "campaigns",
+              "label": "gasLimit",
               "offset": 0,
               "slot": "203",
-              "type": "t_mapping(t_uint256,t_struct(Campaign)5118_storage)",
+              "type": "t_uint256",
               "contract": "CrossChainCrowdfund",
-              "src": "contracts/CrossChainCrowdfund.sol:121"
+              "src": "contracts/CrossChainCrowdfund.sol:120"
             },
             {
-              "label": "contributions",
+              "label": "campaigns",
               "offset": 0,
               "slot": "204",
-              "type": "t_mapping(t_uint256,t_struct(Contribution)5107_storage)",
+              "type": "t_mapping(t_uint256,t_struct(Campaign)5118_storage)",
               "contract": "CrossChainCrowdfund",
               "src": "contracts/CrossChainCrowdfund.sol:122"
             },
             {
-              "label": "nextCampaignId",
+              "label": "contributions",
               "offset": 0,
               "slot": "205",
-              "type": "t_uint256",
+              "type": "t_mapping(t_uint256,t_struct(Contribution)5107_storage)",
               "contract": "CrossChainCrowdfund",
-              "src": "contracts/CrossChainCrowdfund.sol:124"
+              "src": "contracts/CrossChainCrowdfund.sol:123"
             },
             {
-              "label": "nextContributionId",
+              "label": "nextCampaignId",
               "offset": 0,
               "slot": "206",
               "type": "t_uint256",
               "contract": "CrossChainCrowdfund",
               "src": "contracts/CrossChainCrowdfund.sol:125"
+            },
+            {
+              "label": "nextContributionId",
+              "offset": 0,
+              "slot": "207",
+              "type": "t_uint256",
+              "contract": "CrossChainCrowdfund",
+              "src": "contracts/CrossChainCrowdfund.sol:126"
             }
           ],
           "types": {
@@ -1398,7 +1406,7 @@
       "contracts/CrossChainCrowdfund.sol:SafeERC20": {
         "src": "contracts/CrossChainCrowdfund.sol:36",
         "version": {
-          "withMetadata": "aa422e9df4bb32d15d9012e55d85457a186b4b7355f797262bffd2d62d9b6ddc",
+          "withMetadata": "e3b94e3ea3b7e9b651c7935ef791e155a038cecfd824af4f21549bdc2030b79a",
           "withoutMetadata": "e2a89a66865458f0d9fedd4bc7faf0ee62e4c341d176ab79d29bd77a1bdfc32a",
           "linkedWithoutMetadata": "e2a89a66865458f0d9fedd4bc7faf0ee62e4c341d176ab79d29bd77a1bdfc32a"
         },

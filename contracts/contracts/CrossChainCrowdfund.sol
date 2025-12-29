@@ -264,9 +264,15 @@ contract CrossChainCrowdfund is UniversalContract, Initializable, UUPSUpgradeabl
     uint256 campaignId,
     string memory donorName,
     string memory note
-  ) external {
+  ) external payable {
     uint256 amount = msg.value;
     address donorAddress = msg.sender;
+    if (amount == 0) revert AmountZero();
+
+    // Wrap native tZETA → tZETA ZRC20
+    (bool success, ) = tZETA.call{value: amount}(abi.encodeWithSignature("deposit()"));
+    if (!success) revert TransferFailed();
+
     uint256 amountOut;
     address gasZRC20;
     uint256 gasFee;
