@@ -335,7 +335,7 @@ export async function getContract(signer?: ethers.Signer, readOnly?: boolean) {
     );
   }
   console.debug("[web3] using contract address:", dep.address);
-  return new ethers.Contract(dep.address, CrossChainCrowdfundABI, signer || provider);
+  return new ethers.Contract(dep.address, CrossChainCrowdfundABI.abi, signer || provider);
 }
 
 export async function isCreator(address: string): Promise<boolean> {
@@ -451,7 +451,7 @@ export async function createCampaignOnChain(input: CreateCampaignInput = {}): Pr
   console.debug("[web3] createCampaign receipt status:", receipt?.status);
   
   // Try to decode CampaignCreated to get ID
-  const iface = new ethers.Interface(CrossChainCrowdfundABI);
+  const iface = new ethers.Interface(CrossChainCrowdfundABI.abi);
   for (const log of receipt.logs ?? []) {
     try {
       const parsed = iface.parseLog(log);
@@ -602,7 +602,7 @@ export async function getCampaignsByCreator(
   const dep = await fetchDeployment();
   const latest = await provider.getBlockNumber();
   const fromBlock = latest > lookbackBlocks ? latest - lookbackBlocks : 0;
-  const iface = new ethers.Interface(CrossChainCrowdfundABI);
+  const iface = new ethers.Interface(CrossChainCrowdfundABI.abi);
   
   // Filter by CampaignCreated events for this creator
   const topic0 = ethers.id("CampaignCreated(uint256,address,address)");
@@ -653,7 +653,7 @@ export async function createAndConfigureCampaign({
   payoutGasLimit?: number;  // optional
 }) {
   // Step 1: create campaign
-  const { id: campaignId, txHash } = await createCampaignOnChain({
+  const { id: campaignId, txHash: createTxHash } = await createCampaignOnChain({
     preferredZRC20,
   });
 
@@ -661,6 +661,7 @@ export async function createAndConfigureCampaign({
   await updateCampaignPayoutToken(campaignId, preferredZRC20);
 
   // Step 3: optional payout destination
+  let finalTxHash = createTxHash;
   if (payoutAddress) {
     const contract = await getContract(await (await getProvider()).getSigner());
     const tx = await contract.updateCampaignDestination(
@@ -668,10 +669,13 @@ export async function createAndConfigureCampaign({
       payoutAddress,
       payoutGasLimit || 0
     );
-    await tx.wait(1);
+    const receipt = await tx.wait(1);
+    if (receipt?.hash) {
+      finalTxHash = receipt.hash;
+    }
   }
 
-  return { campaignId, txHash };
+  return { campaignId, txHash: finalTxHash };
 }
 
 // Get donation events for a campaign
@@ -693,7 +697,7 @@ export async function getCampaignDonations(
   const dep = await fetchDeployment();
   const latest = await provider.getBlockNumber();
   const fromBlock = latest > lookbackBlocks ? latest - lookbackBlocks : 0;
-  const iface = new ethers.Interface(CrossChainCrowdfundABI);
+  const iface = new ethers.Interface(CrossChainCrowdfundABI.abi);
   
   // Filter by ContributionReceived events for this campaign
   const topic0 = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)");
@@ -793,7 +797,7 @@ export async function getCampaignDonationsBetween(
   const chainLatest = await provider.getBlockNumber();
   const end = Math.min(toBlock ?? chainLatest, chainLatest);
   const start = Math.max(0, Math.min(fromBlock, end));
-  const iface = new ethers.Interface(CrossChainCrowdfundABI);
+  const iface = new ethers.Interface(CrossChainCrowdfundABI.abi);
 
   // Filter by ContributionReceived events for this campaign
   const topic0 = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)");

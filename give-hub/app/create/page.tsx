@@ -70,6 +70,9 @@ export default function CreateCampaignPage() {
     description: '',
     category: '',
     goal: '',
+    payoutAddress: '',
+    payoutGasLimit: '100000',
+    selectedChain: '' as string,
   })
   const [aiLoading, setAiLoading] = useState(false)
   const [image, setImage] = useState<string>('')
@@ -84,7 +87,17 @@ export default function CreateCampaignPage() {
   const [imageGenLoading, setImageGenLoading] = useState(false)
   // Web3/payment prefs
   const [preferredToken, setPreferredToken] = useState('')
-  const [zrc20Options, setZrc20Options] = useState<{ symbol: string; address: string }[]>([])
+  const [availableChains, setAvailableChains] = useState<Array<{ id: number; name: string }>>([])
+  const [payoutOptions, setPayoutOptions] = useState<Array<{
+    chainId: number;
+    chainName: string;
+    symbol: string;
+    zrc20Address: string;
+    coinType: 'gas' | 'erc20';
+    decimals: number;
+  }>>([])
+  const [filteredTokens, setFilteredTokens] = useState<typeof payoutOptions>([])
+  const [optionsLoading, setOptionsLoading] = useState(true)
   const requiresOnChain = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || '').toLowerCase() === 'zetachain'
   const wzetaAddrEnv = (process.env.NEXT_PUBLIC_WZETA_ADDRESS || '').trim()
   const [isTokenValid, setIsTokenValid] = useState(false)
@@ -93,66 +106,48 @@ export default function CreateCampaignPage() {
   const [errorText, setErrorText] = useState('')
   const [errorDetails, setErrorDetails] = useState<unknown>(null)
 
-  // Fetch ZRC-20 options from API
+  // Fetch payout options (chains and tokens) from new API
   useEffect(() => {
-    if (!requiresOnChain) return
-    const fetchTokens = async () => {
+    const fetchPayoutOptions = async () => {
       try {
-        const res = await fetch('/api/zrc20-options')
-        if (!res.ok) throw new Error('Failed to fetch tokens')
+        setOptionsLoading(true)
+        const res = await fetch('/api/campaign/payout-options')
+        if (!res.ok) throw new Error('Failed to fetch payout options')
         const data = await res.json()
-        const allTokens = data?.byChain || {}
-        setZrc20Options(allTokens)
-        // Default to WZETA if available, otherwise first token in first chain
-        const wzeta = (Object.values(allTokens) as Token[][])
-          .flat()
-          .find((t: Token) => t.symbol === 'WZETA')
-        if (wzeta) {
-          setPreferredToken(wzeta.address)
-        } else if ((Object.values(allTokens) as Token[][]).flat().length > 0) {
-          setPreferredToken((Object.values(allTokens) as Token[][])[0][0].address)
-        }
+        setAvailableChains(data.chains || [])
+        setPayoutOptions(data.options || [])
       } catch (e) {
-        console.error('Failed to fetch ZRC-20 options:', e)
-        showError('Could not load token options.', 'Loading Failed')
+        console.error('Failed to fetch payout options:', e)
+        showError('Could not load blockchain and token options.', 'Loading Failed')
+      } finally {
+        setOptionsLoading(false)
       }
     }
-    fetchTokens()
-  }, [requiresOnChain])
+    fetchPayoutOptions()
+  }, [])
 
-  // Validate token when preferredToken changes
+  // Filter tokens when chain is selected
   useEffect(() => {
-    if (!requiresOnChain || !preferredToken) {
-      setIsTokenValid(true)
+    if (!formData.selectedChain) {
+      setFilteredTokens([])
+      setPreferredToken('')
       return
     }
-
-    const validateToken = async () => {
-      try {
-        // Skip validation for WZETA and zETH
-        if (preferredToken.includes('WZETA') || preferredToken.includes('zETH')) {
-          setIsTokenValid(true)
-          return
-        }
-
-        // Additional validation for zBTC
-        if (preferredToken.includes('zBTC')) {
-          showError('zBTC is currently not supported for campaigns', 'Token Not Supported')
-          setIsTokenValid(false)
-          return
-        }
-
-        // Default validation
-        setIsTokenValid(isAddress(preferredToken))
-      } catch (e) {
-        console.error('Token validation failed:', e)
-        showError('Token validation failed. Please try another token.', 'Validation Failed')
-        setIsTokenValid(false)
-      }
+    
+    const selectedChainId = parseInt(formData.selectedChain, 10)
+    const tokensForChain = payoutOptions.filter(opt => opt.chainId === selectedChainId)
+    setFilteredTokens(tokensForChain)
+    
+    // Auto-select first token for the chain
+    if (tokensForChain.length > 0) {
+      setPreferredToken(tokensForChain[0].zrc20Address)
     }
+  }, [formData.selectedChain, payoutOptions])
 
-    validateToken()
-  }, [preferredToken, requiresOnChain])
+  // Simple token validation
+  useEffect(() => {
+    setIsTokenValid(!!preferredToken)
+  }, [preferredToken])
 
   if (!context) {
     throw new Error('AuthContext must be used within an AuthProvider')
@@ -254,6 +249,24 @@ const handleSubmit = async (e: React.FormEvent) => {
     setSubmitMessage("");
     return;
   }
+  
+  // Validate payout address if provided
+  if (formData.payoutAddress && !isAddress(formData.payoutAddress)) {
+    showError("Payout address must be a valid EVM address (0x...)", "Validation Error");
+    setSubmitLoading(false);
+    setSubmitMessage("");
+    return;
+  }
+
+  // Validate gas limit
+  const gasLimit = parseInt(formData.payoutGasLimit || '100000', 10);
+  if (gasLimit < 50000 || gasLimit > 500000) {
+    showError("Gas limit must be between 50,000 and 500,000", "Validation Error");
+    setSubmitLoading(false);
+    setSubmitMessage("");
+    return;
+  }
+  
   if (formData.category === "other" && !otherCategory.trim()) {
     showError("Please specify your category", "Validation Error");
     return;
@@ -273,7 +286,6 @@ const handleSubmit = async (e: React.FormEvent) => {
 
       if (chainId !== targetChainId) {
         showInfo(`Switching to ZetaChain network...`, "Network Switch");
-        await ensureWalletOnChain(targetChainId);
       }
 
       const creatorExists = await isCreator(address);
@@ -282,17 +294,20 @@ const handleSubmit = async (e: React.FormEvent) => {
       }
 
       setTxPhase("confirming");
+      setSubmitMessage("Confirm campaign creation in MetaMask...");
       showInfo("Confirm in MetaMask…", "Transaction Confirmation");
 
       const res = await createAndConfigureCampaign({
         preferredZRC20: preferredToken || process.env.NEXT_PUBLIC_WZETA_ADDRESS!,
-        payoutAddress: address,
-        payoutGasLimit: 0,
+        payoutAddress: formData.payoutAddress || address,
+        payoutGasLimit: parseInt(formData.payoutGasLimit || '100000', 10),
       });
 
       setTxPhase("done");
       onChainCampaignId = res.campaignId;
       setTxHash(res.txHash);
+      
+      setSubmitMessage("Campaign created on blockchain! Saving to database...");
 
       console.debug(
         "[create] On-chain campaign created. ID:",
@@ -312,6 +327,8 @@ const handleSubmit = async (e: React.FormEvent) => {
       goal: parseFloat(formData.goal),
       creatorId: user.id,
       preferredZRC20: preferredToken || undefined,
+      payoutAddress: formData.payoutAddress || undefined,
+      payoutGasLimit: formData.payoutGasLimit ? parseInt(formData.payoutGasLimit, 10) : 100000,
     };
 
     if (onChainCampaignId) {
@@ -626,39 +643,134 @@ const handleSubmit = async (e: React.FormEvent) => {
               )}
             </div>
 
+            {/* Select Blockchain */}
+            <div>
+              <label htmlFor="selectedChain" className="block text-lg font-semibold text-gray-900 mb-3">
+                Select Blockchain *
+              </label>
+              <p className="text-sm text-gray-600 mb-3">
+                Choose a blockchain. Available tokens for that blockchain will appear below.
+              </p>
+              
+              {optionsLoading ? (
+                <div className="p-4 bg-gray-50 rounded-lg text-gray-600">Loading blockchains...</div>
+              ) : (
+                <select
+                  name="selectedChain"
+                  id="selectedChain"
+                  value={formData.selectedChain}
+                  onChange={(e) => setFormData(prev => ({ ...prev, selectedChain: e.target.value }))}
+                  className="w-full p-4 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-lg"
+                  required
+                >
+                  <option value="">-- Select a blockchain --</option>
+                  {availableChains.map(chain => (
+                    <option key={chain.id} value={chain.id}>
+                      {chain.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {!formData.selectedChain && availableChains.length > 0 && (
+                <p className="text-sm text-red-600 mt-2">Please select a blockchain.</p>
+              )}
+            </div>
+
             {/* Preferred Token (ZRC-20) */}
             <div>
               <label className="block text-lg font-semibold text-gray-900 mb-3">
-                Preferred Payout Token {requiresOnChain ? '*' : ''}
+                Preferred Payout Token *
               </label>
-              <div className="space-y-2">
-                {Object.entries(zrc20Options).map(([chain, tokens]) => (
-                  <div key={chain} className="space-y-1">
-                    <div className="text-sm text-gray-500">{chain}</div>
-                    <div className="flex flex-wrap gap-2">
-                      {tokens && Array.isArray(tokens) && tokens.map((token) => (
-                        <button
-                          key={token.address}
-                          type="button"
-                          className={`px-3 py-1 text-sm rounded-full ${preferredToken === token.address ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 hover:bg-gray-200'}`}
-                          onClick={() => setPreferredToken(token.address)}
-                        >
-                          {token.symbol}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <p className="text-sm text-gray-600 mb-3">
+                {!formData.selectedChain 
+                  ? 'Select a blockchain first to see available tokens.'
+                  : `Available tokens for ${availableChains.find(c => c.id.toString() === formData.selectedChain)?.name}:`
+                }
+              </p>
+
+              {!formData.selectedChain ? (
+                <div className="p-4 bg-gray-50 rounded-lg text-gray-600">
+                  Please select a blockchain above to view available tokens.
+                </div>
+              ) : filteredTokens.length === 0 ? (
+                <div className="p-4 bg-yellow-50 rounded-lg text-yellow-700 border border-yellow-200">
+                  No tokens available for the selected blockchain.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {filteredTokens.map((token) => (
+                    <button
+                      key={token.zrc20Address}
+                      type="button"
+                      onClick={() => setPreferredToken(token.zrc20Address)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        preferredToken === token.zrc20Address
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                      }`}
+                    >
+                      {token.symbol}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {preferredToken && (
-                <p className="text-xs text-gray-500 mt-1">Token address: {preferredToken}</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  Selected: {filteredTokens.find(t => t.zrc20Address === preferredToken)?.symbol || 'Unknown'} 
+                  (ZRC20: {preferredToken})
+                </p>
               )}
-              {!isTokenValid && requiresOnChain && (
-                <p className="text-sm text-red-600 mt-1">A valid token must be selected.</p>
+              {!preferredToken && formData.selectedChain && (
+                <p className="text-sm text-red-600 mt-2">Please select a token.</p>
               )}
-              {isTokenValid && (
-                <p className="text-sm text-gray-500 mt-1">Donations will be automatically swapped to this token.</p>
-              )}
+            </div>
+
+            {/* Payout Configuration (Advanced) */}
+            <div className="border-t pt-6 mt-6">
+              <label className="block text-lg font-semibold text-gray-900 mb-3">
+                Payout Configuration (Advanced)
+              </label>
+              <p className="text-sm text-gray-600 mb-4">Configure where and how campaign funds are withdrawn.</p>
+              
+              {/* Payout Address */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Payout Address
+                </label>
+                <input
+                  type="text"
+                  name="payoutAddress"
+                  value={formData.payoutAddress}
+                  onChange={handleInputChange}
+                  className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
+                  placeholder="Leave empty to use your connected wallet"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  EVM address where funds will be sent. If empty, defaults to your connected wallet address.
+                </p>
+              </div>
+
+              {/* Payout Gas Limit */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Payout Gas Limit
+                </label>
+                <input
+                  type="number"
+                  name="payoutGasLimit"
+                  value={formData.payoutGasLimit}
+                  onChange={handleInputChange}
+                  className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
+                  min="50000"
+                  max="500000"
+                  step="10000"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Gas limit for cross-chain payout (50,000 - 500,000). Higher for cross-chain withdrawals.
+                </p>
+              </div>
             </div>
 
             {/* Submit moved to header */}

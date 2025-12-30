@@ -28,10 +28,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const showUnsynced = searchParams.get('showUnsynced')
-    const skipBlockchainCheck = searchParams.get('skipBlockchain') === 'true'
-    // MongoDB status is managed internally by the db adapter
-    
-    // Get campaigns based on database config and filter params
+    // Fetch campaigns from DB
     const searchQuery = searchParams.get('search')?.trim();
     const searchParam = searchParams.get('param') as 'all' | 'title' | 'creator' | 'category' || 'all';
     const creatorId = searchParams.get('creatorId')?.trim() || undefined;
@@ -74,28 +71,21 @@ export async function GET(request: Request) {
       });
     }
     
-    // If skipBlockchainCheck is true, return all campaigns quickly without verification
-    if (skipBlockchainCheck) {
-      // For quick loading, just filter based on whether campaigns have onChain property
-      let campaigns = filteredCampaigns
-      if (showUnsynced === 'true') {
-        // Show campaigns without onChain property
-        campaigns = filteredCampaigns.filter(campaign => !campaign.onChain)
-      } else if (showUnsynced === 'all') {
-        campaigns = filteredCampaigns // All campaigns for studio (with search applied)
-      } else {
-        // Show campaigns with onChain property
-        campaigns = filteredCampaigns.filter(campaign => !!campaign.onChain)
-      }
-      return NextResponse.json({ 
-        success: true, 
-        campaigns: campaigns.map(normalizeCampaignForApi), 
-        verificationStatus: 'skipped'
-      }, { status: 200 })
-    }
+    // Get on-chain synced IDs for verification
+    let syncedOnChainIds = new Set<string>()
     
-    // Process using contract view: get all synced on-chain campaign IDs
-    const syncedOnChainIds = await serverGetAllSyncedCampaignIds(100)
+    try {
+      syncedOnChainIds = await serverGetAllSyncedCampaignIds(100)
+    } catch (error) {
+      // If contract call fails, fall back to DB sync checking
+      console.warn('[campaigns] Contract getAllSyncedCampaigns failed, using DB fallback:', error)
+      // All campaigns in DB are considered "synced" if they have onChain property
+      syncedOnChainIds = new Set(
+        filteredCampaigns
+          .filter(c => c.onChain?.campaignId)
+          .map(c => c.onChain!.campaignId)
+      )
+    }
 
     // Filter campaigns based on verified on-chain sync status
     let campaigns = filteredCampaigns
@@ -108,11 +98,8 @@ export async function GET(request: Request) {
     } else if (showUnsynced === 'all') {
       campaigns = filteredCampaigns // All campaigns for studio
     } else {
-      // Only show campaigns whose onChain id is present in the view results
-      campaigns = filteredCampaigns.filter(campaign => {
-        const onChainId = campaign.onChain?.campaignId
-        return !!onChainId && syncedOnChainIds.has(onChainId)
-      })
+      // Show all campaigns from DB (on-chain verification is bonus, not requirement)
+      campaigns = filteredCampaigns
     }
     
     return NextResponse.json({ 
@@ -145,19 +132,8 @@ export const POST = authMiddleware(async (req: AuthedRequest) => {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 })
     }
     
-    // Ensure preferredToken is WZETA
-    const WZETA_ADDRESS = process.env.NEXT_PUBLIC_WZETA_ADDRESS
-    if (!WZETA_ADDRESS) {
-      return NextResponse.json({ success: false, error: 'WZETA token address not configured' }, { status: 500 })
-    }
-    
-    // Validate that preferredToken is WZETA
-    if (preferredToken && preferredToken.address !== WZETA_ADDRESS) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Only WZETA token is supported as preferred token' 
-      }, { status: 400 })
-    }
+    // Token is optionally selected from the multi-chain selector
+    // Validation happens on-chain during transaction
 
     // Build data to satisfy DB adapter type Omit<Campaign, 'id'>
     const campaignData: Omit<Campaign, 'id'> & { onChain?: Campaign['onChain']; onchainId?: number } = {

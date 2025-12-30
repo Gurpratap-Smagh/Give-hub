@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { switchNetwork } from '@/lib/web3/network-switcher';
+import { showError, showSuccess } from '@/components/notification-manager';
 
 export interface Chain {
   id: string;
@@ -20,7 +22,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
     icon: '⟠',
     chainId: 11155111,
     nativeToken: 'ETH',
-    zrc20Address: '0x0000000000000000000000000000000000000000', // TODO: Add actual address
+    zrc20Address: '0x05ba149a7bd6dc1f937fa9046a9e05c05f3b18b0', // zETH on ZetaChain
     isTestnet: true
   },
   {
@@ -57,6 +59,7 @@ interface ChainSelectorProps {
   label?: string;
   disabled?: boolean;
   showTestnetBadge?: boolean;
+  onNetworkSwitch?: (chainId: number) => Promise<void>;
 }
 
 export function ChainSelector({
@@ -64,11 +67,41 @@ export function ChainSelector({
   onChainSelect,
   label = 'Select Chain',
   disabled = false,
-  showTestnetBadge = true
+  showTestnetBadge = true,
+  onNetworkSwitch
 }: ChainSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
   
   const selected = SUPPORTED_CHAINS.find(c => c.id === selectedChain);
+
+  const handleChainSelect = async (chain: Chain) => {
+    setIsOpen(false);
+    
+    // Try to switch network in MetaMask
+    try {
+      setIsSwitching(true);
+      
+      // If custom handler provided, use it
+      if (onNetworkSwitch) {
+        await onNetworkSwitch(chain.chainId);
+      } else {
+        // Default: try to switch via web3 util
+        await switchNetwork(chain.id);
+      }
+      
+      showSuccess(`Switched to ${chain.name}`);
+    } catch (error) {
+      console.warn(`Failed to switch to ${chain.name}:`, error);
+      // Still allow selection even if network switch fails
+      showError(`Network Switch`, `Could not switch to ${chain.name}. You may need to switch manually in MetaMask.`);
+    } finally {
+      setIsSwitching(false);
+    }
+    
+    // Update selected chain
+    onChainSelect(chain);
+  };
 
   return (
     <div className="relative">
@@ -80,7 +113,7 @@ export function ChainSelector({
       
       <button
         type="button"
-        disabled={disabled}
+        disabled={disabled || isSwitching}
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:border-primary-500 dark:hover:border-primary-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -91,6 +124,7 @@ export function ChainSelector({
               <div className="text-left">
                 <div className="font-medium text-gray-900 dark:text-white">
                   {selected.name}
+                  {isSwitching && <span className="text-xs text-gray-500 ml-1">(switching...)</span>}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   {selected.nativeToken}
@@ -121,11 +155,9 @@ export function ChainSelector({
               <button
                 key={chain.id}
                 type="button"
-                onClick={() => {
-                  onChainSelect(chain);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                onClick={() => handleChainSelect(chain)}
+                disabled={isSwitching}
+                className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   chain.id === selectedChain ? 'bg-primary-50 dark:bg-primary-900/20' : ''
                 }`}
               >

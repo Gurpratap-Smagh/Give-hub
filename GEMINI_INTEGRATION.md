@@ -2,7 +2,7 @@
 
 This guide shows how to integrate Google’s Gemini API into Give-Hub for features like content moderation, campaign copy generation, donor Q&A, or intelligent tagging.
 
-Important: As of 2025, Google’s official SDK is the Google GenAI SDK. The older `@google/generative-ai` package is in limited maintenance. Prefer `@google/genai`.
+Important: As of 2025, Google’s official SDK is the Google GenAI SDK. The older `@google/genai` package is in limited maintenance. Prefer `@google/genai`.
 
 - Official docs: https://ai.google.dev/gemini-api/docs/quickstart
 - API keys: https://ai.google.dev/gemini-api/docs/api-key

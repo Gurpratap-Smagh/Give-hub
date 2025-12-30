@@ -95,7 +95,7 @@ export async function POST(
     }
 
     const wallet = new ethers.Wallet(privateKey, provider)
-    const contract = new ethers.Contract(contractAddress, CrossChainCrowdfundABI, wallet)
+    const contract = new ethers.Contract(contractAddress, CrossChainCrowdfundABI.abi, wallet)
 
     // 5) Execute transaction
     try {
