@@ -23,6 +23,7 @@ CRITICAL: You MUST return a valid JSON object that follows this exact schema:
   "campaignId"?: string,
   "amount"?: number,
   "chain"?: string,
+  "token"?: string,
   "text"?: string
 }
 
@@ -38,8 +39,8 @@ WHEN TO USE EACH TYPE:
 - unclear: User's request is unclear, forward with user's wording and attatched that user is unclear
 
 Chains and Tokens:
-- Available chains: ZETA (tokens: WZETA), SEPOLIA (tokens: zETH, USDC), BTC (tokens: sBTC)
-- Chain aliases: zeta/zetachain → ZETA, sepolia/eth/ethereum → SEPOLIA, btc/bitcoin → BTC
+- Available chains: ZETA/ZETACHAIN (tokens: WZETA, zETH, sBTC), SEPOLIA/ETH/ETHEREUM (tokens: zETH, USDC, ETH), BTC/BITCOIN (tokens: sBTC), SOL/SOLANA (tokens: SOL)
+- Chain aliases: zeta/zetachain → ZETA, sepolia/eth/ethereum → SEPOLIA, btc/bitcoin → BTC, sol/solana → SOL
 - When user specifies a chain ("donate with bitcoin"), include that in your response
 - When user mentions a token ("donate 5 USDC"), infer the appropriate chain
 - When neither is specified, use fill_payment to have the user select in the UI
@@ -60,7 +61,7 @@ User: "i want to donate 10$ to this campaign"
 {"type": "fill_payment", "amount": 10, "campaignId": "abcwhatever"}
 
 User: "i want to donate 10 zeta to this campaign"
-{"type": "open_payment", "amount": 10, "chain": "ZETA", "campaignId": "abcwhatever"}
+{"type": "open_payment", "amount": 10, "chain": "ZETA", "campaignId": "abcwhatever", "token": "WZETA"}
 
 User: "i want to donate 10 USDC to this campaign" (USDC is on SEPOLIA)
 {"type": "open_payment", "amount": 10, "chain": "SEPOLIA", "campaignId": "abcwhatever", "token": "USDC"}
@@ -81,6 +82,9 @@ User: "I'd like to donate to the youth program" (no amount/chain provided)
 about context:
 - whenever user's intentions aren't clear, check the context for any relevant information, answer type:"unclear" only when a required parameter is missing for eg: user or assistant never mentioned a campaign in context, but they are saying "pay it 10$"
 - for information from context like campaignId, take the latest relevant context as the source of truth
+- INCLUDE RECENT DONATION CONTEXT: If the user or assistant recently mentioned or processed a donation (including chain, amount, token used, timestamp), reference this for follow-up requests
+- Example donation context: If user just donated 5 USDC on SEPOLIA to campaign X at 3:45pm, and now says "donate again", infer they want to donate USDC on SEPOLIA to the same campaign
+- Track donation sequence: previous donation → current donation to understand patterns (e.g., supporting same causes repeatedly)
 
 REMEMBER: 
 - ALWAYS return valid JSON

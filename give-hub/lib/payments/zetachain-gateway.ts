@@ -3,9 +3,9 @@
 import { ethers, BrowserProvider, Contract, parseEther, parseUnits } from 'ethers';
 import type { WindowWithEthereum } from '../../types/ethereum';
 // Import the ABI from the JSON file
-import artifact from '../../abis/fresh.json';
+import artifact from '../../abis/CrossChainCrowdfund.json';
 
-// Type for the ABI from fresh.json
+// Type for the ABI from CrossChainCrowdfund.json
 type ContractABI = Array<{
   type: string;
   name?: string;
@@ -26,6 +26,13 @@ export const CHAINS = {
     nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
     rpcUrls: ['https://sepolia.drpc.org'],
     blockExplorerUrls: ['https://sepolia.etherscan.io/'],
+  },
+  BSC_TESTNET: {
+    chainId: '0x61', // 97
+    chainName: 'BSC Testnet',
+    nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+    rpcUrls: ['https://data-seed-prebsc-1-1.binance.org:8545'],
+    blockExplorerUrls: ['https://testnet.bscscan.com/'],
   },
   ZETA_ATHENS: {
     chainId: '0x1b59', // 7001
@@ -366,7 +373,7 @@ export async function makePayment(args: MakePaymentArgs): Promise<string> {
     say("Preparing native ZETA donation on ZetaChain…");
     const contract = new ethers.Contract(CONTRACT, abi, signer);
     const value = await parseAmount(); // 18 decimals
-    const tx = await contract.donateNative(ethers.ZeroAddress, 0n, campaignId, donorName, note, { value });
+    const tx = await contract.donateNative(campaignId, donorName, note, { value });
     say("Confirming on ZetaChain…");
     const r = await tx.wait();
     return r?.hash ?? tx.hash;
@@ -443,4 +450,25 @@ export async function makePayment(args: MakePaymentArgs): Promise<string> {
 
   // Fallback for unknown mode
   throw new Error(`Unsupported payment mode: ${mode}`);
+}
+
+/**
+ * Map chain ID to human-readable chain name
+ * Supports EVM and non-EVM chains (Bitcoin, etc.)
+ */
+export function getChainName(chainId: number | string): string {
+  const id = typeof chainId === 'string' ? parseInt(chainId, 10) : chainId;
+  
+  const chainNames: Record<number, string> = {
+    1: 'Ethereum Mainnet',
+    11155111: 'Ethereum Sepolia',
+    80001: 'Polygon Mumbai',
+    97: 'BSC Testnet',
+    56: 'BSC Mainnet',
+    7001: 'ZetaChain Athens',
+    8332: 'Bitcoin Testnet', // Bitcoin testnet via ZetaChain
+    0: 'Bitcoin', // Bitcoin mainnet alias
+  };
+  
+  return chainNames[id] || `Unknown Chain (${id})`;
 }

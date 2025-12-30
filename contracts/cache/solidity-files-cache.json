@@ -1,9 +1,9 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "/home/kali/Give-hub/contracts/contracts/CrossChainCrowdfund.sol": {
-      "lastModificationDate": 1767050633639,
-      "contentHash": "9f1eb5d74384eb4bcb8175950d49d426",
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\contracts\\CrossChainCrowdfund.sol": {
+      "lastModificationDate": 1767050941039,
+      "contentHash": "d295d0539836ce997aa0669cb8ab43ca",
       "sourceName": "contracts/CrossChainCrowdfund.sol",
       "solcConfig": {
         "version": "0.8.26",
@@ -52,47 +52,8 @@
         "SafeERC20"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/protocol-contracts/contracts/Revert.sol": {
-      "lastModificationDate": 1766467335484,
-      "contentHash": "a45f5144b4fa2354e2524a574d2d8159",
-      "sourceName": "@zetachain/protocol-contracts/contracts/Revert.sol",
-      "solcConfig": {
-        "version": "0.8.26",
-        "settings": {
-          "viaIR": true,
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata",
-                "storageLayout"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "0.8.26"
-      ],
-      "artifacts": [
-        "Abortable",
-        "Revertable"
-      ]
-    },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/toolkit/contracts/BytesHelperLib.sol": {
-      "lastModificationDate": 1766467335606,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\toolkit\\contracts\\BytesHelperLib.sol": {
+      "lastModificationDate": 1767060446803,
       "contentHash": "324991cd16818e54cf31cbfd6a101a99",
       "sourceName": "@zetachain/toolkit/contracts/BytesHelperLib.sol",
       "solcConfig": {
@@ -129,48 +90,8 @@
         "BytesHelperLib"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol": {
-      "lastModificationDate": 1766467341008,
-      "contentHash": "b0970a564d121abf9adfff8d1a01eb16",
-      "sourceName": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol",
-      "solcConfig": {
-        "version": "0.8.26",
-        "settings": {
-          "viaIR": true,
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata",
-                "storageLayout"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [
-        "../../utils/AddressUpgradeable.sol"
-      ],
-      "versionPragmas": [
-        "^0.8.2"
-      ],
-      "artifacts": [
-        "Initializable"
-      ]
-    },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol": {
-      "lastModificationDate": 1766467333592,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol": {
+      "lastModificationDate": 1767061323893,
       "contentHash": "a70d53f7e468306c02c529ecaa1d59c5",
       "sourceName": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol",
       "solcConfig": {
@@ -210,8 +131,8 @@
         "OwnableUpgradeable"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/toolkit/contracts/SwapHelperLib.sol": {
-      "lastModificationDate": 1766467335608,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\toolkit\\contracts\\SwapHelperLib.sol": {
+      "lastModificationDate": 1767060446857,
       "contentHash": "e74953dbc35905e8a2ea434e4332e7b8",
       "sourceName": "@zetachain/toolkit/contracts/SwapHelperLib.sol",
       "solcConfig": {
@@ -253,8 +174,8 @@
         "SwapHelperLib"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol": {
-      "lastModificationDate": 1766467342764,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@uniswap\\v2-periphery\\contracts\\interfaces\\IUniswapV2Router02.sol": {
+      "lastModificationDate": 1767061333339,
       "contentHash": "3fd36426274a5b35f7e702f87ba08a8e",
       "sourceName": "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol",
       "solcConfig": {
@@ -293,10 +214,10 @@
         "IUniswapV2Router02"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol": {
-      "lastModificationDate": 1766467352648,
-      "contentHash": "22d32862163cf1a76f3cc60ffaefe4ce",
-      "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol",
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\Revert.sol": {
+      "lastModificationDate": 1767061323089,
+      "contentHash": "a45f5144b4fa2354e2524a574d2d8159",
+      "sourceName": "@zetachain/protocol-contracts/contracts/Revert.sol",
       "solcConfig": {
         "version": "0.8.26",
         "settings": {
@@ -328,13 +249,52 @@
         "0.8.26"
       ],
       "artifacts": [
-        "IZRC20",
-        "IZRC20Metadata",
-        "ZRC20Events"
+        "Abortable",
+        "Revertable"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol": {
-      "lastModificationDate": 1766467341003,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol": {
+      "lastModificationDate": 1767061323837,
+      "contentHash": "b0970a564d121abf9adfff8d1a01eb16",
+      "sourceName": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "storageLayout"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "../../utils/AddressUpgradeable.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.2"
+      ],
+      "artifacts": [
+        "Initializable"
+      ]
+    },
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\proxy\\utils\\UUPSUpgradeable.sol": {
+      "lastModificationDate": 1767061323965,
       "contentHash": "c50df4f62eb9ef48d89b3a48a57e3bf5",
       "sourceName": "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol",
       "solcConfig": {
@@ -375,8 +335,8 @@
         "UUPSUpgradeable"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol": {
-      "lastModificationDate": 1766467352648,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\IGatewayZEVM.sol": {
+      "lastModificationDate": 1767061329206,
       "contentHash": "8e208257ec663b59f19e34eb2346edf3",
       "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/IGatewayZEVM.sol",
       "solcConfig": {
@@ -418,8 +378,48 @@
         "IGatewayZEVMEvents"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol": {
-      "lastModificationDate": 1766467352648,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\IZRC20.sol": {
+      "lastModificationDate": 1767061329220,
+      "contentHash": "22d32862163cf1a76f3cc60ffaefe4ce",
+      "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/IZRC20.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "storageLayout"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "0.8.26"
+      ],
+      "artifacts": [
+        "IZRC20",
+        "IZRC20Metadata",
+        "ZRC20Events"
+      ]
+    },
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\UniversalContract.sol": {
+      "lastModificationDate": 1767061329224,
       "contentHash": "50d3371d747c1de177c14c323e73e9a2",
       "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/UniversalContract.sol",
       "solcConfig": {
@@ -463,46 +463,8 @@
         "zContract"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol": {
-      "lastModificationDate": 1766467333630,
-      "contentHash": "c30c805386fda8a42ff515da963d3a95",
-      "sourceName": "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol",
-      "solcConfig": {
-        "version": "0.8.26",
-        "settings": {
-          "viaIR": true,
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata",
-                "storageLayout"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.1"
-      ],
-      "artifacts": [
-        "AddressUpgradeable"
-      ]
-    },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol": {
-      "lastModificationDate": 1766467333634,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\utils\\ContextUpgradeable.sol": {
+      "lastModificationDate": 1767061323159,
       "contentHash": "b6dfb72ff1fd764f725ec4db364b1b20",
       "sourceName": "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol",
       "solcConfig": {
@@ -541,10 +503,10 @@
         "ContextUpgradeable"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol": {
-      "lastModificationDate": 1766467342764,
-      "contentHash": "95d8729b2c698dc663322167b3c085fe",
-      "sourceName": "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol",
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\utils\\AddressUpgradeable.sol": {
+      "lastModificationDate": 1767061323131,
+      "contentHash": "c30c805386fda8a42ff515da963d3a95",
+      "sourceName": "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol",
       "solcConfig": {
         "version": "0.8.26",
         "settings": {
@@ -573,14 +535,14 @@
       },
       "imports": [],
       "versionPragmas": [
-        ">=0.6.2"
+        "^0.8.1"
       ],
       "artifacts": [
-        "IUniswapV2Router01"
+        "AddressUpgradeable"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/toolkit/contracts/shared/libraries/UniswapV2Library.sol": {
-      "lastModificationDate": 1766467353038,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\toolkit\\contracts\\shared\\libraries\\UniswapV2Library.sol": {
+      "lastModificationDate": 1767060447161,
       "contentHash": "8a20ce02e67df0a71b9324f28704e1ba",
       "sourceName": "@zetachain/toolkit/contracts/shared/libraries/UniswapV2Library.sol",
       "solcConfig": {
@@ -621,8 +583,46 @@
         "UniswapV2Library"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/toolkit/contracts/shared/interfaces/IZRC20.sol": {
-      "lastModificationDate": 1766467353044,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@uniswap\\v2-periphery\\contracts\\interfaces\\IUniswapV2Router01.sol": {
+      "lastModificationDate": 1767061333335,
+      "contentHash": "95d8729b2c698dc663322167b3c085fe",
+      "sourceName": "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "storageLayout"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.6.2"
+      ],
+      "artifacts": [
+        "IUniswapV2Router01"
+      ]
+    },
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\toolkit\\contracts\\shared\\interfaces\\IZRC20.sol": {
+      "lastModificationDate": 1767060447151,
       "contentHash": "25438a3a020a18156c8738c9448604c0",
       "sourceName": "@zetachain/toolkit/contracts/shared/interfaces/IZRC20.sol",
       "solcConfig": {
@@ -661,8 +661,8 @@
         "ZRC20Events"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol": {
-      "lastModificationDate": 1766467342749,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@uniswap\\v2-core\\contracts\\interfaces\\IUniswapV2Factory.sol": {
+      "lastModificationDate": 1767061342488,
       "contentHash": "ec39b5372f4f4d52101b4da561e2aee6",
       "sourceName": "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol",
       "solcConfig": {
@@ -699,8 +699,8 @@
         "IUniswapV2Factory"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/toolkit/contracts/shared/libraries/SafeMath.sol": {
-      "lastModificationDate": 1766467353031,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\toolkit\\contracts\\shared\\libraries\\SafeMath.sol": {
+      "lastModificationDate": 1767060447156,
       "contentHash": "203fb84febc6f15c3480a9b69c2f7d83",
       "sourceName": "@zetachain/toolkit/contracts/shared/libraries/SafeMath.sol",
       "solcConfig": {
@@ -737,8 +737,8 @@
         "Math"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol": {
-      "lastModificationDate": 1766467342778,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@uniswap\\v2-core\\contracts\\interfaces\\IUniswapV2Pair.sol": {
+      "lastModificationDate": 1767061342491,
       "contentHash": "3fa31c3860f2b9585c3a98c64850829e",
       "sourceName": "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol",
       "solcConfig": {
@@ -775,8 +775,8 @@
         "IUniswapV2Pair"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/interfaces/draft-IERC1822Upgradeable.sol": {
-      "lastModificationDate": 1766467333627,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\interfaces\\draft-IERC1822Upgradeable.sol": {
+      "lastModificationDate": 1767061323232,
       "contentHash": "a6883cfd85607b16c121a02728369eb3",
       "sourceName": "@openzeppelin/contracts-upgradeable/interfaces/draft-IERC1822Upgradeable.sol",
       "solcConfig": {
@@ -813,8 +813,8 @@
         "IERC1822ProxiableUpgradeable"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/proxy/ERC1967/ERC1967UpgradeUpgradeable.sol": {
-      "lastModificationDate": 1766467341008,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\proxy\\ERC1967\\ERC1967UpgradeUpgradeable.sol": {
+      "lastModificationDate": 1767061323303,
       "contentHash": "e186f91201ca317278fffbf1ea60cea0",
       "sourceName": "@openzeppelin/contracts-upgradeable/proxy/ERC1967/ERC1967UpgradeUpgradeable.sol",
       "solcConfig": {
@@ -858,84 +858,8 @@
         "ERC1967UpgradeUpgradeable"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/utils/StorageSlotUpgradeable.sol": {
-      "lastModificationDate": 1766467333637,
-      "contentHash": "02cf959b00ba5c650708472f195f8b29",
-      "sourceName": "@openzeppelin/contracts-upgradeable/utils/StorageSlotUpgradeable.sol",
-      "solcConfig": {
-        "version": "0.8.26",
-        "settings": {
-          "viaIR": true,
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata",
-                "storageLayout"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "StorageSlotUpgradeable"
-      ]
-    },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/interfaces/IERC1967Upgradeable.sol": {
-      "lastModificationDate": 1766467333602,
-      "contentHash": "a5421a5e611067b9202e83329fbf6fc7",
-      "sourceName": "@openzeppelin/contracts-upgradeable/interfaces/IERC1967Upgradeable.sol",
-      "solcConfig": {
-        "version": "0.8.26",
-        "settings": {
-          "viaIR": true,
-          "optimizer": {
-            "enabled": true,
-            "runs": 200
-          },
-          "evmVersion": "paris",
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata",
-                "storageLayout"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.0"
-      ],
-      "artifacts": [
-        "IERC1967Upgradeable"
-      ]
-    },
-    "/home/kali/Give-hub/contracts/node_modules/@openzeppelin/contracts-upgradeable/proxy/beacon/IBeaconUpgradeable.sol": {
-      "lastModificationDate": 1766467341006,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\proxy\\beacon\\IBeaconUpgradeable.sol": {
+      "lastModificationDate": 1767061323642,
       "contentHash": "21bffd733b4ca013e125a0ffe2e52254",
       "sourceName": "@openzeppelin/contracts-upgradeable/proxy/beacon/IBeaconUpgradeable.sol",
       "solcConfig": {
@@ -972,8 +896,84 @@
         "IBeaconUpgradeable"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/protocol-contracts/contracts/zevm/interfaces/IWZETA.sol": {
-      "lastModificationDate": 1766467352648,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\interfaces\\IERC1967Upgradeable.sol": {
+      "lastModificationDate": 1767061323707,
+      "contentHash": "a5421a5e611067b9202e83329fbf6fc7",
+      "sourceName": "@openzeppelin/contracts-upgradeable/interfaces/IERC1967Upgradeable.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "storageLayout"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "IERC1967Upgradeable"
+      ]
+    },
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@openzeppelin\\contracts-upgradeable\\utils\\StorageSlotUpgradeable.sol": {
+      "lastModificationDate": 1767061323941,
+      "contentHash": "02cf959b00ba5c650708472f195f8b29",
+      "sourceName": "@openzeppelin/contracts-upgradeable/utils/StorageSlotUpgradeable.sol",
+      "solcConfig": {
+        "version": "0.8.26",
+        "settings": {
+          "viaIR": true,
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata",
+                "storageLayout"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "StorageSlotUpgradeable"
+      ]
+    },
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\IWZETA.sol": {
+      "lastModificationDate": 1767061329216,
       "contentHash": "47296e9a7495e957ae73b93d897bfc6a",
       "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/IWZETA.sol",
       "solcConfig": {
@@ -1010,8 +1010,8 @@
         "IWETH9"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/protocol-contracts/contracts/zevm/interfaces/ICoreRegistry.sol": {
-      "lastModificationDate": 1766467352648,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\zevm\\interfaces\\ICoreRegistry.sol": {
+      "lastModificationDate": 1767061329201,
       "contentHash": "698eae4feb78e96579bf848b9f912787",
       "sourceName": "@zetachain/protocol-contracts/contracts/zevm/interfaces/ICoreRegistry.sol",
       "solcConfig": {
@@ -1050,8 +1050,8 @@
         "ICoreRegistry"
       ]
     },
-    "/home/kali/Give-hub/contracts/node_modules/@zetachain/protocol-contracts/contracts/helpers/interfaces/IBaseRegistry.sol": {
-      "lastModificationDate": 1766467352653,
+    "C:\\Users\\gurpr\\givehub\\Give-hub\\contracts\\node_modules\\@zetachain\\protocol-contracts\\contracts\\helpers\\interfaces\\IBaseRegistry.sol": {
+      "lastModificationDate": 1767061329197,
       "contentHash": "e0b336ec9c4310c32cabfdd82f112d94",
       "sourceName": "@zetachain/protocol-contracts/contracts/helpers/interfaces/IBaseRegistry.sol",
       "solcConfig": {

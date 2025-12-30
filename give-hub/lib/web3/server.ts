@@ -93,7 +93,7 @@ export async function getServerContract(): Promise<ethers.Contract> {
     throw new Error('Contract address not configured in environment variables');
   }
   
-  return new ethers.Contract(address, CrossChainCrowdfundABI, provider);
+  return new ethers.Contract(address, CrossChainCrowdfundABI.abi, provider);
 }
 
 // Event signature for verification
