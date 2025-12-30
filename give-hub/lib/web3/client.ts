@@ -376,7 +376,11 @@ export async function getCampaignInfo(campaignId: string) {
       exists: info.creator !== ethers.ZeroAddress
     };
   } catch (error) {
-    console.error('Error fetching campaign info:', error);
+    // Suppress network changed errors - they're expected when switching chains
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (!errorMsg.includes("network changed")) {
+      console.error('Error fetching campaign info:', error);
+    }
     return null;
   }
 }

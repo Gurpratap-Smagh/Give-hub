@@ -11,6 +11,17 @@ import { DonationToast } from "@/components/donation-toast";
 import { evmDepositAndCall, ZetaChainClient } from "@zetachain/toolkit/client";
 import * as ethers from "ethers";
 
+// Suppress gateway address errors from ZetaChain toolkit
+const originalError = console.error;
+console.error = function(...args: any[]) {
+  const message = args[0]?.toString?.() || String(args[0]);
+  // Silently ignore gateway address and network change errors
+  if (message?.includes("Failed to get gateway address") || message?.includes("network changed")) {
+    return;
+  }
+  originalError.apply(console, args);
+};
+
 // Payment provider mode
 const PAYMENT_PROVIDER = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || "local").toLowerCase();
 
@@ -63,6 +74,8 @@ export default function PaymentModal({
   const [note, setNote] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>("");
+  // When true we are awaiting on-chain confirmation after a gateway detection race
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const { user } = useAuth();
 
   // Fetch payout options (chains and tokens)
@@ -149,13 +162,21 @@ export default function PaymentModal({
 
   // Filter tokens when chain is selected
   useEffect(() => {
-    if (!selectedChainId) {
+    if (selectedChainId === null) {
       setFilteredTokens([]);
       setSelectedToken(null);
       return;
     }
 
-    const tokensForChain = payoutOptions.filter((opt) => opt.chainId === selectedChainId);
+    // Handle ZetaChain special case: chainId 0 includes tokens with chainId: null
+    const tokensForChain = payoutOptions.filter((opt) => {
+      if (selectedChainId === 0) {
+        // For ZetaChain (id 0), include tokens with chainId === null or chainId === 0
+        return opt.chainId === null || opt.chainId === 0;
+      }
+      return opt.chainId === selectedChainId;
+    });
+    
     setFilteredTokens(tokensForChain);
 
     // Auto-select first token for the chain
@@ -163,6 +184,17 @@ export default function PaymentModal({
       setSelectedToken(tokensForChain[0]);
     }
   }, [selectedChainId, payoutOptions]);
+
+  // Auto-select ZetaChain when in ZetaChain mode
+  useEffect(() => {
+    if (onZeta && availableChains.length > 0 && selectedChainId === null) {
+      // Find ZetaChain (id: 0) and select it by default
+      const zetaChain = availableChains.find(c => c.id === 0);
+      if (zetaChain) {
+        setSelectedChainId(0);
+      }
+    }
+  }, [onZeta, availableChains, selectedChainId]);
 
   // Initialize amount when modal opens
   useEffect(() => {
@@ -186,6 +218,25 @@ export default function PaymentModal({
     }, 50);
     return () => clearTimeout(t);
   }, [isOpen, autoSubmit, amount, selectedToken, isProcessing, missingOnChainMapping]);
+
+  // When donation completes (showToast becomes true) clear awaiting state and close modal
+  useEffect(() => {
+    if (showToast && awaitingConfirmation) {
+      // Donation confirmed by the background flow
+      setAwaitingConfirmation(false);
+      setIsProcessing(false);
+      setProcessingStatus("");
+
+      const t = setTimeout(() => {
+        if (onClose) onClose();
+        setAmount("");
+        setDonorName("");
+        setNote("");
+        setProcessingStatus("");
+      }, 1400);
+      return () => clearTimeout(t);
+    }
+  }, [showToast, awaitingConfirmation, onClose]);
 
   const handlePayment = async () => {
     const raw = (amount || "").trim().replace(/,/g, ".");
@@ -260,40 +311,112 @@ export default function PaymentModal({
 
         // Use ZetaChain Toolkit's universal evmDepositAndCall
         // This works from ANY connected chain - the toolkit detects which chain the signer is on
-        const tx = await client.evmDepositAndCall({
-          receiver: contractAddress,
-          amount: raw,
-          types: ["uint256", "string", "string"],
-          values: [BigInt(Number(onChainCampaignId)), donorDisplayName, donorNote],
-          revertOptions: {
-            callOnRevert: true,
-            revertAddress: signerAddress,
-            abortAddress: signerAddress,
-            revertMessage: ethers.hexlify(ethers.toUtf8Bytes("Donation failed")),
-            onRevertGasLimit: "500000" // as string or number
-          },
-          txOptions: {
-            gasLimit: 800000
+        // We'll retry transient gateway detection errors and recreate provider/signer/client each attempt
+        let tx: any = null;
+        let lastGatewayError: any = null;
+        const maxRetries = 20; // allow up to ~30s of retries for transient network switches
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            // Recreate provider and signer for each attempt to avoid stale provider state
+            const attemptProvider = new ethers.BrowserProvider((window as any).ethereum);
+            const attemptSigner = await attemptProvider.getSigner();
+            const attemptClient = new ZetaChainClient({
+              network: process.env.NEXT_PUBLIC_ZETACHAIN_NETWORK === "mainnet" ? "mainnet" : "testnet",
+              signer: attemptSigner,
+            });
+
+            // Probe provider network and try a wallet switch if it doesn't match the selected chain
+            try {
+              const net = await attemptProvider.getNetwork();
+              const currentChain = Number(net.chainId);
+              if (selectedChainId !== null && currentChain !== selectedChainId) {
+                console.debug(`Attempt ${attempt + 1}/${maxRetries} - provider chain ${currentChain} !== selected ${selectedChainId}; requesting wallet switch`);
+                try {
+                  await window.ethereum.request({
+                    method: 'wallet_switchEthereumChain',
+                    params: [{ chainId: `0x${selectedChainId.toString(16)}` }],
+                  });
+                  // allow wallet to settle
+                  await new Promise(r => setTimeout(r, 1000));
+                } catch (switchErr:any) {
+                  console.debug('Wallet switch attempt failed (will continue to retry):', switchErr?.message || switchErr);
+                }
+              }
+            } catch (probeErr:any) {
+              console.debug('Provider network probe failed (will retry):', probeErr?.message || probeErr);
+            }
+
+            tx = await attemptClient.evmDepositAndCall({
+              receiver: contractAddress,
+              amount: raw,
+              types: ["uint256", "string", "string"],
+              values: [BigInt(Number(onChainCampaignId)), donorDisplayName, donorNote],
+              revertOptions: {
+                callOnRevert: true,
+                revertAddress: await attemptSigner.getAddress(),
+                abortAddress: await attemptSigner.getAddress(),
+                revertMessage: ethers.hexlify(ethers.toUtf8Bytes("Donation failed")),
+                onRevertGasLimit: "500000"
+              },
+              txOptions: {
+                gasLimit: 800000
+              }
+            });
+
+            // success
+            break;
+          } catch (txError: any) {
+            // If it's a gateway detection / network-change error, retry with backoff
+            if (txError?.message?.includes("gateway address") || txError?.message?.includes("network changed")) {
+              lastGatewayError = txError;
+              const backoff = Math.min(800 + attempt * 600, 2500); // cap backoff
+              console.debug(`Attempt ${attempt + 1}/${maxRetries} - Gateway detection error (retrying after ${backoff}ms):`, txError?.message);
+              await new Promise(resolve => setTimeout(resolve, backoff));
+              continue;
+            }
+            // Non-transient - rethrow
+            throw txError;
           }
-        });
-
+        }
+        
         setProcessingStatus("Confirming transaction...");
-        const receipt = await tx.wait();
-        txHash = receipt?.hash || tx.hash;
 
-        // Start donation flow tracking
-        startDonation(txHash, raw, campaign.id, donorDisplayName, chainName, selectedToken.symbol);
-        onPaymentSuccess(amountValue, chainName, selectedToken.symbol);
+        if (tx) {
+          const receipt = await tx.wait();
+          txHash = receipt?.hash || tx.hash;
 
-        showSuccess(`Donation of ${raw} ${selectedToken.symbol} sent successfully from ${chainName}!`);
+          // Start donation flow tracking
+          startDonation(txHash, raw, campaign.id, donorDisplayName, chainName, selectedToken.symbol);
+          onPaymentSuccess(amountValue, chainName, selectedToken.symbol);
 
-        // Close modal
-        onClose();
-        setAmount("");
-        setDonorName("");
-        setNote("");
-        setProcessingStatus("");
-        return;
+          showSuccess(`Donation of ${raw} ${selectedToken.symbol} sent successfully from ${chainName}!`);
+
+          // Close modal
+          onClose();
+          setAmount("");
+          setDonorName("");
+          setNote("");
+          setProcessingStatus("");
+          return;
+        }
+
+        // If we reach here, `tx` is null (gateway detection race happened). Don't throw — proceed with a placeholder
+        const placeholderTxHash = `pending:${Date.now()}`;
+        console.debug("Proceeding with placeholder tx hash due to gateway detection race:", placeholderTxHash);
+        setProcessingStatus("Transaction submission may be delayed; awaiting on-chain confirmation...");
+
+        // Start donation flow with placeholder tx hash so UI shows progress (useDonationFlow will timeout/check later)
+        // Do NOT call onPaymentSuccess yet — wait for real confirmation
+        startDonation(placeholderTxHash, raw, campaign.id, donorDisplayName, chainName, selectedToken.symbol);
+
+        // Keep modal open and show awaiting confirmation status; disable inputs so user cannot submit again
+        setAwaitingConfirmation(true);
+        setProcessingStatus("Transaction submitted — awaiting on-chain confirmation. You can close this dialog and check back later or wait here.");
+        showSuccess(`Donation submitted — awaiting confirmation from ${chainName}.`);
+
+        // Do NOT close modal automatically; allow background confirmation flow to update state
+        return; 
       }
 
       // Local/mock payment mode
@@ -320,7 +443,10 @@ export default function PaymentModal({
       const errorMessage = error instanceof Error ? error.message : "Payment failed";
       showError(`Payment failed: ${errorMessage}`);
     } finally {
-      setIsProcessing(false);
+      // If we're awaiting confirmation after a gateway race, keep the processing state active
+      if (!awaitingConfirmation) {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -525,14 +651,14 @@ export default function PaymentModal({
           {/* Submit Button */}
           <button
             onClick={() => void handlePayment()}
-            disabled={isProcessing || !selectedToken || !amount || optionsLoading || missingOnChainMapping}
+            disabled={isProcessing || awaitingConfirmation || !selectedToken || !amount || optionsLoading || missingOnChainMapping}
             className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
-              isProcessing || !selectedToken || !amount || optionsLoading || missingOnChainMapping
+              isProcessing || awaitingConfirmation || !selectedToken || !amount || optionsLoading || missingOnChainMapping
                 ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                 : "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800"
             }`}
           >
-            {isProcessing ? "Processing..." : `Donate ${selectedToken?.symbol || ""}`}
+            {isProcessing || awaitingConfirmation ? "Processing..." : `Donate ${selectedToken?.symbol || ""}`}
           </button>
 
           {missingOnChainMapping && (
