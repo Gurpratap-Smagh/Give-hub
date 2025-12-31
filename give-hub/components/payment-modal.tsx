@@ -275,7 +275,9 @@ export default function PaymentModal({
         const walletChainId = Number(network.chainId);
 
         // Check if user needs to switch chains
-        if (walletChainId !== selectedChainId) {
+        // Skip wallet switch for ZetaChain (id 0) as MetaMask doesn't accept 0x0 as valid chainId
+        // ZetaChain toolkit will handle cross-chain routing
+        if (walletChainId !== selectedChainId && selectedChainId !== 0) {
           setProcessingStatus(`Requesting chain switch to ${availableChains.find(c => c.id === selectedChainId)?.name}...`);
           
           try {
@@ -299,6 +301,98 @@ export default function PaymentModal({
 
         setProcessingStatus(`Processing donation from ${chainName}...`);
 
+        const NATIVE_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE".toLowerCase();
+        const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+        const tokenAddr = (selectedToken?.zrc20Address || (selectedToken as any)?.address || "").toLowerCase();
+        const isNativeZetaDonation =
+          selectedChainId === 0 &&
+          selectedToken?.symbol === "ZETA" &&
+          (
+            selectedToken?.isNative === true ||
+            tokenAddr === NATIVE_SENTINEL ||
+            tokenAddr === ZERO_ADDRESS ||
+            tokenAddr === ""
+          );
+
+        if (isNativeZetaDonation) {
+          // Direct donateNative call – no gateway, no depositAndCall
+          setProcessingStatus("Preparing native ZETA donation on ZetaChain...");
+
+          // ZetaChain actual chain IDs
+          const zetaChainId =
+            process.env.NEXT_PUBLIC_ZETACHAIN_NETWORK === "mainnet" ? 7000 : 7001; // 7000 mainnet, 7001 athens testnet
+
+          // Use a mutable signer reference for the direct call
+          let currentSigner = signer;
+
+          // Force switch to ZetaChain if not already there
+          if (walletChainId !== zetaChainId) {
+            setProcessingStatus("Switching wallet to ZetaChain...");
+            try {
+              await window.ethereum.request({
+                method: "wallet_switchEthereumChain",
+                params: [{ chainId: `0x${zetaChainId.toString(16)}` }],
+              });
+              // Refresh provider & signer after switch
+              const newProvider = new ethers.BrowserProvider(window.ethereum);
+              currentSigner = await newProvider.getSigner();
+              await new Promise((r) => setTimeout(r, 1000)); // let wallet settle
+            } catch (err: any) {
+              throw new Error("Please switch to ZetaChain in your wallet to donate with native ZETA.");
+            }
+          }
+
+          // Direct contract call with msg.value
+          const crowdfundContract = new ethers.Contract(
+            contractAddress,
+            [
+              "function donateNative(uint256 campaignId, string donorName, string note) external payable",
+            ],
+            currentSigner
+          );
+
+          // Debug: log selectedToken and parameters to verify encoding
+          console.debug('[donateNative] selectedToken=', selectedToken);
+          console.debug('[donateNative] params:', {
+            campaignId: BigInt(Number(onChainCampaignId)),
+            donorDisplayName,
+            donorNote,
+            value: raw,
+          });
+
+          // Manually encode calldata to avoid reliance on generated method bindings
+          const iface = crowdfundContract.interface;
+          const calldata = iface.encodeFunctionData('donateNative', [
+            BigInt(Number(onChainCampaignId)),
+            donorDisplayName,
+            donorNote,
+          ]);
+          console.debug('[donateNative] encoded calldata=', calldata);
+
+          setProcessingStatus("Sending native ZETA donation...");
+          const tx = await currentSigner.sendTransaction({
+            to: contractAddress,
+            data: calldata,
+            value: ethers.parseEther(raw),
+            gasLimit: 500000,
+          });
+
+          setProcessingStatus("Waiting for confirmation...");
+          const receipt = await tx.wait();
+          txHash = receipt?.hash || tx.hash;
+
+          // Success path – same as cross-chain case
+          startDonation(txHash, raw, campaign.id, donorDisplayName, chainName, selectedToken.symbol);
+          onPaymentSuccess(amountValue, chainName, selectedToken.symbol);
+          showSuccess(`Donation of ${raw} ZETA sent successfully!`);
+
+          onClose();
+          setAmount("");
+          setDonorName("");
+          setNote("");
+          setProcessingStatus("");
+          return; // exit early – skip the depositAndCall logic below
+        }
         // Encode the message for the universal contract
         const messageData = ethers.AbiCoder.defaultAbiCoder().encode(
           ["uint256", "string", "string"],
@@ -330,7 +424,8 @@ export default function PaymentModal({
             try {
               const net = await attemptProvider.getNetwork();
               const currentChain = Number(net.chainId);
-              if (selectedChainId !== null && currentChain !== selectedChainId) {
+              // Skip wallet switch for ZetaChain (id 0) - toolkit handles cross-chain routing
+              if (selectedChainId !== null && currentChain !== selectedChainId && selectedChainId !== 0) {
                 console.debug(`Attempt ${attempt + 1}/${maxRetries} - provider chain ${currentChain} !== selected ${selectedChainId}; requesting wallet switch`);
                 try {
                   await window.ethereum.request({
@@ -453,7 +548,7 @@ export default function PaymentModal({
   // Do not render modal content unless explicitly opened
   if (!isOpen) return null;
 
-  const needsChainSwitch = currentChainId && selectedChainId && currentChainId !== selectedChainId;
+  const needsChainSwitch = currentChainId !== null && selectedChainId !== null && currentChainId !== selectedChainId;
 
   return (
     <>
@@ -583,8 +678,8 @@ export default function PaymentModal({
                 <p className="text-gray-600 text-sm">Loading blockchains...</p>
               ) : (
                 <select
-                  value={selectedChainId || ""}
-                  onChange={(e) => setSelectedChainId(parseInt(e.target.value, 10))}
+                  value={selectedChainId ?? ""}
+                  onChange={(e) => setSelectedChainId(e.target.value === "" ? null : parseInt(e.target.value, 10))}
                   className="gh-select w-full mb-3"
                 >
                   <option value="">-- Select a blockchain --</option>

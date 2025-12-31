@@ -50,12 +50,12 @@ export const POST = authMiddleware(async (req: AuthedRequest) => {
       // Generate a simple placeholder image as PNG (1x1 transparent pixel with description as metadata)
       // For actual image generation in future, use the description to call a proper image API
       // For now, generate a gradient placeholder image
-      const canvas = await generatePlaceholderImage(description)
-      console.log('[generate-image] Image generated, base64 length:', canvas.length)
+      const result = await generatePlaceholderImage(description)
+      console.log('[generate-image] Image generated, base64 length:', result.base64.length, 'mime:', result.mime)
       
       return NextResponse.json({ 
-        imageBase64: canvas, 
-        mime: 'image/png',
+        imageBase64: result.base64, 
+        mime: result.mime,
         message: 'Image generated successfully'
       })
     } catch (error) {
@@ -94,15 +94,17 @@ export const POST = authMiddleware(async (req: AuthedRequest) => {
  * Generate a simple placeholder image as a gradient
  * Returns base64-encoded image
  */
-async function generatePlaceholderImage(text: string): Promise<string> {
+async function generatePlaceholderImage(text: string): Promise<{ base64: string; mime: string }> {
   try {
     console.log('[generatePlaceholderImage] Creating SVG with text:', text.substring(0, 50))
     
-    const width = 400
-    const height = 300
+    const width = 800
+    const height = 450
     
-    // Create SVG with gradient - wrap text for better display
-    const wrappedText = text.substring(0, 60) // Limit text length
+    // Use Gemini description as main content, wrap and truncate for SVG display
+    const lines = text.split('. ').slice(0, 3) // Take first 3 sentences max
+    const wrappedLines = lines.map((line, idx) => `<tspan x="50%" dy="${idx === 0 ? 0 : '1.5em'}">${line.substring(0, 80)}</tspan>`).join('')
+    
     const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -111,11 +113,11 @@ async function generatePlaceholderImage(text: string): Promise<string> {
         </linearGradient>
       </defs>
       <rect width="${width}" height="${height}" fill="url(#grad)"/>
-      <text x="50%" y="40%" font-size="18" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif">
-        Campaign
+      <text x="50%" y="40%" font-size="16" fill="rgba(255,255,255,0.9)" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif" font-weight="500">
+        ${wrappedLines}
       </text>
-      <text x="50%" y="60%" font-size="14" fill="rgba(255,255,255,0.8)" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif">
-        Image Generated
+      <text x="50%" y="85%" font-size="12" fill="rgba(255,255,255,0.6)" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif">
+        AI-Generated Campaign Image
       </text>
     </svg>`
     
@@ -123,11 +125,11 @@ async function generatePlaceholderImage(text: string): Promise<string> {
     const base64Svg = Buffer.from(svg).toString('base64')
     console.log('[generatePlaceholderImage] Generated base64 SVG, length:', base64Svg.length)
     
-    return base64Svg
+    return { base64: base64Svg, mime: 'image/svg+xml' }
   } catch (error) {
     console.error('[generatePlaceholderImage] Error:', error)
     // Return a minimal 1x1 transparent pixel PNG as fallback
     console.log('[generatePlaceholderImage] Using fallback 1x1 PNG')
-    return 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    return { base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', mime: 'image/png' }
   }
 }
