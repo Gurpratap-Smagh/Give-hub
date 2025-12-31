@@ -190,16 +190,14 @@ export default function CampaignPageContent({ initialCampaign, initialDonations:
     }
     try {
       setImageGenLoading(true)
-      const selectedCategory = (editPreview.category || 'general')
-      const subject = (editPreview.description && editPreview.description.trim())
-        ? editPreview.description
-        : `Title: ${editPreview.title || 'Charitable campaign'}`
-      const prompt = `Generate a single high-quality 2:1 landscape image that fills a 2:1 cover frame perfectly (edge-to-edge, no borders, no text or watermarks). Compose safely so key subjects remain fully visible within the 2:1 crop.\n\nSubject description:\n${subject}\n\nCategory/theme: ${selectedCategory}\n\nStyle: photorealistic or clean illustration, balanced lighting, clear focal point, visually appealing for a cover.`
       const res = await fetch('/api/ai/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ 
+          title: editPreview.title,
+          description: editPreview.description
+        })
       })
       const data: { imageBase64?: string; mime?: string; error?: string; message?: string; details?: string } = await res.json().catch(() => ({}))
       if (!res.ok) {

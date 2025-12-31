@@ -3,11 +3,21 @@ import { GoogleGenAI } from '@google/genai'
 import { authMiddleware, type AuthedRequest } from '@/lib/auth'
 
 // POST /api/ai/generate-image - Generate campaign image using Gemini
-// Body: { prompt: string }
+// Body: { prompt: string, title?: string, description?: string }
 export const POST = authMiddleware(async (req: AuthedRequest) => {
   try {
-    const { prompt } = await req.json().catch(() => ({})) as { prompt?: string }
-    if (!prompt || !prompt.trim()) {
+    const { prompt, title, description } = await req.json().catch(() => ({})) as { prompt?: string; title?: string; description?: string }
+    
+    // Build final prompt using template if title/description provided
+    let finalPrompt = prompt;
+    if (title || description) {
+      const template = process.env.IMAGEN_PROMPT_TEMPLATE || "Create a compelling campaign image for: Campaign Title: {title}\n\nDescription: {description}";
+      finalPrompt = template
+        .replace('{title}', title || 'Untitled Campaign')
+        .replace('{description}', description || 'A campaign for positive impact');
+    }
+    
+    if (!finalPrompt || !finalPrompt.trim()) {
       return NextResponse.json({ error: 'Missing prompt' }, { status: 400 })
     }
 
@@ -21,13 +31,13 @@ export const POST = authMiddleware(async (req: AuthedRequest) => {
     try {
       // Generate a visual description using Gemini
       console.log('[generate-image] Calling Gemini API with model: gemini-2.5-flash')
-      console.log('[generate-image] Prompt:', prompt.substring(0, 100) + '...')
+      console.log('[generate-image] Prompt:', finalPrompt.substring(0, 100) + '...')
       
       const response = await genAI.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [{ 
           role: 'user',
-          parts: [{ text: `Create a detailed visual description for a compelling campaign image. ${prompt}` }]
+          parts: [{ text: `Create a detailed visual description for a compelling campaign image. ${finalPrompt}` }]
         }],
       })
 

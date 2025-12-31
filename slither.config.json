@@ -1,0 +1,12 @@
+{
+  "detectors_to_run": "all",
+  "exclude_dependencies": true,
+  "filter_paths": "node_modules",
+  "solc_args": "--base-path contracts --include-path contracts/node_modules",
+  "fail_on": "high",
+  "solc_remaps": [
+    "@zetachain/=contracts/node_modules/@zetachain/",
+    "@openzeppelin/=contracts/node_modules/@openzeppelin/",
+    "@uniswap/=contracts/node_modules/@uniswap/"
+  ]
+}
