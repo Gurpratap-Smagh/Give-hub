@@ -202,13 +202,14 @@ export default function CreateCampaignPage() {
     }
     try {
       setImageGenLoading(true)
-      const selectedCategory = formData.category === 'other' ? (otherCategory || 'other') : (formData.category || 'general')
-      const prompt = `TASK: Generate an image for this campaign.\n\nCampaign details:\n${JSON.stringify({ title: formData.title, description: formData.description, goal: formData.goal, category: selectedCategory })}\n\nGenerate a compelling image that represents this campaign.`
       const res = await fetch('/api/ai/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ 
+          title: formData.title,
+          description: formData.description
+        })
       })
       const data: { imageBase64?: string; mime?: string; error?: string; message?: string; details?: string } = await res.json().catch(() => ({}))
       if (!res.ok) {

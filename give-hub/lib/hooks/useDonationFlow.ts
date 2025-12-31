@@ -104,6 +104,12 @@ export function useDonationFlow(campaignId?: string) {
   useEffect(() => {
     if (!state.pendingTxHash || state.timedOut) return;
     
+    // Skip receipt checks for placeholder tx hashes (from gateway detection race)
+    if (state.pendingTxHash.startsWith('pending:')) {
+      console.debug('[useDonationFlow] Placeholder tx hash detected; skipping wallet receipt check');
+      return;
+    }
+    
     // Check if wallet shows transaction as confirmed
     const checkWalletConfirmation = async () => {
       try {
