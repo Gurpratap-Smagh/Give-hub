@@ -704,7 +704,8 @@ export async function getCampaignDonations(
   const iface = new ethers.Interface(CrossChainCrowdfundABI.abi);
   
   // Filter by ContributionReceived events for this campaign
-  const topic0 = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)");
+  // Use the ABI interface to derive the event topic to avoid signature mismatches
+  const topic0 = iface.getEventTopic("ContributionReceived");
   const topic1 = ethers.zeroPadValue(ethers.toBeHex(campaignId), 32); // campaignId is indexed
   
   // Fetch logs in safe chunks of 400 blocks
@@ -804,7 +805,8 @@ export async function getCampaignDonationsBetween(
   const iface = new ethers.Interface(CrossChainCrowdfundABI.abi);
 
   // Filter by ContributionReceived events for this campaign
-  const topic0 = ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)");
+  // Use the ABI interface to derive the event topic to avoid signature mismatches
+  const topic0 = iface.getEventTopic("ContributionReceived");
   const topic1 = ethers.zeroPadValue(ethers.toBeHex(campaignId), 32); // campaignId is indexed
 
   // Fetch logs in safe chunks of 400 blocks

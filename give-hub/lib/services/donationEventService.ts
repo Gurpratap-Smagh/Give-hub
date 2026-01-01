@@ -8,7 +8,22 @@ const CONTRIBUTION_ABI = [
   'event ContributionReceived(uint256 indexed campaignId, address indexed donor, uint256 indexed contributionId, address originalToken, uint256 originalAmount, uint256 convertedAmount, string originChain, string donorName, string note)'
 ];
 
-export const CONTRIBUTION_RECEIVED_TOPIC = ethers.id('ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)');
+// Pre-computed topic to avoid potential issues with ethers.Interface.getEventTopic()
+// This matches: keccak256('ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)')
+const CONTRIBUTION_RECEIVED_TOPIC = '0xc651bb5718cda0929dca50389be20dbd9410697ae1db9cd889366f95d8bd0a7e';
+
+export function getContributionReceivedTopic() {
+  // Try to calculate dynamically, fall back to pre-computed value
+  try {
+    const iface = new ethers.Interface(CONTRIBUTION_ABI);
+    if (typeof (iface as any).getEventTopic === 'function') {
+      return (iface as any).getEventTopic('ContributionReceived');
+    }
+  } catch (err) {
+    console.warn('[getContributionReceivedTopic] Failed to compute event topic dynamically:', err);
+  }
+  return CONTRIBUTION_RECEIVED_TOPIC;
+}
 
 export interface LiveDonation {
   id: string;
@@ -37,7 +52,8 @@ interface DonationEventServiceConfig {
 }
 
 export class DonationEventService {
-  private provider: ethers.JsonRpcProvider | null = null;
+  private provider: ethers.JsonRpcProvider | ethers.WebSocketProvider | null = null;
+  private pollProvider: ethers.JsonRpcProvider | null = null; // HTTP provider used for polling if WS lacks some RPC methods
   private contractInterface: ethers.Interface;
   private contractAddress: string;
   private listeners: Map<string, Set<(donation: LiveDonation) => void>> = new Map();
@@ -48,49 +64,136 @@ export class DonationEventService {
   private pollIntervalMs: number;
   private lookbackBlocks: number;
   private reconnectAttempts: number = 0;
-  private maxReconnectAttempts: number = 5;
+  private maxReconnectAttempts: number = Number(process.env.NEXT_PUBLIC_DONATION_MAX_RECONNECTS || process.env.DONATION_MAX_RECONNECTS || 12);
+  private wsLogListener: ((log: any) => void) | null = null;
+  private isScanningBackwards: boolean = false;
+  private DEEP_SCAN_LIMIT = 500000; // 1. Limit scan to 500k blocks
+
+  async connect(): Promise<void> {
+  if (this.isConnected) return;
+
+  try {
+    const httpUrl = process.env.NEXT_PUBLIC_ZETA_RPC_URL;
+    this.pollProvider = new ethers.JsonRpcProvider(httpUrl);
+    this.provider = this.pollProvider; 
+
+    const currentBlock = await this.pollProvider.getBlockNumber();
+    this.isConnected = true;
+    
+    // Fix: Instead of searching from block 1, we find the safe limit
+    // BlockPI lowest height is usually currentBlock - 100k
+    const safeLowestBlock = Math.max(0, currentBlock - 500000); 
+
+    // 1. Start Fast Polling (For Multi-user Live Sync)
+    this.startLivePolling();
+
+    // 2. Start Background Script (For History Backfill)
+    this.runDeepScan(currentBlock, safeLowestBlock).catch(e => console.error("History Sync Error:", e));
+
+  } catch (error) {
+    this.scheduleReconnect();
+  }
+  }
 
   constructor(config?: Partial<DonationEventServiceConfig>) {
     this.contractInterface = new ethers.Interface(CONTRIBUTION_ABI);
-    this.contractAddress = config?.contractAddress || process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT || '';
+    // Prefer explicit config, then modern env vars used by the app
+    this.contractAddress = config?.contractAddress
+      || process.env.NEXT_PUBLIC_CROSSCHAIN_CONTRACT
+      || process.env.NEXT_PUBLIC_CROWDFUND_ADDRESS
+      || process.env.NEXT_PUBLIC_GIVEHUB_CONTRACT_ADDRESS
+      || '';
     this.pollIntervalMs = config?.pollInterval || 2000; // Poll every 2 seconds
     this.lookbackBlocks = config?.lookbackBlocks || 100;
   }
+  private startLivePolling(): void {
+  // Poll every 3 seconds for the LATEST blocks only
+  setInterval(async () => {
+    try {
+      const latest = await this.pollProvider!.getBlockNumber();
+      // Only check the last 10 blocks (extremely fast, low RPC cost)
+      await this.processBlocks(latest - 10, latest);
+    } catch (err) {
+      console.warn("Live poll skipped:", err.message);
+    }
+  }, 3000);
+}
+  private async runDeepScan(startFromBlock: number, safeLowestBlock: number): Promise<void> {
+  if (this.isScanningBackwards) return;
+  this.isScanningBackwards = true;
 
-  async connect(): Promise<void> {
-    if (this.isConnected) return;
+  const providerToUse = this.pollProvider || this.provider;
+  const CHUNK_SIZE = 4500; // Safe for BlockPI's 5k limit
+  
+  let currentToBlock = startFromBlock;
+
+  console.log(`[DonationEventService] Starting Deep Scan: ${startFromBlock} down to ${safeLowestBlock}`);
+
+  while (currentToBlock > safeLowestBlock && this.isConnected) {
+    // Calculate the start of the chunk, ensuring it doesn't go below the pruning floor
+    let currentFromBlock = Math.max(safeLowestBlock, currentToBlock - CHUNK_SIZE);
 
     try {
-      const rpcUrl = process.env.NEXT_PUBLIC_ZETA_RPC_URL || process.env.NEXT_PUBLIC_ZETA_RPC_HTTP;
-      if (!rpcUrl) {
-        throw new Error('RPC URL not configured');
+      const filter = {
+        address: this.contractAddress,
+        topics: [getContributionReceivedTopic()],
+        fromBlock: currentFromBlock,
+        toBlock: currentToBlock,
+      };
+
+      const logs = await providerToUse!.getLogs(filter);
+      
+      // Process logs in order
+      for (const log of logs) {
+        const donation = this.decodeDonation(log);
+        
+        // Use the Set to prevent showing a donation the user just made (duplicate signal)
+        if (donation && !this.seenDonations.has(donation.id)) {
+          this.seenDonations.add(donation.id);
+          await this.processDonation(donation);
+        }
       }
 
-      // Create provider with retry logic
-      this.provider = new ethers.JsonRpcProvider(rpcUrl, {
-        name: 'zetachain-athens',
-        chainId: 7001
-      });
+      // If we've reached the absolute floor, stop the loop
+      if (currentFromBlock === safeLowestBlock) break;
 
-      // Test connection
-      const blockNumber = await this.provider.getBlockNumber();
-      console.log(`[DonationEventService] Connected to block ${blockNumber}`);
+      // Move the window backward for the next iteration
+      currentToBlock = currentFromBlock - 1;
       
-      this.lastProcessedBlock = Math.max(0, blockNumber - this.lookbackBlocks);
-      
-      // Backfill recent events
-      await this.processBlocks(this.lastProcessedBlock, blockNumber);
-      
-      // Start polling
-      this.startPolling();
-      
-      this.isConnected = true;
-      this.reconnectAttempts = 0;
+      // Small pause to avoid RPC rate limiting/throttling
+      await new Promise(resolve => setTimeout(resolve, 150));
+
     } catch (error) {
-      console.error('[DonationEventService] Connection failed:', error);
-      this.scheduleReconnect();
-      throw error;
+      console.error(`[DonationEventService] Deep Scan error at block ${currentToBlock}:`, error);
+      // If the RPC fails, wait longer before retrying to let the node recover
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
+  }
+
+  console.log(`[DonationEventService] Deep Scan Completed successfully.`);
+  this.isScanningBackwards = false;
+}
+
+  private setupLiveListener(): void {
+    if (!this.provider || !this.contractAddress) return;
+
+    const filter = {
+      address: this.contractAddress,
+      topics: [getContributionReceivedTopic()]
+    };
+
+    // When a new donation is detected by WS or Polling
+    const handleNewLog = async (log: ethers.Log) => {
+      const donation = this.decodeDonation(log);
+      // Ensure no duplication with the Deep Scan thread
+      if (donation && !this.seenDonations.has(donation.id)) {
+        this.seenDonations.add(donation.id);
+        console.log('[DonationEventService] Live donation detected!', donation.txHash);
+        await this.processDonation(donation);
+      }
+    };
+
+    this.provider.on(filter as any, handleNewLog);
   }
 
   private startPolling(): void {
@@ -99,10 +202,11 @@ export class DonationEventService {
     }
 
     this.pollInterval = setInterval(async () => {
-      if (!this.provider || !this.isConnected) return;
+      const providerToUse = this.pollProvider || this.provider;
+      if (!providerToUse || !this.isConnected) return;
       
       try {
-        const currentBlock = await this.provider.getBlockNumber();
+        const currentBlock = await providerToUse.getBlockNumber();
         
         if (currentBlock > this.lastProcessedBlock) {
           // Process new blocks
@@ -118,7 +222,8 @@ export class DonationEventService {
   }
 
   private async processBlocks(fromBlock: number, toBlock: number): Promise<void> {
-    if (!this.provider || !this.contractAddress) return;
+    const providerToUse = this.pollProvider || this.provider;
+    if (!providerToUse || !this.contractAddress) return;
 
     const CHUNK_SIZE = 4000; // Max block range allowed by some RPC providers
     let allLogs: ethers.Log[] = [];
@@ -129,12 +234,12 @@ export class DonationEventService {
         
         const filter = {
           address: this.contractAddress,
-          topics: [CONTRIBUTION_RECEIVED_TOPIC],
+          topics: [getContributionReceivedTopic()],
           fromBlock: start,
           toBlock: end,
         };
 
-        const logs = await this.provider.getLogs(filter);
+        const logs = await providerToUse.getLogs(filter);
         allLogs = allLogs.concat(logs);
       }
       
@@ -184,13 +289,24 @@ export class DonationEventService {
       // Get token metadata
       const tokenMeta = getTokenByAddress(originalToken.toLowerCase());
       const decimals = tokenMeta?.decimals || 18;
-      const tokenSymbol = tokenMeta?.symbol || 'TOKEN';
+      let tokenSymbol = tokenMeta?.symbol || 'TOKEN';
       
       const formattedAmount = ethers.formatUnits(originalAmount, decimals);
       const formattedConverted = ethers.formatUnits(convertedAmount, decimals);
       
-      // Calculate USD value
-      const usdValue = toUSD(parseFloat(formattedAmount), tokenSymbol);
+      // Normalize symbol for price lookup:
+      // - Remove chain suffix (e.g., "USDC.zeta" -> "USDC")
+      // - Map common aliases (e.g., "zETH" -> "ETH" for price lookup)
+      const baseSymbol = tokenSymbol.split('.')[0];
+      const priceSymbol = baseSymbol === 'zETH' ? 'ETH' : baseSymbol;
+      
+      // Calculate USD value with the normalized symbol
+      const usdValue = toUSD(parseFloat(formattedAmount), priceSymbol);
+      
+      // Validate USD value
+      if (!Number.isFinite(usdValue) || usdValue < 0) {
+        console.warn(`[DonationEventService] Invalid USD value calculated: ${usdValue} for ${formattedAmount} ${priceSymbol}`);
+      }
 
       return {
         id: `${log.transactionHash}-${log.index}`,
@@ -234,6 +350,26 @@ export class DonationEventService {
   }
 
   private async updateCampaignInMongoDB(donation: LiveDonation, retries = 3): Promise<void> {
+    // Ensure usdValue is a valid number
+    let usdAmount = Number(donation.usdValue);
+    if (!Number.isFinite(usdAmount) || usdAmount <= 0) {
+      console.warn(`[DonationEventService] Invalid USD amount: ${donation.usdValue}, using fallback conversion`, {
+        originalAmount: donation.originalAmount,
+        symbol: donation.tokenSymbol,
+      });
+      // Fallback: try to convert using the original amount and symbol again
+      usdAmount = toUSD(parseFloat(donation.originalAmount), donation.tokenSymbol);
+    }
+    
+    if (!Number.isFinite(usdAmount) || usdAmount <= 0) {
+      console.error(`[DonationEventService] Could not calculate valid USD amount for donation:`, {
+        originalAmount: donation.originalAmount,
+        symbol: donation.tokenSymbol,
+        txHash: donation.txHash,
+      });
+      return; // Skip this donation if we can't get a valid amount
+    }
+
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         // Record donation details and atomically increment raised amount inside the API route
@@ -241,12 +377,12 @@ export class DonationEventService {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            amount: donation.usdValue, // Pass USD amount
+            amount: usdAmount, // Ensure this is a number, not a string
             chain: donation.originChain,
-            donorName: donation.donorName,
+            donorName: donation.donorName || 'Anonymous',
             tokenSymbol: 'USD', // Ensure backend treats amount as USD and skips reconversion
             txId: donation.txHash,
-            timestamp: donation.timestamp
+            timestamp: donation.timestamp.toISOString()
           })
         });
 
@@ -255,9 +391,15 @@ export class DonationEventService {
           throw new Error(`[DonationEventService] Failed to record donation (and increment raised): ${errorText}`);
         }
 
+        console.log('[DonationEventService] Successfully recorded donation:', {
+          campaignId: donation.campaignId,
+          amount: usdAmount,
+          txHash: donation.txHash,
+        });
+        
         return; // Success
       } catch (error) {
-        console.error(`[DonationEventService] MongoDB update attempt ${attempt} failed:`, error);
+        console.error(`[DonationEventService] MongoDB update attempt ${attempt}/${retries} failed:`, error);
         if (attempt === retries) {
           console.error('[DonationEventService] All retry attempts failed for MongoDB update');
         } else {
@@ -288,15 +430,18 @@ export class DonationEventService {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+    const maxAttempts = Number(process.env.NEXT_PUBLIC_DONATION_MAX_RECONNECTS || process.env.DONATION_MAX_RECONNECTS || this.maxReconnectAttempts || 12);
+    if (this.reconnectAttempts >= maxAttempts) {
       console.error('[DonationEventService] Max reconnect attempts reached');
+      // Reset attempts slowly so it can try again later instead of permanently stopping
+      this.reconnectAttempts = 0;
       return;
     }
 
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
     this.reconnectAttempts++;
     
-    console.log(`[DonationEventService] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    console.log(`[DonationEventService] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${maxAttempts})`);
     
     setTimeout(() => {
       this.connect().catch(console.error);
@@ -312,9 +457,25 @@ export class DonationEventService {
     }
     
     if (this.provider) {
-      this.provider.removeAllListeners();
+      try {
+        this.provider.removeAllListeners();
+      } catch (e) {
+        console.error('[DonationEventService] Error removing listeners on provider:', e);
+      }
       this.provider = null;
     }
+
+    if (this.pollProvider) {
+      try {
+        this.pollProvider.removeAllListeners();
+      } catch (e) {
+        console.error('[DonationEventService] Error removing listeners on poll provider:', e);
+      }
+      this.pollProvider = null;
+    }
+
+    // Reset WS listener reference
+    this.wsLogListener = null;
     
     this.listeners.clear();
     console.log('[DonationEventService] Disconnected');

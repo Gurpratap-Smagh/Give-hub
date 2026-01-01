@@ -76,14 +76,9 @@ export function useLiveDonations(
   const seenCampaigns = useRef<Set<string>>(new Set());
 
   const iface = useMemo(() => new ethers.Interface(CROWDFUND_ABI), []);
-  const donationTopic0 = useMemo(
-    () => ethers.id("ContributionReceived(uint256,address,uint256,address,uint256,uint256,string,string,string)"),
-    []
-  );
-  const campaignTopic0 = useMemo(
-    () => ethers.id("CampaignCreated(uint256,address,address)"),
-    []
-  );
+  // Derive topics from the ABI interface to avoid signature mismatches
+  const donationTopic0 = useMemo(() => iface.getEventTopic("ContributionReceived"), [iface]);
+  const campaignTopic0 = useMemo(() => iface.getEventTopic("CampaignCreated"), [iface]);
   const topic1 = useMemo(() => toTopic1IfNumeric(targetCampaignId), [targetCampaignId]);
 
   const enabled = useMemo(() => options?.enabled !== false, [options?.enabled]);

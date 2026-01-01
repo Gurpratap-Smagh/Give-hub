@@ -132,7 +132,7 @@ export function CampaignCard({ campaign, variant = 'minimal', compact = false, c
           
           {/* Live donation activity indicator removed */}
           {/* Image (always render; fallback placeholder keeps size consistent) */}
-          <div className="w-full h-32 relative rounded-lg overflow-hidden mb-3">
+          <div className="w-full h-32 relative rounded-lg overflow-hidden mb-3 object-top">
             <Image
               key={imgSrc}
               src={imgSrc}
@@ -142,7 +142,7 @@ export function CampaignCard({ campaign, variant = 'minimal', compact = false, c
               loading="eager"
               priority
               sizes="(max-width: 640px) 160px, (max-width: 1024px) 160px, 160px"
-              className="object-cover"
+              className="object-cover object-top"
               referrerPolicy="no-referrer"
               onError={() => setImgSrc(CARD_PLACEHOLDER_2x1)}
               onLoad={(e) => {
