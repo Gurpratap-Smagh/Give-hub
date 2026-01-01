@@ -27,5 +27,9 @@ jobs:
         uses: crytic/slither-action@v0.3.0
         with:
           target: 'contracts/'
-          slither-args: '--solc-args "--base-path contracts --include-path contracts/node_modules"'
+          # We tell slither that the dependencies are in contracts/node_modules 
+          # but the base for compilation is the contracts/ folder
+          slither-args: >-
+            --solc-args "--base-path contracts --include-path contracts/node_modules"
+            --filter-paths "node_modules"
           fail-on: 'high'
