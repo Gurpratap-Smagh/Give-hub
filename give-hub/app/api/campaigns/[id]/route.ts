@@ -21,10 +21,10 @@ function normalizeCampaign(campaign: Campaign): CampaignDTO {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params
+    const { id } = params
     const campaign = await db.findCampaignById(id)
     if (!campaign) {
       return NextResponse.json({ success: false, error: 'Campaign not found' }, { status: 404 })

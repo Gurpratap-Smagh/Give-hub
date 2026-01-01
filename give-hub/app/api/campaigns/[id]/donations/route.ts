@@ -14,10 +14,10 @@ import { CampaignModel } from '../../../../../lib/mongodb/models/campaign'
  */
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: rawId } = await params
+    const { id: rawId } = params
 
     // Resolve campaignId: allow either DB id (campaign_...) or on-chain numeric id
     let resolvedId = rawId
@@ -72,10 +72,10 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
   try {
-    const { id: rawId } = await params
+    const { id: rawId } = context.params;
     const body = await request.json()
     const amount: number = body.amount
     const rawChain: string = body.chain
@@ -180,7 +180,7 @@ export async function POST(
     const effectiveTimestamp: Date = timestamp ?? new Date()
     const donationDoc = {
       name: donorName,
-      amount,
+      amount: usdValue,
       chain,
       timestamp: effectiveTimestamp,
       ...(txId ? { txHash: txId } : {}),
@@ -191,7 +191,7 @@ export async function POST(
     if (txId && typeof txId === 'string') {
       // Atomically push donation and increment raised only if there is no existing element with this txHash
       const res = await CampaignModel.updateOne(
-        { id: resolvedId, donations: { $not: { $elemMatch: { txHash: txId } } } },
+        { id: resolvedId, 'donations.txHash': { $ne: txId } },
         {
           $push: { donations: donationDoc },
           $inc: { raised: usdValue },
@@ -201,15 +201,15 @@ export async function POST(
       incremented = (res.modifiedCount || 0) > 0
     } else {
       // No txId provided: fallback to create then increment (non-idempotent)
-      await db.createDonation({
-        campaignId: resolvedId,
-        name: donorName,
-        amount,
-        chain,
-        timestamp,
-      })
-      const updated = await db.incrementCampaignRaised(resolvedId, usdValue)
-      incremented = !!updated
+      const res = await CampaignModel.updateOne(
+        { id: resolvedId },
+        {
+          $push: { donations: donationDoc },
+          $inc: { raised: usdValue },
+          $set: { updatedAt: new Date() },
+        }
+      );
+      incremented = (res.modifiedCount || 0) > 0
     }
 
     // Update creator stats only if the campaign total was incremented
@@ -238,7 +238,7 @@ export async function POST(
       donation: {
         id: txId || `tx_${Date.now()}`,
         campaignId: resolvedId,
-        amount,
+        amount: usdValue,
         chain,
         donorName,
         timestamp: effectiveTimestamp,
@@ -252,7 +252,8 @@ export async function POST(
           : 0,
       },
     })
-  } catch {
+  } catch (error) {
+    console.error('Donation recording error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

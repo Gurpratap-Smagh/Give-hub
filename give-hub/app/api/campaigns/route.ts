@@ -98,8 +98,11 @@ export async function GET(request: Request) {
     } else if (showUnsynced === 'all') {
       campaigns = filteredCampaigns // All campaigns for studio
     } else {
-      // Show all campaigns from DB (on-chain verification is bonus, not requirement)
-      campaigns = filteredCampaigns
+      // By default, only show campaigns that are verified on-chain
+      campaigns = filteredCampaigns.filter(campaign => {
+        const onChainId = campaign.onChain?.campaignId
+        return onChainId && syncedOnChainIds.has(onChainId)
+      })
     }
     
     return NextResponse.json({ 

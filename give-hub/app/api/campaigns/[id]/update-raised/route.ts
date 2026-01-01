@@ -18,10 +18,10 @@ function normalizeCampaign(campaign: CampaignData) {
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
   try {
-    const { id } = await context.params
+    const { id } = context.params
     const body = await request.json()
     const { amount } = body
 

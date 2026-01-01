@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { Creator } from '@/lib/db'
+import { toUSD } from '@/lib/prices/converter'
 
 /**
  * POST /api/payments
@@ -54,8 +55,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Convert amount to USD
+    const amountUSD = toUSD(amount, chain)
+
     // Compute new total (allow exceeding goal)
-    const newTotal = campaign.raised + amount
+    const newTotal = campaign.raised + amountUSD
 
     // TODO: SMART CONTRACT INTEGRATION
     // Replace this mock payment processing with actual blockchain transaction
@@ -74,7 +78,7 @@ export async function POST(request: NextRequest) {
     const donation = await db.createDonation({
       campaignId,
       name: donorName,
-      amount,
+      amount: amountUSD,
       chain: chain as string
     })
 
@@ -96,7 +100,7 @@ export async function POST(request: NextRequest) {
     if (creator && creator.role === 'creator') {
       const creatorData = creator as Creator
       await db.updateUser(creatorData.id, {
-        totalRaised: (creatorData.totalRaised || 0) + amount
+        totalRaised: (creatorData.totalRaised || 0) + amountUSD
       })
     }
 
@@ -105,7 +109,7 @@ export async function POST(request: NextRequest) {
       donation: {
         id: mockTransactionId,
         campaignId,
-        amount,
+        amount: amountUSD,
         chain,
         donorName,
         timestamp: donation.timestamp
