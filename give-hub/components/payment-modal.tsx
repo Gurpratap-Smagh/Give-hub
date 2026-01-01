@@ -25,6 +25,12 @@ console.error = function(...args: any[]) {
 // Payment provider mode
 const PAYMENT_PROVIDER = (process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || "local").toLowerCase();
 
+// Public mapping of chain IDs to human-readable names used by other components
+export const CHAIN_NAMES: Record<number, string> = {
+  7001: process.env.NEXT_PUBLIC_ZETA_CHAIN_NAME || 'ZetaChain Athens',
+  11155111: 'Ethereum Sepolia',
+};
+
 interface PaymentOption {
   value: string;
   label: string;
@@ -304,6 +310,7 @@ export default function PaymentModal({
         const NATIVE_SENTINEL = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE".toLowerCase();
         const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
         const tokenAddr = (selectedToken?.zrc20Address || (selectedToken as any)?.address || "").toLowerCase();
+        // selectedChainId === 0 is the UI's representation for ZetaChain (see payout-options)
         const isNativeZetaDonation =
           selectedChainId === 0 &&
           selectedToken?.symbol === "ZETA" &&
@@ -318,10 +325,8 @@ export default function PaymentModal({
           // Direct donateNative call – no gateway, no depositAndCall
           setProcessingStatus("Preparing native ZETA donation on ZetaChain...");
 
-          // ZetaChain actual chain IDs
-          const zetaChainId =
-            process.env.NEXT_PUBLIC_ZETACHAIN_NETWORK === "mainnet" ? 7000 : 7001; // 7000 mainnet, 7001 athens testnet
-
+          // ZetaChain actual chain ID should come from env NEXT_PUBLIC_ZETA_CHAIN_ID (default 7001 testnet)
+          const zetaChainId = Number(process.env.NEXT_PUBLIC_ZETA_CHAIN_ID || (process.env.NEXT_PUBLIC_ZETACHAIN_NETWORK === "mainnet" ? 7000 : 7001)); // prefer explicit env var
           // Use a mutable signer reference for the direct call
           let currentSigner = signer;
 

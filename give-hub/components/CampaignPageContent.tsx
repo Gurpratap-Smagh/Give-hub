@@ -400,7 +400,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations 
   }
   
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="bg-gray-50 min-h-screen overflow-hidden">
       <div className="container mx-auto px-4 py-8">
       {/* Edit Mode */}
       {isEditing ? (

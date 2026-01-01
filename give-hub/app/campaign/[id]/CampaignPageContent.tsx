@@ -470,7 +470,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations:
                     alt="Preview image"
                     fill
                     sizes="(max-width: 768px) 100vw, 50vw"
-                    className="object-cover"
+                    className="object-cover object-top"
                     priority
                   />
                 ) : (
@@ -578,7 +578,7 @@ export default function CampaignPageContent({ initialCampaign, initialDonations:
                   src={imgSrc}
                   alt={campaign.title}
                   fill
-                  className="object-cover"
+                  className="object-cover object-top"
                   onError={() => setImgSrc(CARD_PLACEHOLDER_2x1)}
                   priority
                 />
