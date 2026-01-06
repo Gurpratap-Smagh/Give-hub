@@ -1,6 +1,6 @@
 # GiveHub   
 
-**Live**: [https://give-hub-kappa.vercel.app/](https://give-hub-kappa.vercel.app/)  
+**Live**: [https://give-hub-nngk.vercel.app/](https://give-hub-nngk.vercel.app/)  
 
 **Monorepo**: Houses Next.js frontend, backend services, Solidity contracts (security + versioned deploys).  
 
